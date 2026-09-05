@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-lib
+dist-types
+.DS_Store
+*.log
+*.tsbuildinfo
+test-results
+playwright-report
+presentation.db
+.vite
