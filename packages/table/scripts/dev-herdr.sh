@@ -15,7 +15,10 @@ if ! herdr status server >/dev/null 2>&1; then
   exit 1
 fi
 
-for port in 5173 8787; do
+web_port="${PORT:-5173}"
+api_port="${SHEETBASE_API_PORT:-8787}"
+
+for port in "$web_port" "$api_port"; do
   if curl --silent --fail --max-time 1 "http://127.0.0.1:${port}/" >/dev/null 2>&1; then
     echo "Port ${port} is already serving HTTP. Stop the existing process before starting the Herdr workspace." >&2
     exit 1
@@ -34,19 +37,19 @@ api_pane_id="$(printf '%s' "$workspace_json" | json_get result.root_pane.pane_id
 web_tab_json="$(herdr tab create --workspace "$workspace_id" --cwd "$repo_dir" --label "Table" --no-focus)"
 web_pane_id="$(printf '%s' "$web_tab_json" | json_get result.root_pane.pane_id)"
 
-herdr pane rename "$api_pane_id" "API · :8787" >/dev/null
-herdr pane rename "$web_pane_id" "Table · :5173" >/dev/null
+herdr pane rename "$api_pane_id" "API · :${api_port}" >/dev/null
+herdr pane rename "$web_pane_id" "Table · :${web_port}" >/dev/null
 
-herdr pane run "$api_pane_id" "exec bun run dev:api" >/dev/null
-herdr pane run "$web_pane_id" "exec bun run dev -- --force" >/dev/null
+herdr pane run "$api_pane_id" "exec env SHEETBASE_API_PORT=${api_port} bun run dev:api" >/dev/null
+herdr pane run "$web_pane_id" "exec env PORT=${web_port} SHEETBASE_API_PORT=${api_port} bun run dev -- --force" >/dev/null
 herdr workspace focus "$workspace_id" >/dev/null
 
 cat <<EOF
 Sheetbase development workspace started in Herdr.
 
   Workspace: $workspace_id
-  Table:     http://localhost:5173/million (home: http://localhost:5173/)
-  API proxy: http://localhost:5173/api/table
+  Table:     http://localhost:${web_port}/million (home: http://localhost:${web_port}/)
+  API proxy: http://localhost:${web_port}/api/table
 
 The API and Vite processes are persistent Herdr panes. Close the workspace to stop both.
 EOF
