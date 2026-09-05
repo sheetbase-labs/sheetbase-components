@@ -36,4 +36,4 @@ Import from `sheetbase-shared`:
 - `buildPredicate`, `applySearch`, `compileToDatasetQuery` (flattens a single-level group onto `DatasetQuery`)
 - `ThemeToggleButton`, `theme.css`, `shell.css`
 
-Standalone package repositories remain the published unit; this repo is the source of truth for shared behaviour.
+Large table sources (`Spreadsheet.tsx`, `styles.css`, `functions.ts`) are stored as concatenated parts under `*.parts/` and assembled by `packages/table/scripts/assemble-large-files.mjs` before test/dev/build (GitHub MCP file-size limits during the initial import).
