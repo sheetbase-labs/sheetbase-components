@@ -1,5 +1,6 @@
-import { addressKey, columnLabel, parseAddress, Worksheet } from "../engine";
-import type { CellAddress } from "../engine";
+import { addressKey, columnLabel, parseAddress } from "../engine/coordinates";
+import { Worksheet } from "../engine/workbook";
+import type { CellAddress } from "../engine/types";
 
 export type GridPoint = Readonly<{ row: number; column: number }>;
 export type GridSelection = Readonly<{ anchor: GridPoint; focus: GridPoint }>;
@@ -266,7 +267,10 @@ export function validateTypedCell(value: string, dataType: CellDataType = "text"
   if (dataType === "number" && !Number.isFinite(Number(value))) return "Enter a valid number.";
   if (dataType === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)))) return "Enter a date as YYYY-MM-DD.";
   if (dataType === "boolean" && !/^(true|false)$/i.test(value)) return "Enter true or false.";
-  if (options?.length && !value.split(",").map((entry) => entry.trim()).every((entry) => options.includes(entry))) return `Choose one of: ${options.join(", ")}.`;
+  if (options?.length) {
+    const allowed = new Set(options);
+    if (!value.split(",").map((entry) => entry.trim()).every((entry) => allowed.has(entry))) return `Choose one of: ${options.join(", ")}.`;
+  }
   return undefined;
 }
 
@@ -395,15 +399,11 @@ export function formulaSuggestions(
   if (!token) return [];
   const query = token[1].toLowerCase();
   const tokenStart = token.index;
-  const functions: FormulaSuggestion[] = formulaFunctions
-    .filter((item) => item.label.toLowerCase().startsWith(query))
-    .map((item) => ({
-      label: item.label,
-      detail: item.detail,
-      replacement: `${item.label}(`,
-      tokenStart,
-      kind: "function",
-    }));
+  const functions: FormulaSuggestion[] = [];
+  for (const item of formulaFunctions) {
+    if (!item.label.toLowerCase().startsWith(query)) continue;
+    functions.push({ label: item.label, detail: item.detail, replacement: `${item.label}(`, tokenStart, kind: "function" });
+  }
   const fieldSuggestions: FormulaSuggestion[] = fields
     .filter((field) => field.label.toLowerCase().includes(query))
     .slice(0, 8)
