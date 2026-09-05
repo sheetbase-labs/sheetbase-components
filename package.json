@@ -6,6 +6,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "test": "bun run --filter '*' test",
+    "build": "bun run --filter '*' build",
     "dev:table": "bun run --filter sheetbase-table dev",
     "dev:explorer": "bun run --filter sheetbase-explorer dev",
     "dev:schema": "bun run --filter sheetbase-schemaeditor dev",
