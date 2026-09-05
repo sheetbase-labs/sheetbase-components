@@ -25,6 +25,10 @@ bun run dev:rules      # :5202
 bun run dev:search     # :5203
 ```
 
+GitHub Actions on this repo run unit tests for every package, table/explorer/schema/rules/search production and library builds, table bundle budget and benches, explorer benches, and table Playwright e2e on Chromium, Firefox and WebKit.
+
+Table `PORT` / `SHEETBASE_API_PORT` / `E2E_PORT` overrides from `sheetbase-table` #23 are honoured by Vite, the Herdr helper and Playwright.
+
 ## Shared contract
 
 Import from `sheetbase-shared`:
