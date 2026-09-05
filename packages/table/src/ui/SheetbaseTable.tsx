@@ -16,8 +16,10 @@ export type SheetbaseTableProps = Readonly<{
   readOnly?: boolean;
 }>;
 
+const noSheets: readonly SheetTab[] = [];
+
 /** Public single-renderer table composition. Sheet ownership remains with the caller. */
-export function SheetbaseTable({ spreadsheet, sections, sheets = [], activeSheetId = sheets[0]?.id ?? "", onSheetSelect, onAddSheet, onSheetRename, onSheetDelete, onSheetMove, readOnly = false }: SheetbaseTableProps) {
+export function SheetbaseTable({ spreadsheet, sections, sheets = noSheets, activeSheetId = sheets[0]?.id ?? "", onSheetSelect, onAddSheet, onSheetRename, onSheetDelete, onSheetMove, readOnly = false }: SheetbaseTableProps) {
   const tableRef = useRef<SpreadsheetHandle>(null);
   const [selection, setSelection] = useState<SpreadsheetSelection>({ address: "A1", range: "A1", input: "" });
   const [formula, setFormula] = useState("");
