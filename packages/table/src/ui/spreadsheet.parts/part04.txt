@@ -1,0 +1,317 @@
+            textAlign: format?.horizontalAlign,
+            justifyContent: format?.horizontalAlign === "right" ? "flex-end" : format?.horizontalAlign === "center" ? "center" : undefined,
+            color: format?.foreground,
+            backgroundColor: format?.background,
+          }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            const clickStart = typeof performance !== "undefined" ? performance.now() : 0;
+            if (editing && draft.startsWith("=")) {
+              event.preventDefault();
+              dragSelecting.current = true;
+              const next = {
+                anchor: point,
+                focus: point,
+                tokenStart: formulaReference?.tokenStart ?? draft.length,
+              };
+              if (event.metaKey || event.ctrlKey) {
+                const separator = /[=(,+\-*/]\s*$/.test(draft) ? "" : ",";
+                const appended = { ...next, tokenStart: draft.length + separator.length };
+                setFormulaReference(appended);
+                setDraft((current) => current + separator + formulaReferenceLabel(appended));
+              } else updateFormulaReference(next);
+              return;
+            }
+            dragSelecting.current = true;
+            setSelection((current) => ({ anchor: event.shiftKey ? current.anchor : point, focus: point }));
+            // The pointer is already on the target: letting focus scroll would
+            // yank the page mid-gesture and stale the coordinates of a
+            // double-click or right-click follow-up.
+            viewportRef.current?.focus({ preventScroll: true });
+            if (onCellClickTiming && typeof requestAnimationFrame !== "undefined") {
+              if (clickTimingFrame.current !== undefined) cancelAnimationFrame(clickTimingFrame.current);
+              clickTimingFrame.current = requestAnimationFrame(() => {
+                clickTimingFrame.current = requestAnimationFrame(() => onCellClickTiming(performance.now() - clickStart));
+              });
+            }
+          }}
+          onPointerEnter={() => {
+            if (editing && formulaReference && dragSelecting.current) {
+              updateFormulaReference({ ...formulaReference, focus: point });
+              return;
+            }
+            if (fillOrigin.current) {
+              fillTargetRef.current = point;
+              setFillTarget(point);
+            } else if (dragSelecting.current) setSelection((current) => ({ ...current, focus: point }));
+          }}
+          onDoubleClick={() => { if (!readOnly) beginEdit(point); }}
+        >
+          {loading ? <span className="loading-placeholder" /> : renderCell?.(cellContext) ?? <span className={`${raw.startsWith("=") ? "formula-value" : ""}${value.includes("\n") ? " multiline" : ""}`}>{value}</span>}
+          {writeState && <button className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
+            event.stopPropagation();
+            if (event.shiftKey) {
+              commitMutation(cellChangesMutation("Revert failed write", [{ address: key, before: data.get(key), after: writeState.before }]));
+              setWriteStates((current) => { const next = new Map(current); next.delete(key); return next; });
+            } else if (writeState.status === "failed" || writeState.status === "conflict") runFieldWrite(writeState.write, writeState.before);
+          }} />}
+        </div>;
+      }))}
+
+      {visibleRows.map((row) => <div
+        role="rowheader"
+        aria-selected={row >= range.top && row <= range.bottom}
+        className={`row-header${row >= range.top && row <= range.bottom ? " selected-header" : ""}`}
+        key={`row-${row}`}
+        style={{ left: "var(--sheet-scroll-left, 0px)", top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row], width: ROW_HEADER_WIDTH, height: rowHeights[row] ?? ROW_HEIGHT }}
+        onPointerDown={() => {
+          dragSelecting.current = true;
+          setSelection({ anchor: { row, column: 0 }, focus: { row, column: columnCount - 1 } });
+          viewportRef.current?.focus({ preventScroll: true });
+        }}
+        onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
+      >{row + 1}<span className="row-resizer" onPointerDown={(event) => resizeRow(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>)}
+
+      {renderColumns.map(({ index: column }) => <div
+        role="columnheader"
+        aria-selected={column >= range.left && column <= range.right}
+        className={`column-header${column >= range.left && column <= range.right ? " selected-header" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}`}
+        key={`column-${column}`}
+        draggable={Boolean(onColumnMove)}
+        style={{
+          left: columnLeft(column),
+          top: "var(--sheet-scroll-top, 0px)",
+          width: columnWidths[column],
+          height: COLUMN_HEADER_HEIGHT,
+        }}
+        onPointerDown={(event) => {
+          if (editing && draft.startsWith("=")) {
+            event.preventDefault();
+            event.stopPropagation();
+            selectFormulaColumn(column, event.metaKey || event.ctrlKey);
+            return;
+          }
+          dragSelecting.current = true;
+          setSelection({ anchor: { row: 0, column }, focus: { row: rowCount - 1, column } });
+          viewportRef.current?.focus({ preventScroll: true });
+        }}
+        onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "column", index: column, x: event.clientX, y: event.clientY }); }}
+        onDragStart={(event) => { event.dataTransfer.setData("application/x-sheetbase-column", String(column)); event.dataTransfer.effectAllowed = "move"; }}
+        onDragOver={(event) => { if (onColumnMove) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+        onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData("application/x-sheetbase-column")); if (Number.isInteger(from) && from !== column) onColumnMove?.(from, column); }}
+      >
+        <span className="column-coordinate">{columnLabel(column)}</span>
+        <span className="column-name">{datasetHeader?.fields.find((field) => field.column === column)?.label ?? columnLabel(column)}</span>
+        {fieldIds[column] && <button
+          className={`column-sort${query.sort?.some((sort) => sort.fieldId === fieldIds[column]) ? " active" : ""}`}
+          aria-label={`Sort ${fieldIds[column]}`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            const fieldId = fieldIds[column]!;
+            const current = query.sort?.find((sort) => sort.fieldId === fieldId)?.direction;
+            const next = current === undefined ? "asc" : current === "asc" ? "desc" : undefined;
+            if (sortMode === "local") {
+              if (next) {
+                if (!sortBaselineRef.current) sortBaselineRef.current = data;
+                commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`);
+              } else if (sortBaselineRef.current) {
+                commit(sortBaselineRef.current, `Clear ${fieldId} sort`);
+                sortBaselineRef.current = undefined;
+              }
+            }
+            const otherSorts = (query.sort ?? []).filter((sort) => sort.fieldId !== fieldId);
+            onQueryChange?.({ ...query, sort: next ? [...otherSorts, { fieldId, direction: next }] : otherSorts });
+          }}
+        >{query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "asc" ? "▲" : query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "desc" ? "▼" : "↕"}</button>}
+        <span className="column-resizer" onPointerDown={(event) => resizeColumn(column, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitColumn(column); }} />
+      </div>)}
+
+      {findPanel && <div className="find-panel" role="search" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }}>
+        <input autoFocus aria-label="Find" placeholder="Find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }} />
+        {findPanel === "replace" && <input aria-label="Replace with" placeholder="Replace with" value={replacement} onChange={(event) => setReplacement(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }} />}
+        <button onClick={() => findText(findQuery)}>Find</button>
+        {findPanel === "find" && !readOnly && <button onClick={() => setFindPanel("replace")}>Replace…</button>}
+        {findPanel === "replace" && !readOnly && <button onClick={() => replaceAll(findQuery, replacement)}>Replace all</button>}
+        <button aria-label="Close find" onClick={() => { setFindPanel(undefined); viewportRef.current?.focus(); }}>×</button>
+      </div>}
+      {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={onQueryChange} actions={contextMenuActions} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { onColumnVisibilityChange(fieldIds[contextMenu.index]!, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
+      {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} autoFocus onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
+        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
+        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
+        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
+        {contextMenu.axis === "row" && <button onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
+        {contextMenu.axis === "row" && <button onClick={() => { setRowHeights((current) => { const next = [...current]; next[contextMenu.index] = 0; onRowHeightsChange?.(next); return next; }); closeContextMenu(); }}>Hide row</button>}
+        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button onClick={() => { setRowHeights((current) => { const next = [...current]; next[contextMenu.index - 1] = ROW_HEIGHT; onRowHeightsChange?.(next); return next; }); closeContextMenu(); }}>Unhide previous row</button>}
+        {contextMenu.axis === "row" && <button onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
+        {(frozenRowCount > 0 || frozenColumnCount > 0) && <button onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
+        {contextMenuActions?.map((action) => <button key={action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
+      </div>}
+
+
+      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: ROW_HEADER_WIDTH, height: COLUMN_HEADER_HEIGHT }} />
+      <div className={`selection-outline${fillTarget ? " filling" : ""}`} style={{
+        left: columnLeft(previewRange.left),
+        top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[previewRange.top],
+        width: columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left],
+        height: rowOffsets[previewRange.bottom + 1] - rowOffsets[previewRange.top],
+      }}>
+        {!readOnly && <button
+          className="fill-handle"
+          aria-label="Fill selection"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dragSelecting.current = false;
+            fillOrigin.current = selection;
+            fillTargetRef.current = selection.focus;
+            setFillTarget(selection.focus);
+          }}
+        />}
+      </div>
+
+      {spillBox && <div
+        className="spill-range"
+        aria-hidden="true"
+        style={{
+          left: columnLeft(spillBox.left),
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[spillBox.top],
+          width: columnOffsets[spillBox.right + 1] - columnOffsets[spillBox.left],
+          height: rowOffsets[spillBox.bottom + 1] - rowOffsets[spillBox.top],
+        }}
+      />}
+
+      {displayedReferenceRanges.map((reference, index) => {
+        const referenceRange = normaliseSelection(reference);
+        if (referenceRange.top >= rowCount || referenceRange.left >= columnCount) return null;
+        const right = Math.min(referenceRange.right, columnCount - 1);
+        const bottom = Math.min(referenceRange.bottom, rowCount - 1);
+        return <div
+        className={`formula-reference${suggestedRange === reference ? " suggested" : ""}`}
+        key={`reference-${referenceRange.top}-${referenceRange.left}-${bottom}-${right}`}
+        style={{
+          left: columnLeft(referenceRange.left),
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[referenceRange.top],
+          width: columnOffsets[right + 1] - columnOffsets[referenceRange.left],
+          height: rowOffsets[bottom + 1] - rowOffsets[referenceRange.top],
+          borderColor: ["#00a77b", "#f26a21", "#2f78ed", "#b44fd8"][index % 4],
+        }}
+      />;
+      })}
+      {editing && draft.startsWith("=") && <FormulaTokens value={draft} className="cell-formula-tokens" style={{
+        left: columnLeft(editing.column) + 1,
+        top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+        width: columnWidths[editing.column] - 2,
+        height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+      }} />}
+      {editing && !activeCustomEditor && <input
+        className={`cell-editor${draft.startsWith("=") ? " tokenised-input" : ""}`}
+        autoFocus
+        type={!draft.startsWith("=") && editingField?.dataType === "number" ? "number" : !draft.startsWith("=") && editingField?.dataType === "date" ? "date" : "text"}
+        aria-invalid={validationError ? true : undefined}
+        aria-activedescendant={suggestions.length > 0 ? `formula-suggestion-${suggestionIndex}` : undefined}
+        value={draft}
+        aria-label={`Edit ${cellKey(editing)}`}
+        style={{
+          left: columnLeft(editing.column) + 1,
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+          width: columnWidths[editing.column] - 2,
+          height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+        }}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setFormulaReference(null);
+          setValidationError(undefined);
+        }}
+        onBlur={(event) => {
+          if ((event.relatedTarget as HTMLElement | null)?.closest("[data-formula-bar]")) return;
+          finishEdit(true);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "F4" && draft.startsWith("=")) {
+            event.preventDefault();
+            setDraft((current) => cycleAbsoluteReference(current));
+            setFormulaReference(null);
+            return;
+          }
+          if (draft === "=" && /^[a-z]$/i.test(event.key)) {
+            const column = event.key.toUpperCase().charCodeAt(0) - 65;
+            if (column >= 0 && column < columnCount && selectFormulaColumn(column)) {
+              event.preventDefault();
+              return;
+            }
+          }
+          const formulaNavigation: Record<string, GridPoint> = {
+            ArrowUp: { row: -1, column: 0 }, ArrowDown: { row: 1, column: 0 },
+            ArrowLeft: { row: 0, column: -1 }, ArrowRight: { row: 0, column: 1 },
+          };
+          const expectsReference = /[=(,+\-*/]\s*$/.test(draft);
+          if (draft.startsWith("=") && formulaNavigation[event.key] && (formulaReference || suggestions.length === 0 || expectsReference)) {
+            event.preventDefault();
+            navigateFormulaReference(formulaNavigation[event.key], event.shiftKey);
+            return;
+          }
+          if (suggestions.length && event.key === "ArrowDown") {
+            event.preventDefault();
+            setSuggestionIndex((current) => (current + 1) % suggestions.length);
+            return;
+          }
+          if (suggestions.length && event.key === "ArrowUp") {
+            event.preventDefault();
+            setSuggestionIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+            return;
+          }
+          if (suggestions.length && (event.key === "Enter" || event.key === "Tab")) {
+            event.preventDefault();
+            setDraft((current) => applyFormulaSuggestion(current, suggestions[suggestionIndex]));
+            setSuggestionIndex(0);
+            return;
+          }
+          if (event.key === "Escape") { event.preventDefault(); finishEdit(false); }
+          if (event.key === "Enter") { event.preventDefault(); finishEdit(true, { row: 1, column: 0 }); }
+          if (event.key === "Tab") { event.preventDefault(); finishEdit(true, { row: 0, column: event.shiftKey ? -1 : 1 }); }
+        }}
+      />}
+      {editing && activeCustomEditor && <div
+        className="cell-editor custom-editor-host"
+        style={{
+          left: columnLeft(editing.column) + 1,
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+          width: columnWidths[editing.column] - 2,
+          height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+        }}
+      >
+        {activeCustomEditor.render({
+          point: editing,
+          address: cellKey(editing),
+          field: editingField,
+          initialDraft: draft,
+          commit: (value) => finishEdit(true, undefined, value),
+          cancel: () => finishEdit(false),
+        })}
+      </div>}
+      {editing && !activeCustomEditor && !draft.startsWith("=") && editingField?.multiple && editingField.options && <MultiOptionPicker
+        options={editingField.options}
+        current={draft}
+        onCommit={(value) => finishEdit(true, undefined, value)}
+        onCancel={() => finishEdit(false)}
+      />}
+      {editing && !(editingField?.multiple && editingField.options) && !activeCustomEditor && !draft.startsWith("=") && (editingField?.dataType === "boolean" || editingField?.dataType === "relationship" || editingField?.options?.length) && <div
+        className={`typed-options ${editingField.dataType ?? "text"}`}
+        role={editingField.dataType === "boolean" ? "radiogroup" : "listbox"}
+        aria-label={`Choose ${editingField.label}`}
+        style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+      >
+        {(editingField.options ?? (editingField.dataType === "boolean" ? ["true", "false"] : []))
+          .filter((option) => editingField.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()))
+          .map((option) => <button
+            role={editingField.dataType === "boolean" ? "radio" : "option"}
+            aria-checked={editingField.dataType === "boolean" ? draft.toLocaleLowerCase() === option.toLocaleLowerCase() : undefined}
+            aria-selected={editingField.dataType !== "boolean" ? draft === option : undefined}
+            className={draft.toLocaleLowerCase() === option.toLocaleLowerCase() ? "active" : ""}
+            key={option}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => finishEdit(true, undefined, option)}
+          >{editingField.dataType === "boolean" ? (option === "true" ? "✓ Yes" : "No") : option}</button>)}
+      </div>}
