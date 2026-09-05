@@ -153,7 +153,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
                 />
                 <button
                   type="button"
-                  className={canGenerate ? "sb-btn" : "sb-btn is-muted"}
+                  className={canGenerate ? "sb-nl-action" : "sb-nl-action is-muted"}
                   aria-disabled={!canGenerate}
                   onClick={() => { if (canGenerate) addFromText(); }}
                 >Generate</button>
