@@ -39,6 +39,9 @@ export function columnDisplayDefaults(fields: readonly ColumnDisplayField[]): re
  * suffix applies to plain and `number` formats only — never currency or
  * percent.
  */
+const currencyFormat = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+const percentFormat = new Intl.NumberFormat("en-GB", { style: "percent", maximumFractionDigits: 2 });
+
 export function formatCellDisplay(
   calculated: string,
   cellFormat: Readonly<Pick<CellFormat, "numberFormat">> | undefined,
@@ -52,9 +55,9 @@ export function formatCellDisplay(
   let text: string;
   switch (numberFormat) {
     case "currency":
-      return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(numeric);
+      return currencyFormat.format(numeric);
     case "percent":
-      return new Intl.NumberFormat("en-GB", { style: "percent", maximumFractionDigits: 2 }).format(numeric);
+      return percentFormat.format(numeric);
     case "number":
       text =
         columnDefault?.precision !== undefined
