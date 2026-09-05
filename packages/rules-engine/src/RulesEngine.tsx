@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import {
   ThemeToggleButton,
+  loadInitialState,
   normaliseOperator,
   operatorShortLabel,
   operatorsForField,
+  useIdleSave,
   type FilterOperator,
+  type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
 import type { PipelineRule, Row, RuleActionKind, RuleCondition, RuleOperator } from "./types";
@@ -21,6 +24,8 @@ export interface RulesEngineProps {
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
   onThemeChange?: (next: ThemeMode) => void;
+  persistKey?: string;
+  adapter?: PersistenceAdapter<PipelineRule[]>;
 }
 
 const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
@@ -66,9 +71,10 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], theme, defaultTheme = "light", onThemeChange }: RulesEngineProps) {
-  const [draft, setDraft] = useState<PipelineRule[]>(initialRules ?? []);
+export function RulesEngine({ value, initialRules, onChange, fields = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter }: RulesEngineProps) {
+  const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
+  useIdleSave(persistKey, rules, adapter);
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
   const activeTheme = theme ?? innerTheme;
   function toggleTheme() {
