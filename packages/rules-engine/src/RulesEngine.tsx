@@ -8,7 +8,7 @@ import {
   type ThemeMode,
 } from "sheetbase-shared";
 import type { PipelineRule, Row, RuleActionKind, RuleCondition, RuleOperator } from "./types";
-import { parseNaturalLanguageRule } from "./language";
+import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun } from "./engine";
 
 export interface RulesEngineProps {
@@ -77,6 +77,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
     onThemeChange?.(next);
   }
   const [draftText, setDraftText] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
   const [probe, setProbe] = useState<string>('{"status": "failed", "amount": 1200}');
   const [probeError, setProbeError] = useState<string | null>(null);
 
@@ -87,8 +88,13 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
 
   function addFromText() {
     if (!draftText.trim()) return;
-    commit([...rules, parseNaturalLanguageRule(draftText.trim())]);
-    setDraftText("");
+    try {
+      commit([...rules, parseNaturalLanguageRule(draftText.trim())]);
+      setDraftText("");
+      setParseError(null);
+    } catch (error) {
+      setParseError(error instanceof RuleParseError ? error.message : "Could not parse that rule.");
+    }
   }
 
   function patchRule(id: string, patch: Partial<PipelineRule>) {
@@ -140,6 +146,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
                 />
                 <button className="sb-btn primary" onClick={addFromText} disabled={!draftText.trim()}>Generate</button>
               </div>
+              {parseError && <p className="sb-error">{parseError}</p>}
             </div>
             <div className="sb-panel-heading"><span>Pipeline rules</span><span>{rules.length}</span></div>
             <ul className="sb-rule-list">
@@ -224,7 +231,14 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
               {probeError ? <p className="sb-error">{probeError}</p> : probeResult && (
                 probeResult.matched.length === 0
                   ? <p className="sb-muted">No rules match this row.</p>
-                  : <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
+                  : <div>
+                    <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
+                    {probeResult.effects.rejected && <p className="sb-error">Rejected</p>}
+                    {probeResult.effects.routes.length > 0 && <p className="sb-muted">Route {probeResult.effects.routes.join(", ")}</p>}
+                    {Object.keys(probeResult.effects.transforms).length > 0 && (
+                      <pre className="sb-probe" style={{ minHeight: 0 }}>{JSON.stringify(probeResult.effects.output, null, 2)}</pre>
+                    )}
+                  </div>
               )}
             </div>
           </aside>
