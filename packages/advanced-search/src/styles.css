@@ -9,8 +9,8 @@
 .sb-filter-rule { display: grid; grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 0.9fr) minmax(110px, 1fr) auto; gap: 5px; align-items: center; }
 .sb-filter-rule.between { grid-template-columns: minmax(110px, 1.2fr) minmax(90px, 0.9fr) minmax(70px, 0.5fr) minmax(70px, 0.5fr) auto; }
 .sb-filter-rule select, .sb-filter-rule input {
-  width: 100%; min-width: 0; height: 22px; padding: 0 5px;
-  border: 1px solid var(--border); border-radius: 4px; outline: none;
+  width: 100%; min-width: 0; height: 24px; padding: 0 6px;
+  border: 1px solid var(--border); border-radius: 5px; outline: none;
   background: var(--canvas); color: var(--text); font-size: 11px;
 }
 .sb-filter-rule input { font-family: var(--font-mono); font-size: 11px; }
