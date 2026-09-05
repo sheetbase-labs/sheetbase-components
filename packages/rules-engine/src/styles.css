@@ -2,9 +2,9 @@
 .sb-rules-main { min-width: 0; }
 .sb-nl { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .sb-nl-row {
-  display: flex; align-items: stretch;
+  display: flex; align-items: stretch; box-sizing: border-box;
   height: 24px; min-height: 24px; max-height: 24px;
-  border: 1px solid var(--border-strong); border-radius: 5px;
+  border: 1px solid var(--border); border-radius: 5px;
   background: var(--canvas); overflow: hidden;
 }
 .sb-nl-row:focus-within {
@@ -12,21 +12,21 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .sb-nl-row .sb-input {
-  flex: 1; min-width: 0; height: 100%;
-  border: 0; border-radius: 0; background: transparent;
-  box-shadow: none; padding: 0 8px;
+  flex: 1; min-width: 0; height: 100% !important;
+  border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  padding: 0 8px;
 }
-.sb-nl-row .sb-input:hover, .sb-nl-row .sb-input:focus {
-  border: 0; box-shadow: none;
+.sb-nl-row .sb-nl-action {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 100%; padding: 0 10px;
+  border-left: 1px solid var(--border);
+  font: inherit; font-size: var(--text-size); font-weight: 500;
+  color: var(--text); cursor: pointer; white-space: nowrap;
 }
-.sb-nl-row .sb-btn {
-  appearance: none; flex: none; height: 100%;
-  border: 0; border-radius: 0; border-left: 1px solid var(--border-strong);
-  background: transparent; color: var(--text);
-  padding: 0 10px; font-size: var(--text-size); font-weight: 500; line-height: 22px;
-}
-.sb-nl-row .sb-btn:hover { background: var(--panel-2); color: var(--text); }
-.sb-nl-row .sb-btn.is-muted { color: var(--muted); pointer-events: none; }
+.sb-nl-row .sb-nl-action.is-muted { color: var(--muted); pointer-events: none; cursor: default; }
 .sb-rule-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .sb-rule { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .sb-rule-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
