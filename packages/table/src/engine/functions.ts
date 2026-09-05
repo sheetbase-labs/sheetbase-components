@@ -1,1 +1,4 @@
-SEE_LOCAL_FILE_/tmp/sheetbase-components/packages/table/src/engine/functions.ts
+/**
+ * The sheet function library — the single source of truth for function
+ * semantics, shared by the bytecode evaluator and the direct AST evaluator.
+ */
