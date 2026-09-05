@@ -1,1548 +1,414 @@
-    if (/µg/i.test(s)) return 1e-6 * n;
-    if (/µl/i.test(s)) return 1e-6 * n;
-    if (/µmol/i.test(s)) return 1e-6 * n;
-    if (/g/i.test(s)) return 1e-3 * n;
-    if (/l/i.test(s)) return 1e-3 * n;
-    if (/mol/i.test(s)) return 1e-3 * n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toMass(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/kg/i.test(s)) return n;
-    if (/mg/i.test(s)) return 1e-6 * n;
-    if (/µg/i.test(s)) return 1e-9 * n;
-    if (/g/i.test(s)) return 1e-3 * n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toMol(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/mmol/i.test(s)) return 1e-3 * n;
-    if (/µmol/i.test(s)) return 1e-6 * n;
-    if (/mol/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toVol(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/ml/i.test(s)) return 1e-3 * n;
-    if (/µl/i.test(s)) return 1e-6 * n;
-    if (/l/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toConc(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/mmol/i.test(s)) return 1e-3 * n;
-    if (/µmol/i.test(s)) return 1e-6 * n;
-    if (/mol/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toLen(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/km/i.test(s)) return 1000 * n;
-    if (/mm/i.test(s)) return 0.001 * n;
-    if (/cm/i.test(s)) return 0.01 * n;
-    if (/m/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toArea(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/km/i.test(s)) return 1e6 * n;
-    if (/mm/i.test(s)) return 1e-6 * n;
-    if (/cm/i.test(s)) return 1e-4 * n;
-    if (/m/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toTime(s: string) {
-  try {
-    const n = parseFloat(s);
-    if (Number.isNaN(n)) return 0;
-    if (/ms/i.test(s)) return n / 1000;
-    if (/min/i.test(s)) return n * 60;
-    if (/h/i.test(s)) return n * 3600;
-    if (/d/i.test(s)) return n * 86400;
-    if (/s/i.test(s)) return n;
-    return n;
-  } catch {
-    return 0;
-  }
-}
-
-function toTemp(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/°?\s*f\b/i.test(s)) return (n - 32) * (5 / 9);
-  if (/°?\s*k\b/i.test(s)) return n - 273.15;
-  return n;
-}
-
-function toEnergy(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kj/i.test(s)) return 1000 * n;
-  if (/kcal/i.test(s)) return 4184 * n;
-  if (/cal/i.test(s)) return 4.184 * n;
-  return n;
-}
-
-function toPower(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kw/i.test(s)) return 1000 * n;
-  if (/mw/i.test(s) && !/mmw/i.test(s)) return 1e6 * n;
-  return n;
-}
-
-function toPressure(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kpa/i.test(s)) return 1000 * n;
-  if (/bar/i.test(s)) return 1e5 * n;
-  if (/atm/i.test(s)) return 101325 * n;
-  if (/mmhg|torr/i.test(s)) return 133.322 * n;
-  if (/psi/i.test(s)) return 6894.76 * n;
-  return n;
-}
-
-function toFreq(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/khz/i.test(s)) return 1000 * n;
-  if (/mhz/i.test(s)) return 1e6 * n;
-  if (/ghz/i.test(s)) return 1e9 * n;
-  return n;
-}
-
-function toCurrent(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/ma/i.test(s)) return 0.001 * n;
-  if (/µa/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toVoltage(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kv/i.test(s)) return 1000 * n;
-  if (/mv/i.test(s) && !/mmv/i.test(s)) return 0.001 * n;
-  return n;
-}
-
-function toResistance(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kω|kohm/i.test(s)) return 1000 * n;
-  if (/mω|mohm/i.test(s)) return 1e6 * n;
-  return n;
-}
-
-function toCapacitance(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/µf/i.test(s)) return 1e-6 * n;
-  if (/nf/i.test(s)) return 1e-9 * n;
-  if (/pf/i.test(s)) return 1e-12 * n;
-  return n;
-}
-
-function toInductance(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mh/i.test(s)) return 0.001 * n;
-  if (/µh/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toCharge(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mc/i.test(s)) return 0.001 * n;
-  if (/µc/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toAngle(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/rad/i.test(s)) return n * (180 / Math.PI);
-  return n;
-}
-
-function toBytes(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kib/i.test(s)) return n * 1024;
-  if (/mib/i.test(s)) return n * 1024 ** 2;
-  if (/gib/i.test(s)) return n * 1024 ** 3;
-  if (/tib/i.test(s)) return n * 1024 ** 4;
-  if (/kb/i.test(s)) return n * 1000;
-  if (/mb/i.test(s)) return n * 1e6;
-  if (/gb/i.test(s)) return n * 1e9;
-  if (/tb/i.test(s)) return n * 1e12;
-  return n;
-}
-
-function toSpeed(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/km\/?h|kph/i.test(s)) return n / 3.6;
-  if (/mph/i.test(s)) return n * 0.44704;
-  if (/kn/i.test(s)) return n * 0.514444;
-  return n;
-}
-
-function toAccel(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/g\b/i.test(s) && !/kg/i.test(s)) return n * 9.80665;
-  return n;
-}
-
-function toForce(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/kn/i.test(s)) return 1000 * n;
-  if (/lbf/i.test(s)) return n * 4.44822;
-  return n;
-}
-
-function toTorque(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/n\s*m|nm/i.test(s)) return n;
-  return n;
-}
-
-function toFlow(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/l\/?min/i.test(s)) return n / 60000;
-  if (/ml\/?min/i.test(s)) return n / 6e7;
-  return n;
-}
-
-function toViscosity(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/cp|mPa/i.test(s)) return 0.001 * n;
-  return n;
-}
-
-function toDensity(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/g\/?cm/i.test(s)) return 1000 * n;
-  if (/g\/?ml/i.test(s)) return 1000 * n;
-  return n;
-}
-
-function toMolarMass(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/g\/?mol/i.test(s)) return 0.001 * n;
-  return n;
-}
-
-function toActivity(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/uci/i.test(s)) return n * 37000;
-  if (/mci/i.test(s)) return n * 3.7e7;
-  if (/bq/i.test(s)) return n;
-  return n;
-}
-
-function toDose(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mgy/i.test(s)) return 0.001 * n;
-  if (/µgy/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toDoseEq(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/msv/i.test(s)) return 0.001 * n;
-  if (/µsv/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toIlluminance(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/klx/i.test(s)) return 1000 * n;
-  return n;
-}
-
-function toLuminousFlux(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toAbsorbedDoseRate(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mgy/i.test(s)) return 0.001 * n;
-  return n;
-}
-
-function toCatalytic(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mkat/i.test(s)) return 0.001 * n;
-  if (/µkat/i.test(s)) return 1e-6 * n;
-  return n;
-}
-
-function toOsmolarity(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  if (/mosm/i.test(s)) return 0.001 * n;
-  return n;
-}
-
-function toIU(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toCFU(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toPFU(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toRPM(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toPercent(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toRatio(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toUnitless(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function toCustom(s: string) {
-  const n = parseFloat(s);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function convertUnit(value: string, from: string, to: string) {
-  void from;
-  void to;
-  return parseFloat(value) || 0;
-}
-
-function formatUnit(value: number, unit: string) {
-  if (!Number.isFinite(value)) return '';
-  return `${value} ${unit}`;
-}
-
-function roundTo(value: number, digits: number) {
-  const f = 10 ** digits;
-  return Math.round(value * f) / f;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t;
-}
-
-function inverseLerp(a: number, b: number, v: number) {
-  if (b === a) return 0;
-  return (v - a) / (b - a);
-}
-
-function remap(value: number, inMin: number, inMax: number, outMin: number, outMax: number) {
-  return lerp(outMin, outMax, inverseLerp(inMin, inMax, value));
-}
-
-function wrap(value: number, min: number, max: number) {
-  const range = max - min;
-  if (range === 0) return min;
-  return ((((value - min) % range) + range) % range) + min;
-}
-
-function pingPong(value: number, length: number) {
-  const t = wrap(value, 0, length * 2);
-  return length - Math.abs(t - length);
-}
-
-function smoothstep(edge0: number, edge1: number, x: number) {
-  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
-function smootherstep(edge0: number, edge1: number, x: number) {
-  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * t * (t * (t * 6 - 15) + 10);
-}
-
-function approximately(a: number, b: number, epsilon = 1e-6) {
-  return Math.abs(a - b) <= epsilon;
-}
-
-function isPowerOfTwo(n: number) {
-  return n > 0 && (n & (n - 1)) === 0;
-}
-
-function nextPowerOfTwo(n: number) {
-  if (n <= 1) return 1;
-  return 2 ** Math.ceil(Math.log2(n));
-}
-
-function previousPowerOfTwo(n: number) {
-  if (n <= 1) return 1;
-  return 2 ** Math.floor(Math.log2(n));
-}
-
-function fract(n: number) {
-  return n - Math.floor(n);
-}
-
-function sign(n: number) {
-  return n < 0 ? -1 : n > 0 ? 1 : 0;
-}
-
-function abs(n: number) {
-  return Math.abs(n);
-}
-
-function min(a: number, b: number) {
-  return Math.min(a, b);
-}
-
-function max(a: number, b: number) {
-  return Math.max(a, b);
-}
-
-function hypot(a: number, b: number) {
-  return Math.hypot(a, b);
-}
-
-function atan2(y: number, x: number) {
-  return Math.atan2(y, x);
-}
-
-function toDegrees(rad: number) {
-  return (rad * 180) / Math.PI;
-}
-
-function toRadians(deg: number) {
-  return (deg * Math.PI) / 180;
-}
-
-function randomRange(minV: number, maxV: number) {
-  return minV + Math.random() * (maxV - minV);
-}
-
-function randomInt(minV: number, maxV: number) {
-  return Math.floor(randomRange(minV, maxV + 1));
-}
-
-function shuffleInPlace<T>(arr: T[]) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function pickRandom<T>(arr: T[]) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function unique<T>(arr: T[]) {
-  return [...new Set(arr)];
-}
-
-function compact<T>(arr: Array<T | null | undefined>) {
-  return arr.filter((x): x is T => x != null);
-}
-
-function chunk<T>(arr: T[], size: number) {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
-function flatten<T>(arr: T[][]) {
-  return arr.flat();
-}
-
-function groupBy<T>(arr: T[], key: (item: T) => string) {
-  const map = new Map<string, T[]>();
-  for (const item of arr) {
-    const k = key(item);
-    const list = map.get(k) ?? [];
-    list.push(item);
-    map.set(k, list);
-  }
-  return map;
-}
-
-function indexBy<T>(arr: T[], key: (item: T) => string) {
-  const map = new Map<string, T>();
-  for (const item of arr) map.set(key(item), item);
-  return map;
-}
-
-function countBy<T>(arr: T[], key: (item: T) => string) {
-  const map = new Map<string, number>();
-  for (const item of arr) {
-    const k = key(item);
-    map.set(k, (map.get(k) ?? 0) + 1);
-  }
-  return map;
-}
-
-function sumBy<T>(arr: T[], fn: (item: T) => number) {
-  return arr.reduce((acc, item) => acc + fn(item), 0);
-}
-
-function avgBy<T>(arr: T[], fn: (item: T) => number) {
-  if (!arr.length) return 0;
-  return sumBy(arr, fn) / arr.length;
-}
-
-function minBy<T>(arr: T[], fn: (item: T) => number) {
-  if (!arr.length) return undefined;
-  return arr.reduce((best, item) => (fn(item) < fn(best) ? item : best));
-}
-
-function maxBy<T>(arr: T[], fn: (item: T) => number) {
-  if (!arr.length) return undefined;
-  return arr.reduce((best, item) => (fn(item) > fn(best) ? item : best));
-}
-
-function sortBy<T>(arr: T[], fn: (item: T) => number | string) {
-  return [...arr].sort((a, b) => {
-    const av = fn(a);
-    const bv = fn(b);
-    return av < bv ? -1 : av > bv ? 1 : 0;
-  });
-}
-
-function debounce<T extends (...args: never[]) => void>(fn: T, wait: number) {
-  let t: ReturnType<typeof setTimeout> | undefined;
-  return (...args: Parameters<T>) => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => fn(...args), wait);
-  };
-}
-
-function throttle<T extends (...args: never[]) => void>(fn: T, wait: number) {
-  let last = 0;
-  let t: ReturnType<typeof setTimeout> | undefined;
-  return (...args: Parameters<T>) => {
-    const now = Date.now();
-    const remaining = wait - (now - last);
-    if (remaining <= 0) {
-      if (t) clearTimeout(t);
-      last = now;
-      fn(...args);
-    } else if (!t) {
-      t = setTimeout(() => {
-        last = Date.now();
-        t = undefined;
-        fn(...args);
-      }, remaining);
+      const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editing.row, column: item.column })) ?? "").trim()) : false;
+      commitMutation(cellChangesMutation("Edit cell", [{
+        address: key,
+        before: data.get(key),
+        after: completedDraft === "" ? undefined : completedDraft,
+      }]));
+      const recordId = datasetHeader?.recordIdForRow?.(editing.row);
+      if (field && (!rowWasBlank || recordId)) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: completedDraft }, data.get(key));
+      if (rowWasBlank && datasetHeader && completedDraft !== "") {
+        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? completedDraft : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
+        if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editing.row, values })).catch(() => undefined);
+      }
+    }
+    setEditing(null);
+    setFormulaReference(null);
+    if (movement) move(movement, false);
+    queueMicrotask(() => viewportRef.current?.focus());
+  }, [commitMutation, data, datasetHeader, draft, editing, move, onRecordCreate, readOnly, runFieldWrite]);
+
+  const editActiveInput = useCallback((value: string) => {
+    if (readOnly) return;
+    if (editing) setDraft(value);
+    else beginEdit(selection.focus, value);
+  }, [beginEdit, editing, readOnly, selection.focus]);
+
+  const autoFitRow = useCallback((row = selection.focus.row) => {
+    let lines = 1;
+    for (const [address, value] of data) {
+      try { if (parseAddress(address).row === row) lines = Math.max(lines, value.split("\n").length); } catch { /* Ignore non-cell keys. */ }
+    }
+    const after = Math.max(ROW_HEIGHT, Math.min(180, lines * 20 + 11));
+    setRowHeights((current) => { const next = [...current]; next[row] = after; onRowHeightsChange?.(next); return next; });
+  }, [data, onRowHeightsChange, selection.focus.row]);
+  const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
+    if (readOnly) return;
+    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`);
+  }, [commit, data, range.bottom, range.top, readOnly]);
+
+  const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
+    if (readOnly) return;
+    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`);
+  }, [commit, data, range.left, range.right, readOnly]);
+
+  const autoFitColumn = useCallback((column = selection.focus.column) => {
+    let characters = datasetHeader?.fields.find((field) => field.column === column)?.label.length ?? 1;
+    for (const [address, value] of data) {
+      try { if (parseAddress(address).column === column) characters = Math.max(characters, value.length); } catch { /* Ignore non-cell keys. */ }
+    }
+    const before = columnWidths[column] ?? 140;
+    const after = Math.max(72, Math.min(360, characters * 8 + 28));
+    const mutation = columnWidthMutation({ column, before, after });
+    if (pushHistory(mutation)) setColumnWidths((current) => { const next = [...current]; next[column] = after; onColumnWidthsChange?.(next); return next; });
+  }, [columnWidths, data, datasetHeader, onColumnWidthsChange, pushHistory, selection.focus.column]);
+
+  // Ctrl+D / Ctrl+R: duplicate the leading edge (top row for down, left
+  // column for right — Excel semantics) across the selection through the
+  // autofill tiling helper, so formulas shift relatively. Single-cell (or
+  // single-row for down, single-column for right) selections are a no-op.
+  const fillDown = useCallback(() => {
+    if (readOnly || range.bottom === range.top) return;
+    const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.top, column: range.right } };
+    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
+    commit(filled.data, "Fill down", selectionAddresses(filled.selection));
+    setSelection(filled.selection);
+    announce("Filled down");
+  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
+
+  const fillRight = useCallback(() => {
+    if (readOnly || range.right === range.left) return;
+    const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.bottom, column: range.left } };
+    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
+    commit(filled.data, "Fill right", selectionAddresses(filled.selection));
+    setSelection(filled.selection);
+    announce("Filled right");
+  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
+
+  const findText = useCallback((query: string) => {
+    const normalized = query.toLocaleLowerCase();
+    const match = [...data].find(([, value]) => value.toLocaleLowerCase().includes(normalized));
+    if (!match) return undefined;
+    const point = parseAddress(match[0]);
+    setSelection({ anchor: point, focus: point });
+    reveal(point);
+    return match[0];
+  }, [data, reveal]);
+
+  const replaceAll = useCallback((query: string, replacement: string) => {
+    if (readOnly || !query) return 0;
+    let count = 0;
+    const next = new Map(data);
+    for (const [address, value] of data) {
+      if (!value.includes(query)) continue;
+      next.set(address, value.split(query).join(replacement));
+      count++;
+    }
+    if (count) commit(next, "Replace all");
+    return count;
+  }, [commit, data, readOnly]);
+
+  const annotate = useCallback((address: string, note: string, meta?: { author?: string; createdAt?: string }) => {
+    if (readOnly) return;
+    setAnnotations((current) => {
+      const next = setAnnotationIn(current, address, note, meta);
+      onAnnotationsChange?.(next);
+      return next;
+    });
+  }, [onAnnotationsChange, readOnly]);
+  const removeAnnotationAt = useCallback((address: string) => {
+    if (readOnly) return;
+    setAnnotations((current) => {
+      const next = removeFromAnnotations(current, address);
+      onAnnotationsChange?.(next);
+      return next;
+    });
+  }, [onAnnotationsChange, readOnly]);
+
+  const clearWriteState = useCallback((address: string) => {
+    clearTimeout(writeStateTimers.current.get(address));
+    writeStateTimers.current.delete(address);
+    setWriteStates((current) => {
+      if (!current.has(address)) return current;
+      const next = new Map(current);
+      next.delete(address);
+      return next;
+    });
+  }, []);
+
+  useImperativeHandle(forwardedRef, () => ({
+    undo,
+    redo,
+    setActiveInput: writeActiveCell,
+    editActiveInput,
+    commitEdit: () => finishEdit(true),
+    cancelEdit: () => finishEdit(false),
+    snapshot: () => ({ data, formats: formats.clone(), columnWidths: [...columnWidths], rowHeights: [...rowHeights], selection, scroll, frozenRows: frozenRowCount, frozenColumns: frozenColumnCount, annotations: [...annotations] }),
+    insertRows: (index, count) => changeRows("insert", index, count),
+    deleteRows: (index, count) => changeRows("delete", index, count),
+    insertColumns: (index, count) => changeColumns("insert", index, count),
+    deleteColumns: (index, count) => changeColumns("delete", index, count),
+    autoFitColumn,
+    autoFitRow,
+    find: findText,
+    replaceAll,
+    applyFormat,
+    focus: () => viewportRef.current?.focus(),
+    hydrate,
+    clearWriteState,
+    setFilter,
+    clearFilter,
+    setAnnotation: annotate,
+    removeAnnotation: removeAnnotationAt,
+    heldFieldWrites: () => [...heldWritesRef.current.values()].map((entry) => entry.write),
+    commitHeldFieldWrites: () => {
+      const held = [...heldWritesRef.current.values()];
+      const empty = new Map<string, HeldFieldWrite>();
+      heldWritesRef.current = empty;
+      setHeldWrites(empty);
+      onHeldFieldWritesChange?.([]);
+      held.forEach(({ write, before }) => emitFieldWrite(write, before));
+    },
+    discardHeldFieldWrites: () => {
+      const empty = new Map<string, HeldFieldWrite>();
+      heldWritesRef.current = empty;
+      setHeldWrites(empty);
+      onHeldFieldWritesChange?.([]);
+    },
+  }), [annotate, annotations, clearWriteState, emitFieldWrite, heldWrites, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, redo, removeAnnotationAt, replaceAll, rowHeights, scroll, selection, setFilter, undo, writeActiveCell]);
+
+  useEffect(() => {
+    if (editing) onEditChange?.(draft);
+  }, [draft, editing, onEditChange]);
+
+  useEffect(() => onFormatsChange?.(formats.entries()), [formats, onFormatsChange]);
+
+  const updateFormulaReference = useCallback((next: FormulaReferenceSelection) => {
+    setFormulaReference(next);
+    setDraft((current) => applyFormulaReference(current, next));
+    setSuggestionIndex(0);
+  }, []);
+
+  const navigateFormulaReference = useCallback((delta: GridPoint, extend: boolean) => {
+    if (!editing) return;
+    const next = moveFormulaReference(
+      formulaReference, editing, delta, extend, rowCount, columnCount, draft.length,
+    );
+    updateFormulaReference(next);
+    reveal(next.focus);
+  }, [columnCount, draft.length, editing, formulaReference, reveal, rowCount, updateFormulaReference]);
+
+  const selectFormulaColumn = useCallback((column: number, append = false) => {
+    if (!editing || !draft.startsWith("=")) return false;
+    const range = populatedColumnSelection(data, column, editing);
+    if (!range) return false;
+    const field = datasetHeader?.fields.find((item) => item.column === column);
+    const reference = field ? `[${field.id}]` : selectionLabel(range);
+    const separator = append && !/[=(,+−*/]\s*$/.test(draft) ? "," : "";
+    setDraft((current) => current + separator + reference);
+    setFormulaReference({ ...range, tokenStart: draft.length + separator.length });
+    setSuggestionIndex(0);
+    return true;
+  }, [data, datasetHeader, draft, editing]);
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (editing) return;
+    const command = event.metaKey || event.ctrlKey;
+    if (!command && event.key === "?") { event.preventDefault(); setShowShortcutHelp(true); return; }
+    if (command && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      event.shiftKey ? redo() : undo();
+      return;
+    }
+    if (command && event.key.toLowerCase() === "f" && !event.shiftKey) {
+      event.preventDefault();
+      setFindPanel("find");
+      return;
+    }
+    if (command && (event.key.toLowerCase() === "h" || (event.shiftKey && event.key.toLowerCase() === "f"))) {
+      event.preventDefault();
+      if (!readOnly) setFindPanel("replace");
+      return;
+    }
+    if (command && event.shiftKey && event.key.toLowerCase() === "v") {
+      pasteValuesNext.current = true;
+      return;
+    }
+    if (command && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+    if (command && !event.shiftKey && event.key.toLowerCase() === "d") { event.preventDefault(); fillDown(); return; }
+    if (command && !event.shiftKey && event.key.toLowerCase() === "r") { event.preventDefault(); fillRight(); return; }
+    const navigation: Record<string, GridPoint> = {
+      ArrowUp: { row: -1, column: 0 }, ArrowDown: { row: 1, column: 0 },
+      ArrowLeft: { row: 0, column: -1 }, ArrowRight: { row: 0, column: 1 },
+    };
+    if (navigation[event.key]) { event.preventDefault(); move(navigation[event.key], event.shiftKey); return; }
+    if (event.key === "Tab") { event.preventDefault(); move({ row: 0, column: event.shiftKey ? -1 : 1 }, false); return; }
+    if (event.key === "Enter") { event.preventDefault(); if (!readOnly) beginEdit(selection.focus); return; }
+    if (event.key === "F2") { event.preventDefault(); if (!readOnly) beginEdit(selection.focus); return; }
+    const openColumnMenuAt = (column: number) => {
+      const header = viewportRef.current?.querySelector<HTMLDivElement>(`[role="columnheader"][data-column="${column}"]`);
+      const rect = header?.getBoundingClientRect();
+      setContextMenu({ axis: "column", index: column, x: rect ? rect.left + rect.width / 2 : 160, y: rect ? rect.bottom + 4 : 160 });
+    };
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      openColumnMenuAt(selection.focus.column);
+      return;
+    }
+    if (event.key === "Backspace" || event.key === "Delete") {
+      event.preventDefault(); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
+    }
+    if (!command && !event.altKey && event.key.length === 1) {
+      if (readOnly) return;
+      event.preventDefault(); beginEdit(selection.focus, event.key);
     }
   };
-}
 
-function once<T extends (...args: never[]) => unknown>(fn: T) {
-  let called = false;
-  let result: ReturnType<T>;
-  return (...args: Parameters<T>) => {
-    if (!called) {
-      called = true;
-      result = fn(...args) as ReturnType<T>;
+  const onCopy = (event: React.ClipboardEvent) => {
+    event.preventDefault();
+    event.clipboardData.setData("text/plain", selectionToTsv(data, selection));
+    const calculated = new Map<string, string>();
+    for (const address of selectionAddresses(selection)) {
+      const point = parseAddress(address);
+      const input = data.get(address) ?? "";
+      calculated.set(address, input.startsWith("=") ? displayValue(worksheet, point) : input);
     }
-    return result;
+    event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, selection));
   };
-}
-
-function memoize<T extends (...args: never[]) => unknown>(fn: T) {
-  const cache = new Map<string, ReturnType<T>>();
-  return (...args: Parameters<T>) => {
-    const key = JSON.stringify(args);
-    if (cache.has(key)) return cache.get(key)!;
-    const result = fn(...args) as ReturnType<T>;
-    cache.set(key, result);
-    return result;
+  const onCut = (event: React.ClipboardEvent) => {
+    if (readOnly) { event.preventDefault(); return; }
+    onCopy(event);
+    commit(clearSelection(data, selection, canEdit), "Cut range", selectionAddresses(selection));
   };
-}
-
-function identity<T>(x: T) {
-  return x;
-}
-
-function noop() {}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function assertNever(x: never): never {
-  throw new Error(`Unexpected value: ${String(x)}`);
-}
-
-function ensureArray<T>(value: T | T[]) {
-  return Array.isArray(value) ? value : [value];
-}
-
-function ensureString(value: unknown) {
-  return value == null ? '' : String(value);
-}
-
-function ensureNumber(value: unknown) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function ensureBoolean(value: unknown) {
-  return Boolean(value);
-}
-
-function parseJSON<T>(text: string, fallback: T): T {
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function stringifyJSON(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return '';
-  }
-}
-
-function deepClone<T>(value: T): T {
-  return structuredClone(value);
-}
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (a == null || b == null) return false;
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((x, i) => deepEqual(x, b[i]));
-  }
-  if (typeof a === 'object' && typeof b === 'object') {
-    const ak = Object.keys(a as object);
-    const bk = Object.keys(b as object);
-    if (ak.length !== bk.length) return false;
-    return ak.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
-  }
-  return false;
-}
-
-function omit<T extends object, K extends keyof T>(obj: T, keys: K[]) {
-  const out = { ...obj };
-  for (const k of keys) delete out[k];
-  return out as Omit<T, K>;
-}
-
-function pick<T extends object, K extends keyof T>(obj: T, keys: K[]) {
-  const out = {} as Pick<T, K>;
-  for (const k of keys) out[k] = obj[k];
-  return out;
-}
-
-function mapValues<T extends object, R>(obj: T, fn: (value: T[keyof T], key: keyof T) => R) {
-  const out = {} as { [K in keyof T]: R };
-  for (const k of Object.keys(obj) as Array<keyof T>) out[k] = fn(obj[k], k);
-  return out;
-}
-
-function filterObject<T extends object>(obj: T, fn: (value: T[keyof T], key: keyof T) => boolean) {
-  const out = {} as Partial<T>;
-  for (const k of Object.keys(obj) as Array<keyof T>) {
-    if (fn(obj[k], k)) out[k] = obj[k];
-  }
-  return out;
-}
-
-function invert<K extends string, V extends string>(obj: Record<K, V>) {
-  const out = {} as Record<V, K>;
-  for (const k of Object.keys(obj) as K[]) out[obj[k]] = k;
-  return out;
-}
-
-function defaults<T extends object>(obj: T, fallback: Partial<T>) {
-  return { ...fallback, ...obj };
-}
-
-function merge<T extends object>(a: T, b: Partial<T>) {
-  return { ...a, ...b };
-}
-
-function assign<T extends object>(target: T, source: Partial<T>) {
-  return Object.assign(target, source);
-}
-
-function keys<T extends object>(obj: T) {
-  return Object.keys(obj) as Array<keyof T>;
-}
-
-function values<T extends object>(obj: T) {
-  return Object.values(obj) as Array<T[keyof T]>;
-}
-
-function entries<T extends object>(obj: T) {
-  return Object.entries(obj) as Array<[keyof T, T[keyof T]]>;
-}
-
-function fromEntries<K extends string, V>(ents: Array<[K, V]>) {
-  return Object.fromEntries(ents) as Record<K, V>;
-}
-
-function hasOwn<T extends object>(obj: T, key: PropertyKey) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype;
-}
-
-function isEmptyObject(value: unknown) {
-  return isPlainObject(value) && Object.keys(value).length === 0;
-}
-
-function isEmptyArray(value: unknown) {
-  return Array.isArray(value) && value.length === 0;
-}
-
-function isEmptyString(value: unknown) {
-  return typeof value === 'string' && value.length === 0;
-}
-
-function isNil(value: unknown) {
-  return value == null;
-}
-
-function isDefined<T>(value: T | null | undefined): value is T {
-  return value != null;
-}
-
-function isFunction(value: unknown): value is (...args: never[]) => unknown {
-  return typeof value === 'function';
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-function isNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isBoolean(value: unknown): value is boolean {
-  return typeof value === 'boolean';
-}
-
-function isArray(value: unknown): value is unknown[] {
-  return Array.isArray(value);
-}
-
-function isDate(value: unknown): value is Date {
-  return value instanceof Date && !Number.isNaN(value.getTime());
-}
-
-function isRegExp(value: unknown): value is RegExp {
-  return value instanceof RegExp;
-}
-
-function isMap(value: unknown): value is Map<unknown, unknown> {
-  return value instanceof Map;
-}
-
-function isSet(value: unknown): value is Set<unknown> {
-  return value instanceof Set;
-}
-
-function isWeakMap(value: unknown): value is WeakMap<object, unknown> {
-  return value instanceof WeakMap;
-}
-
-function isWeakSet(value: unknown): value is WeakSet<object> {
-  return value instanceof WeakSet;
-}
-
-function isPromise(value: unknown): value is Promise<unknown> {
-  return Boolean(value) && typeof (value as Promise<unknown>).then === 'function';
-}
-
-function isError(value: unknown): value is Error {
-  return value instanceof Error;
-}
-
-function isElement(value: unknown): value is Element {
-  return typeof Element !== 'undefined' && value instanceof Element;
-}
-
-function isNode(value: unknown): value is Node {
-  return typeof Node !== 'undefined' && value instanceof Node;
-}
-
-function isWindow(value: unknown): value is Window {
-  return typeof window !== 'undefined' && value === window;
-}
-
-function isDocument(value: unknown): value is Document {
-  return typeof document !== 'undefined' && value === document;
-}
-
-function isBrowser() {
-  return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-function isServer() {
-  return !isBrowser();
-}
-
-function getEnv(key: string, fallback = '') {
-  if (typeof process === 'undefined') return fallback;
-  return process.env[key] ?? fallback;
-}
-
-function now() {
-  return Date.now();
-}
-
-function timestamp() {
-  return Math.floor(Date.now() / 1000);
-}
-
-function isoNow() {
-  return new Date().toISOString();
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let n = bytes / 1024;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i += 1;
-  }
-  return `${n.toFixed(1)} ${units[i]}`;
-}
-
-function formatNumber(n: number, locale = 'en-GB') {
-  return new Intl.NumberFormat(locale).format(n);
-}
-
-function formatPercent(n: number, locale = 'en-GB') {
-  return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(n);
-}
-
-function formatCurrency(n: number, currency = 'GBP', locale = 'en-GB') {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(n);
-}
-
-function formatCompact(n: number, locale = 'en-GB') {
-  return new Intl.NumberFormat(locale, { notation: 'compact' }).format(n);
-}
-
-function formatList(items: string[], locale = 'en-GB') {
-  return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(items);
-}
-
-function formatRelative(date: Date, locale = 'en-GB') {
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-  const diff = date.getTime() - Date.now();
-  const abs = Math.abs(diff);
-  const sign = diff < 0 ? -1 : 1;
-  if (abs < 60_000) return rtf.format(sign * Math.round(abs / 1000), 'second');
-  if (abs < 3_600_000) return rtf.format(sign * Math.round(abs / 60_000), 'minute');
-  if (abs < 86_400_000) return rtf.format(sign * Math.round(abs / 3_600_000), 'hour');
-  if (abs < 2_592_000_000) return rtf.format(sign * Math.round(abs / 86_400_000), 'day');
-  if (abs < 31_536_000_000) return rtf.format(sign * Math.round(abs / 2_592_000_000), 'month');
-  return rtf.format(sign * Math.round(abs / 31_536_000_000), 'year');
-}
-
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
-function startOfWeek(d: Date) {
-  const x = startOfDay(d);
-  const day = x.getDay();
-  const diff = (day + 6) % 7;
-  x.setDate(x.getDate() - diff);
-  return x;
-}
-
-function endOfWeek(d: Date) {
-  const x = startOfWeek(d);
-  x.setDate(x.getDate() + 6);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function endOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-}
-
-function startOfYear(d: Date) {
-  return new Date(d.getFullYear(), 0, 1);
-}
-
-function endOfYear(d: Date) {
-  return new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999);
-}
-
-function addDays(d: Date, n: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-function addMonths(d: Date, n: number) {
-  const x = new Date(d);
-  x.setMonth(x.getMonth() + n);
-  return x;
-}
-
-function addYears(d: Date, n: number) {
-  const x = new Date(d);
-  x.setFullYear(x.getFullYear() + n);
-  return x;
-}
-
-function addHours(d: Date, n: number) {
-  const x = new Date(d);
-  x.setHours(x.getHours() + n);
-  return x;
-}
-
-function addMinutes(d: Date, n: number) {
-  const x = new Date(d);
-  x.setMinutes(x.getMinutes() + n);
-  return x;
-}
-
-function addSeconds(d: Date, n: number) {
-  const x = new Date(d);
-  x.setSeconds(x.getSeconds() + n);
-  return x;
-}
-
-function diffDays(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
-}
-
-function diffHours(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / 3_600_000);
-}
-
-function diffMinutes(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / 60_000);
-}
-
-function diffSeconds(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / 1000);
-}
-
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function isSameMonth(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-
-function isSameYear(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear();
-}
-
-function isWeekend(d: Date) {
-  const day = d.getDay();
-  return day === 0 || day === 6;
-}
-
-function isWeekday(d: Date) {
-  return !isWeekend(d);
-}
-
-function isToday(d: Date) {
-  return isSameDay(d, new Date());
-}
-
-function isYesterday(d: Date) {
-  return isSameDay(d, addDays(new Date(), -1));
-}
-
-function isTomorrow(d: Date) {
-  return isSameDay(d, addDays(new Date(), 1));
-}
-
-function daysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function isLeapYear(year: number) {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-function weekNumber(d: Date) {
-  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = x.getUTCDay() || 7;
-  x.setUTCDate(x.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
-  return Math.ceil(((x.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
-}
-
-function quarter(d: Date) {
-  return Math.floor(d.getMonth() / 3) + 1;
-}
-
-function pad2(n: number) {
-  return String(n).padStart(2, '0');
-}
-
-function formatDate(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function formatTime(d: Date) {
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
-function formatDateTime(d: Date) {
-  return `${formatDate(d)} ${formatTime(d)}`;
-}
-
-function parseDate(s: string) {
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function tryParseNumber(s: string) {
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
-function tryParseBoolean(s: string) {
-  const t = s.trim().toLowerCase();
-  if (t === 'true' || t === '1' || t === 'yes') return true;
-  if (t === 'false' || t === '0' || t === 'no') return false;
-  return null;
-}
-
-function slugify(s: string) {
-  return s
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function camelCase(s: string) {
-  return s
-    .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-    .replace(/^(.)/, (c) => c.toLowerCase());
-}
-
-function pascalCase(s: string) {
-  const c = camelCase(s);
-  return c.charAt(0).toUpperCase() + c.slice(1);
-}
-
-function kebabCase(s: string) {
-  return slugify(s);
-}
-
-function snakeCase(s: string) {
-  return slugify(s).replace(/-/g, '_');
-}
-
-function titleCase(s: string) {
-  return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-}
-
-function sentenceCase(s: string) {
-  const t = s.trim();
-  if (!t) return t;
-  return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-function truncate(s: string, max: number) {
-  if (s.length <= max) return s;
-  return `${s.slice(0, Math.max(0, max - 1))}…`;
-}
-
-function pad(s: string, length: number, char = ' ') {
-  return s.padEnd(length, char);
-}
-
-function padStart(s: string, length: number, char = ' ') {
-  return s.padStart(length, char);
-}
-
-function repeat(s: string, n: number) {
-  return s.repeat(Math.max(0, n));
-}
-
-function reverse(s: string) {
-  return [...s].reverse().join('');
-}
-
-function words(s: string) {
-  return s.trim().split(/\s+/).filter(Boolean);
-}
-
-function lines(s: string) {
-  return s.split(/\r?\n/);
-}
-
-function unlines(arr: string[]) {
-  return arr.join('\n');
-}
-
-function splitOnce(s: string, sep: string) {
-  const i = s.indexOf(sep);
-  if (i < 0) return [s, ''];
-  return [s.slice(0, i), s.slice(i + sep.length)];
-}
-
-function splitLast(s: string, sep: string) {
-  const i = s.lastIndexOf(sep);
-  if (i < 0) return [s, ''];
-  return [s.slice(0, i), s.slice(i + sep.length)];
-}
-
-function startsWith(s: string, prefix: string) {
-  return s.startsWith(prefix);
-}
-
-function endsWith(s: string, suffix: string) {
-  return s.endsWith(suffix);
-}
-
-function includes(s: string, sub: string) {
-  return s.includes(sub);
-}
-
-function replaceAllSafe(s: string, search: string, replacement: string) {
-  return s.split(search).join(replacement);
-}
-
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function unescapeHtml(s: string) {
-  return s
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function stripTags(s: string) {
-  return s.replace(/<[^>]*>/g, '');
-}
-
-function encodeURIComponentSafe(s: string) {
-  return encodeURIComponent(s);
-}
-
-function decodeURIComponentSafe(s: string) {
-  try {
-    return decodeURIComponent(s);
-  } catch {
-    return s;
-  }
-}
-
-function base64Encode(s: string) {
-  if (typeof btoa === 'function') return btoa(s);
-  return Buffer.from(s, 'utf8').toString('base64');
-}
-
-function base64Decode(s: string) {
-  if (typeof atob === 'function') return atob(s);
-  return Buffer.from(s, 'base64').toString('utf8');
-}
-
-function hashString(s: string) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function uuid() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-function nanoid(size = 21) {
-  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz-';
-  let id = '';
-  for (let i = 0; i < size; i++) id += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return id;
-}
-
-function range(start: number, end: number, step = 1) {
-  const out: number[] = [];
-  for (let i = start; i < end; i += step) out.push(i);
-  return out;
-}
-
-function times(n: number, fn: (i: number) => void) {
-  for (let i = 0; i < n; i++) fn(i);
-}
-
-function timesMap<T>(n: number, fn: (i: number) => T) {
-  const out: T[] = [];
-  for (let i = 0; i < n; i++) out.push(fn(i));
-  return out;
-}
-
-function zip<A, B>(a: A[], b: B[]) {
-  const n = Math.min(a.length, b.length);
-  const out: Array<[A, B]> = [];
-  for (let i = 0; i < n; i++) out.push([a[i], b[i]]);
-  return out;
-}
-
-function unzip<A, B>(pairs: Array<[A, B]>) {
-  const a: A[] = [];
-  const b: B[] = [];
-  for (const [x, y] of pairs) {
-    a.push(x);
-    b.push(y);
-  }
-  return [a, b] as const;
-}
-
-function interleave<T>(a: T[], b: T[]) {
-  const n = Math.max(a.length, b.length);
-  const out: T[] = [];
-  for (let i = 0; i < n; i++) {
-    if (i < a.length) out.push(a[i]);
-    if (i < b.length) out.push(b[i]);
-  }
-  return out;
-}
-
-function rotate<T>(arr: T[], n: number) {
-  if (!arr.length) return arr;
-  const k = ((n % arr.length) + arr.length) % arr.length;
-  return arr.slice(k).concat(arr.slice(0, k));
-}
-
-function sample<T>(arr: T[], n: number) {
-  const copy = [...arr];
-  shuffleInPlace(copy);
-  return copy.slice(0, n);
-}
-
-function take<T>(arr: T[], n: number) {
-  return arr.slice(0, n);
-}
-
-function takeLast<T>(arr: T[], n: number) {
-  return arr.slice(-n);
-}
-
-function drop<T>(arr: T[], n: number) {
-  return arr.slice(n);
-}
-
-function dropLast<T>(arr: T[], n: number) {
-  return arr.slice(0, Math.max(0, arr.length - n));
-}
-
-function first<T>(arr: T[]) {
-  return arr[0];
-}
-
-function last<T>(arr: T[]) {
-  return arr[arr.length - 1];
-}
-
-function nth<T>(arr: T[], i: number) {
-  return arr[i];
-}
-
-function findLast<T>(arr: T[], fn: (item: T) => boolean) {
-  for (let i = arr.length - 1; i >= 0; i--) if (fn(arr[i])) return arr[i];
-  return undefined;
-}
-
-function findLastIndex<T>(arr: T[], fn: (item: T) => boolean) {
-  for (let i = arr.length - 1; i >= 0; i--) if (fn(arr[i])) return i;
-  return -1;
-}
-
-function every<T>(arr: T[], fn: (item: T) => boolean) {
-  return arr.every(fn);
-}
-
-function some<T>(arr: T[], fn: (item: T) => boolean) {
-  return arr.some(fn);
-}
-
-function none<T>(arr: T[], fn: (item: T) => boolean) {
-  return !arr.some(fn);
-}
-
-function count<T>(arr: T[], fn: (item: T) => boolean) {
-  return arr.filter(fn).length;
-}
-
-function partition<T>(arr: T[], fn: (item: T) => boolean) {
-  const a: T[] = [];
-  const b: T[] = [];
-  for (const item of arr) (fn(item) ? a : b).push(item);
-  return [a, b] as const;
-}
-
-function difference<T>(a: T[], b: T[]) {
-  const set = new Set(b);
-  return a.filter((x) => !set.has(x));
-}
-
-function intersection<T>(a: T[], b: T[]) {
-  const set = new Set(b);
-  return a.filter((x) => set.has(x));
-}
-
-function union<T>(a: T[], b: T[]) {
-  return unique([...a, ...b]);
-}
-
-function symmetricDifference<T>(a: T[], b: T[]) {
-  const aSet = new Set(a);
-  const bSet = new Set(b);
-  return unique([...a.filter((x) => !bSet.has(x)), ...b.filter((x) => !aSet.has(x))]);
-}
-
-function includesAll<T>(a: T[], b: T[]) {
-  const set = new Set(a);
-  return b.every((x) => set.has(x));
-}
-
-function includesAny<T>(a: T[], b: T[]) {
-  const set = new Set(a);
-  return b.some((x) => set.has(x));
-}
-
-function move<T>(arr: T[], from: number, to: number) {
-  const copy = [...arr];
-  const [item] = copy.splice(from, 1);
-  copy.splice(to, 0, item);
-  return copy;
-}
-
-function insert<T>(arr: T[], index: number, item: T) {
-  const copy = [...arr];
-  copy.splice(index, 0, item);
-  return copy;
-}
-
-function removeAt<T>(arr: T[], index: number) {
-  const copy = [...arr];
-  copy.splice(index, 1);
-  return copy;
-}
-
-function removeItem<T>(arr: T[], item: T) {
-  return arr.filter((x) => x !== item);
-}
-
-function replaceAt<T>(arr: T[], index: number, item: T) {
-  const copy = [...arr];
-  copy[index] = item;
-  return copy;
-}
-
-function fill<T>(n: number, item: T) {
-  return Array.from({ length: n }, () => item);
-}
-
-function generate<T>(n: number, fn: (i: number) => T) {
-  return Array.from({ length: n }, (_, i) => fn(i));
-}
-
-function cloneArray<T>(arr: T[]) {
-  return [...arr];
-}
-
-function cloneObject<T extends object>(obj: T) {
-  return { ...obj };
-}
-
-function freeze<T extends object>(obj: T) {
-  return Object.freeze(obj);
-}
-
-function seal<T extends object>(obj: T) {
-  return Object.seal(obj);
-}
-
-function preventExtensions<T extends object>(obj: T) {
-  return Object.preventExtensions(obj);
-}
-
-function isFrozen(obj: object) {
-  return Object.isFrozen(obj);
-}
-
-function isSealed(obj: object) {
-  return Object.isSealed(obj);
-}
-
-function isExtensible(obj: object) {
-  return Object.isExtensible(obj);
-}
-
-function getPrototype(obj: object) {
-  return Object.getPrototypeOf(obj);
-}
-
-function setPrototype(obj: object, proto: object | null) {
-  return Object.setPrototypeOf(obj, proto);
-}
-
-function create(proto: object | null) {
-  return Object.create(proto);
-}
-
-function defineProperty<T extends object>(obj: T, key: PropertyKey, desc: PropertyDescriptor) {
-  return Object.defineProperty(obj, key, desc);
-}
-
-function defineProperties<T extends object>(obj: T, descs: PropertyDescriptorMap) {
-  return Object.defineProperties(obj, descs);
-}
-
-function getOwnPropertyDescriptor(obj: object, key: PropertyKey) {
-  return Object.getOwnPropertyDescriptor(obj, key);
-}
-
-function getOwnPropertyDescriptors(obj: object) {
-  return Object.getOwnPropertyDescriptors(obj);
-}
-
-function getOwnPropertyNames(obj: object) {
-  return Object.getOwnPropertyNames(obj);
-}
-
-function getOwnPropertySymbols(obj: object) {
-  return Object.getOwnPropertySymbols(obj);
-}
-
-function getOwnKeys(obj: object) {
-  return Reflect.ownKeys(obj);
-}
-
-function has(obj: object, key: PropertyKey) {
-  return key in obj;
-}
+  const onPaste = (event: React.ClipboardEvent) => {
+    event.preventDefault();
+    if (readOnly) { pasteValuesNext.current = false; return; }
+    const values = event.clipboardData.getData("application/x-sheetbase-values");
+    const asValues = pasteValuesNext.current && values !== "";
+    pasteValuesNext.current = false;
+    const tsv = asValues ? values : event.clipboardData.getData("text/plain");
+    const rows = parseTsv(tsv);
+    const totalCells = rows.reduce((sum, row) => sum + row.length, 0);
+    const chunkRows = Math.max(1, Math.floor(PASTE_CHUNK_CELLS / Math.max(1, rows[0]?.length ?? 1)));
+    if (totalCells <= PASTE_CHUNK_CELLS) {
+      const pasted = pasteTsv(data, selection.focus, tsv, rowCount, columnCount, canEdit);
+      commit(pasted.data, asValues ? "Paste values" : "Paste range", selectionAddresses(pasted.selection));
+      setSelection(pasted.selection);
+      return;
+    }
+    // Large pastes apply in frame-sized slices so the viewport keeps painting.
+    let working = data;
+    let rowIndex = 0;
+    let bottom = selection.focus.row;
+    let right = selection.focus.column;
+    const pasteLabel = asValues ? "Paste values" : "Paste range";
+    const applyChunk = () => {
+      const slice = rows.slice(rowIndex, rowIndex + chunkRows);
+      const start = { row: selection.focus.row + rowIndex, column: selection.focus.column };
+      const applied = applyTsvRows(working, start, slice, rowCount, columnCount, canEdit);
+      working = applied.data;
+      commit(applied.data, pasteLabel, selectionAddresses(applied.selection));
+      rowIndex += slice.length;
+      bottom = Math.max(bottom, applied.selection.focus.row);
+      right = Math.max(right, applied.selection.focus.column);
+      announce(`Pasting ${Math.min(rowIndex, rows.length)} of ${rows.length} rows`);
+      if (rowIndex < rows.length) {
+        window.setTimeout(applyChunk, 0);
+        return;
+      }
+      setSelection({ anchor: selection.focus, focus: { row: bottom, column: right } });
+    };
+    applyChunk();
+  };
+
+  const resizeColumn = (column: number, event: React.PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = columnWidths[column];
+    let finalWidth = startWidth;
+    const onMove = (moveEvent: PointerEvent) => setColumnWidths((current) => {
+      const next = [...current];
+      finalWidth = Math.max(72, Math.min(480, startWidth + moveEvent.clientX - startX));
+      next[column] = finalWidth;
+      return next;
+    });
+    const onUp = () => {
+      if (finalWidth !== startWidth) {
+        pushHistory(columnWidthMutation({ column, before: startWidth, after: finalWidth }));
+        const next = [...columnWidths]; next[column] = finalWidth; onColumnWidthsChange?.(next);
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  const resizeRow = (row: number, event: React.PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = rowHeights[row] ?? ROW_HEIGHT;
+    let finalHeight = startHeight;
+    const onMove = (moveEvent: PointerEvent) => setRowHeights((current) => {
+      const next = [...current];
+      finalHeight = Math.max(20, Math.min(240, startHeight + moveEvent.clientY - startY));
+      next[row] = finalHeight;
+      return next;
+    });
+    const onUp = () => {
+      if (finalHeight !== startHeight) {
+        const next = [...rowHeights]; next[row] = finalHeight; onRowHeightsChange?.(next);
+      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  return <div
+    className={`spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
+    data-theme={theme}
+    ref={viewportRef}
+    tabIndex={0}
+    role="grid"
+    aria-readonly={readOnly || undefined}
+    aria-rowcount={rowCount}
+    aria-colcount={columnCount}
+    onKeyDown={onKeyDown}
+    onCopy={onCopy}
+    onCut={onCut}
+    onPaste={onPaste}
+    aria-busy={loadingRanges.length > 0}
+    onScroll={(event) => {
+      event.currentTarget.style.setProperty("--sheet-scroll-top", `${event.currentTarget.scrollTop}px`);
+      event.currentTarget.style.setProperty("--sheet-scroll-left", `${event.currentTarget.scrollLeft}px`);
+      setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft });
+    }}
+  >
+    <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight }}>
+      {visibleRows.flatMap((row) => renderColumns.map(({ index: column }) => {
+        const point = { row, column };
+        const key = cellKey(point);
+        const active = samePoint(point, selection.focus);
+        const selected = row >= range.top && row <= range.bottom && column >= range.left && column <= range.right;
+        const raw = data.get(key) ?? "";
+        // Dynamic-array children have no `data` entry; resolve them through the
+        // worksheet spill store so SEQUENCE/UNIQUE/SORT results actually paint.
+        const spilled = raw === "" ? worksheet.spills.value(key) : undefined;
+        const loading = raw === "" && spilled === undefined && loadingRanges.some((loadingRange) => row >= loadingRange.rowStart && row <= loadingRange.rowEnd && column >= loadingRange.columnStart && column <= loadingRange.columnEnd);
+        const writeState = writeStates.get(key);
+        const annotation = annotationFor(annotations, key);
+        const baseFormat = formats.get(point);
+        const calculated = raw.startsWith("=") || spilled !== undefined ? displayValue(worksheet, point) : raw;
+        const conditionalFormat = resolveConditionalFormat(point, calculated, fieldIds[column], conditionalFormats, (conditionFieldId) => {
+          const conditionColumn = fieldIds.indexOf(conditionFieldId);
+          if (conditionColumn < 0) return "";
+          const conditionRaw = data.get(cellKey({ row, column: conditionColumn })) ?? "";
+          return conditionRaw.startsWith("=") ? displayValue(worksheet, { row, column: conditionColumn }) : conditionRaw;
+        });
+        const format = conditionalFormat ? { ...baseFormat, ...conditionalFormat } : baseFormat;
+        const value = formatCellDisplay(calculated, format, columnDisplay[column]);
+        const cellContext: SpreadsheetCellRenderContext = { address: key, point, display: value, field: datasetHeader?.fields.find((field) => field.column === column), selected, active, loading };
+        return <div
+          role="gridcell"
+          aria-selected={selected}
+          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}`}
+          key={key}
+          title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
+          style={{
+            left: columnLeft(column),
+            top: row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}px)` : COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row],
+            width: columnWidths[column],
+            height: rowHeights[row] ?? ROW_HEIGHT,
+            fontWeight: format?.fontWeight,
