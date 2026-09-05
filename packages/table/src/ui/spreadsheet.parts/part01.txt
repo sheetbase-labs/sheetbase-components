@@ -6,27 +6,14 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FormulaTokens } from "./FormulaTokens";
-import { columnLabel, parseAddress, RangeStore, Worksheet } from "../engine";
-import type { BindingResolver, CellBinding, CellFormat } from "../engine";
-import {
-  type DatasetHeaderConfig,
-  type FieldWrite,
-  type SpreadsheetCustomEditor,
-  type SpreadsheetFormatEntry,
-  type SpreadsheetHandle,
-  type SpreadsheetHydrationCell,
-  type SpreadsheetLoadingRange,
-  type SpreadsheetMenuAction,
-  type SpreadsheetProps,
-  type SpreadsheetSelection,
-  type SpreadsheetState,
-  type SpreadsheetViewport,
-  type WriteStatus,
-} from "./spreadsheet-types";
-import { ColumnContextMenu, MultiOptionPicker } from "./spreadsheet-menus";
+import { columnLabel, parseAddress } from "../engine/coordinates";
+import { Worksheet, type BindingResolver } from "../engine/workbook";
+import { RangeStore } from "../engine/range-store";
+import type { CellBinding, CellFormat } from "../engine/types";
 import {
   applyFormulaSuggestion,
   applyFormulaReference,
@@ -53,6 +40,7 @@ import {
   selectionToTsv,
   sortGridRows,
   validateTypedCell,
+  type CellDataType,
   type GridPoint,
   type GridSelection,
   type FormulaReferenceSelection,
@@ -78,33 +66,286 @@ import {
   holdFieldWrite,
   type HeldFieldWrite,
 } from "./held-field-writes";
-import type { DatasetQuery, FilterClause } from "../data";
+import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
+import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
 
 const ROW_HEIGHT = 31;
+
 const COLUMN_HEADER_HEIGHT = 31;
 /** Cells per frame slice for large pastes; keeps the viewport responsive while pasting. */
 const PASTE_CHUNK_CELLS = 20_000;
 
 const ROW_HEADER_WIDTH = 50;
+const defaultQuery: DatasetQuery = {};
 
-export type {
-  CalculationAuthority,
-  DatasetHeaderConfig,
-  FieldWrite,
-  SpreadsheetCellRenderContext,
-  SpreadsheetCustomEditor,
-  SpreadsheetCustomEditorContext,
-  SpreadsheetFormatEntry,
-  SpreadsheetHandle,
-  SpreadsheetHydrationCell,
-  SpreadsheetLoadingRange,
-  SpreadsheetMenuAction,
-  SpreadsheetProps,
-  SpreadsheetSelection,
-  SpreadsheetState,
-  SpreadsheetViewport,
-  WriteStatus,
-} from "./spreadsheet-types";
+export type SpreadsheetSelection = {
+  address: string;
+  range: string;
+  input: string;
+  error?: string;
+  format?: Partial<CellFormat>;
+  mixedFormats?: readonly (keyof CellFormat)[];
+};
+
+export type SpreadsheetViewport = Readonly<{
+  rowStart: number;
+  rowEnd: number;
+  columnStart: number;
+  columnEnd: number;
+}>;
+
+export type SpreadsheetLoadingRange = Readonly<{ rowStart: number; rowEnd: number; columnStart: number; columnEnd: number }>;
+
+export type SpreadsheetHandle = {
+  undo(): void;
+  redo(): void;
+  setActiveInput(value: string): void;
+  editActiveInput(value: string): void;
+  commitEdit(): void;
+  cancelEdit(): void;
+  snapshot(): SpreadsheetState;
+  insertRows(index?: number, count?: number): void;
+  deleteRows(index?: number, count?: number): void;
+  insertColumns(index?: number, count?: number): void;
+  deleteColumns(index?: number, count?: number): void;
+  autoFitColumn(column?: number): void;
+  autoFitRow(row?: number): void;
+  find(query: string): string | undefined;
+  replaceAll(query: string, replacement: string): number;
+  applyFormat(format: Partial<CellFormat>): void;
+  focus(): void;
+  hydrate(cells: ReadonlyMap<string, SpreadsheetHydrationCell>): void;
+  /** Drops the write-state badge for an address (conflict resolutions); no undo history is touched. */
+  clearWriteState(address: string): void;
+  setFilter(filter: FilterClause): void;
+  clearFilter(fieldId: string): void;
+};
+
+export type SpreadsheetState = Readonly<{
+  data: ReadonlyMap<string, string>;
+  formats: RangeStore<CellFormat>;
+  columnWidths: readonly number[];
+  rowHeights: readonly number[];
+  selection: GridSelection;
+  scroll: Readonly<{ top: number; left: number }>;
+  frozenRows: number;
+  frozenColumns: number;
+  annotations?: readonly CellAnnotation[];
+}>;
+
+export type SpreadsheetHydrationCell = Readonly<{ display: string; binding: CellBinding }>;
+export type SpreadsheetFormatEntry = Readonly<{ range: import("../engine").CellRange; value: CellFormat }>;
+export type DatasetHeaderConfig = Readonly<{
+  datasetId?: string;
+  recordIdForRow?(row: number): string | undefined;
+  fields: readonly Readonly<{ id: string; label: string; column: number; writable?: boolean; computed?: boolean; dataType?: CellDataType; required?: boolean; options?: readonly string[]; multiple?: boolean; unit?: string; precision?: number; numberFormat?: CellFormat["numberFormat"] }>[];
+}>;
+export type FieldWrite = Readonly<{ address: string; row: number; datasetId?: string; recordId?: string; fieldId: string; value: string }>;
+export type WriteStatus = "pending" | "saved" | "conflict" | "failed";
+
+/** Checkbox editor for option fields marked `multiple`; commits a comma-joined value. */
+function MultiOptionPicker({ options, current, onCommit, onCancel }: Readonly<{
+  options: readonly string[];
+  current: string;
+  onCommit(value: string): void;
+  onCancel(): void;
+}>) {
+  const validOptions = new Set(options);
+  const selected = new Set(current.split(",").map((entry) => entry.trim()).filter((entry) => validOptions.has(entry)));
+  const [picked, setPicked] = useState<Set<string>>(selected);
+  return <div className="typed-options multi" role="group" aria-label="Choose values">
+    {options.map((option) => <label key={option}>
+      <input
+        type="checkbox"
+        checked={picked.has(option)}
+        onChange={(event) => setPicked((currentPicked) => {
+          const next = new Set(currentPicked);
+          if (event.target.checked) next.add(option); else next.delete(option);
+          return next;
+        })}
+      />
+      <span>{option}</span>
+    </label>)}
+    <button className="multi-apply" onClick={() => onCommit([...picked].join(", "))}>Apply</button>
+    <button onClick={onCancel}>Cancel</button>
+  </div>;
+}
+
+/** "client": the engine parses and evaluates "=..." formulas locally (default). "host": the host owns calculation, so "=..." inputs are kept as inert text and computed values arrive through hydration. */
+export type CalculationAuthority = "client" | "host";
+
+export type SpreadsheetProps = {
+  initialData: ReadonlyMap<string, string>;
+  initialState?: SpreadsheetState;
+  rowCount?: number;
+  columnCount?: number;
+  fieldColumns?: ReadonlySet<number>;
+  computedColumns?: ReadonlySet<number>;
+  frozenRows?: number;
+  frozenColumns?: number;
+  initialColumnWidths?: readonly number[];
+  /** Per-row initial heights by index; absent entries (or the whole prop) mean automatic height. */
+  initialRowHeights?: readonly number[];
+  readOnlyRows?: ReadonlySet<number>;
+  /** Blocks value/structure mutations; selection, copy, sorting and filtering stay live. */
+  readOnly?: boolean;
+  /** Resolved light/dark theme owned by the grid itself. */
+  theme?: "light" | "dark";
+  onSelectionChange?(selection: SpreadsheetSelection): void;
+  onEditChange?(value: string): void;
+  /** Audit/provenance hook: fired synchronously for every committed, undone, redone, or conflict-resolved mutation. Never blocks the grid when the sink throws. */
+  onMutation?(mutation: GridMutation & { at: string; revision?: string }): void;
+  onViewportChange?(viewport: SpreadsheetViewport): void;
+  bindingResolver?: BindingResolver;
+  fieldIds?: readonly (string | undefined)[];
+  query?: DatasetQuery;
+  onQueryChange?(query: DatasetQuery): void;
+  sortMode?: "local" | "server";
+  datasetHeader?: DatasetHeaderConfig;
+  onFieldWrite?(write: FieldWrite): void | Promise<void>;
+  /**
+   * Intercepts the automatic authoritative field-write commit. Return "hold"
+   * to keep the write local (visible, undoable) without committing — the host
+   * owns persistence and reads/flushes the held writes via the handle.
+   * Absent, or "commit", keeps the default immediate commit.
+   */
+  fieldWritePolicy?: (write: FieldWrite) => "commit" | "hold";
+  /** Fired whenever the set of held writes changes (hold, replace, flush, discard). */
+  onHeldFieldWritesChange?(writes: readonly FieldWrite[]): void;
+  onRecordCreate?(record: Readonly<{ row: number; values: Readonly<Record<string, string>> }>): void | Promise<void>;
+  onWriteStateChange?(address: string, status: WriteStatus): void;
+  loadingRanges?: readonly SpreadsheetLoadingRange[];
+  conditionalFormats?: readonly ConditionalFormatRule[];
+  initialFormats?: readonly SpreadsheetFormatEntry[];
+  onFormatsChange?(formats: readonly SpreadsheetFormatEntry[]): void;
+  /** Per-cell provenance notes / review comments, rendered as an overlay marker. */
+  initialAnnotations?: readonly CellAnnotation[];
+  onAnnotationsChange?(annotations: readonly CellAnnotation[]): void;
+  onConditionalFormattingRequest?(fieldId: string | undefined, column: number): void;
+  onCellClickTiming?(milliseconds: number): void;
+  onColumnMove?(from: number, to: number): void;
+  onColumnVisibilityChange?(fieldId: string, visible: boolean): void;
+  onFrozenColumnsChange?(count: number): void;
+  onColumnWidthsChange?(widths: readonly number[]): void;
+  onRowHeightsChange?(heights: readonly number[]): void;
+  /** "host": the host supplies computed values for formula cells; the engine renders "=" inputs as inert text and never evaluates them. Default "client". */
+  calculationAuthority?: CalculationAuthority;
+  /** Replaces the default cell content. Return undefined to keep the built-in rendering. */
+  renderCell?(context: SpreadsheetCellRenderContext): ReactNode | undefined;
+  /** Custom in-cell editors; the first matching editor replaces the built-in input for that field. */
+  customEditors?: readonly SpreadsheetCustomEditor[];
+  /** Extra actions appended to the column and row context menus. */
+  contextMenuActions?: readonly SpreadsheetMenuAction[];
+};
+
+function menuKeys(onClose: () => void) {
+  return (event: React.KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]), select, input"));
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "ArrowDown" ? (current + 1) % items.length : (current - 1 + items.length) % items.length;
+    items[next]!.focus();
+  };
+}
+
+export type SpreadsheetCellRenderContext = Readonly<{
+  address: string;
+  point: GridPoint;
+  display: string;
+  field?: DatasetHeaderConfig["fields"][number];
+  selected: boolean;
+  active: boolean;
+  loading: boolean;
+}>;
+
+export type SpreadsheetMenuAction = Readonly<{
+  label: string;
+  onSelect(context: { axis: "row" | "column"; index: number; fieldId?: string }): void;
+}>;
+
+export type SpreadsheetCustomEditorContext = Readonly<{
+  point: GridPoint;
+  address: string;
+  field?: DatasetHeaderConfig["fields"][number];
+  initialDraft: string;
+  commit(value: string): void;
+  cancel(): void;
+}>;
+
+export type SpreadsheetCustomEditor = Readonly<{
+  matches(context: { point: GridPoint; field?: DatasetHeaderConfig["fields"][number] }): boolean;
+  render(context: SpreadsheetCustomEditorContext): ReactNode;
+}>;
+
+
+function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFit, onHide, onMove, onFreeze, onUnfreeze, onFormat, actions, onClose }: Readonly<{
+  x: number; y: number; column: number;
+  field?: DatasetHeaderConfig["fields"][number]; query: DatasetQuery;
+  onQueryChange?(query: DatasetQuery): void; onAutoFit(): void; onHide?(): void;
+  onMove?(direction: -1 | 1): void; onFreeze(): void; onUnfreeze?(): void; onFormat?(): void; onClose(): void;
+  actions?: readonly SpreadsheetMenuAction[];
+}>) {
+  const existing = field ? query.filters?.find((filter) => filter.fieldId === field.id) : undefined;
+  const [operator, setOperator] = useState<FilterOperator>(() => field ? ensureOperator(field, existing?.operator ?? "eq") : "eq");
+  const [value, setValue] = useState(existing && !Array.isArray(existing.value) && existing.value != null ? String(existing.value) : "");
+  const [value2, setValue2] = useState(existing?.operator === "between" && Array.isArray(existing.value) && existing.value[1] != null ? String(existing.value[1]) : "");
+  const [values, setValues] = useState<readonly string[]>(existing?.operator === "in" && Array.isArray(existing.value) ? existing.value.map(String) : []);
+  const sorts = query.sort ?? [];
+  const sortIndex = field ? sorts.findIndex((sort) => sort.fieldId === field.id) : -1;
+  const setSort = (direction?: "asc" | "desc") => {
+    if (!field) return;
+    const other = sorts.filter((sort) => sort.fieldId !== field.id);
+    onQueryChange?.({ ...query, sort: direction ? [...other, { fieldId: field.id, direction }] : other });
+  };
+  const applyFilter = () => {
+    if (!field) return;
+    const other = (query.filters ?? []).filter((filter) => filter.fieldId !== field.id);
+    const built = buildFilterValue(field, operator, { value, value2, values });
+    if (built === undefined) return;
+    onQueryChange?.({ ...query, filters: [...other, { fieldId: field.id, operator, ...built }] });
+  };
+  const clearFilter = () => field && onQueryChange?.({ ...query, filters: (query.filters ?? []).filter((filter) => filter.fieldId !== field.id) });
+  const operators = field ? operatorsForField(field) : [];
+  return <div
+    className="column-menu"
+    style={{ left: x, top: y }}
+    role="menu"
+    aria-label={`${field?.label ?? columnLabel(column)} column menu`}
+    tabIndex={-1}
+    autoFocus
+    onKeyDown={menuKeys(onClose)}
+    onPointerDown={(event) => event.stopPropagation()}
+  >
+    <header><div><strong>{field?.label ?? columnLabel(column)}</strong><small>{field?.dataType ?? "column"}{sortIndex >= 0 ? ` · sort ${sortIndex + 1}` : ""}</small></div><button aria-label="Close menu" onClick={onClose}>×</button></header>
+    {field && <>
+      <section><label>Sort</label><div className="column-menu-segment"><button className={sorts[sortIndex]?.direction === "asc" ? "active" : ""} onClick={() => setSort("asc")}>↑ Asc</button><button className={sorts[sortIndex]?.direction === "desc" ? "active" : ""} onClick={() => setSort("desc")}>↓ Desc</button><button onClick={() => setSort()}>Clear</button></div></section>
+      <section><div className="column-menu-label"><label>Filter</label>{(query.filters?.length ?? 0) > 1 && <select aria-label="Filter logic" value={query.filterLogic ?? "and"} onChange={(event) => onQueryChange?.({ ...query, filterLogic: event.target.value as "and" | "or" })}><option value="and">Match all</option><option value="or">Match any</option></select>}</div>
+        <select aria-label="Filter condition" value={operator} onChange={(event) => setOperator(event.target.value as FilterOperator)}>{operators.map((entry) => <option key={entry} value={entry}>{operatorLabel(entry, field)}</option>)}</select>
+        {(operator === "isNull" || operator === "notNull") ? null
+          : operator === "in" && field.options ? <select multiple aria-label="Filter values" size={Math.min(4, field.options.length)} value={[...values]} onChange={(event) => setValues(Array.from(event.target.selectedOptions, (option) => option.value))}>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
+          : operator === "between" ? <div className="column-menu-between">
+            <input aria-label="Minimum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value} onChange={(event) => setValue(event.target.value)} />
+            <input aria-label="Maximum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value2} onChange={(event) => setValue2(event.target.value)} />
+          </div>
+          : operator === "withinLastDays" ? <input aria-label="Number of days" type="number" min={1} value={value} onChange={(event) => setValue(event.target.value)} />
+          : field.options && (operator === "eq" || operator === "neq") ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="">Choose…</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
+          : field.dataType === "boolean" ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="true">True</option><option value="false">False</option></select>
+          : <input aria-label="Filter value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && applyFilter()} />}
+        <div className="column-menu-actions"><button className="primary" onClick={applyFilter}>Apply</button>{existing && <button onClick={clearFilter}>Remove</button>}</div>
+      </section>
+    </>}
+    <section className="column-menu-list"><button onClick={onAutoFit}>Auto-fit width</button>{onMove && <><button onClick={() => onMove(-1)}>Move left</button><button onClick={() => onMove(1)}>Move right</button></>}{onHide && <button onClick={onHide}>Hide column</button>}<button onClick={onFreeze}>Freeze through column</button>{onUnfreeze && <button onClick={onUnfreeze}>Unfreeze columns</button>}{onFormat && <button onClick={onFormat}>Conditional formatting…</button>}{actions?.map((action) => <button key={action.label} onClick={() => { action.onSelect({ axis: "column", index: column, fieldId: field?.id }); onClose(); }}>{action.label}</button>)}</section>
+  </div>;
+}
+
 
 function samePoint(a: GridPoint, b: GridPoint): boolean {
   return a.row === b.row && a.column === b.column;
@@ -131,7 +372,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   onViewportChange,
   bindingResolver,
   fieldIds = [],
-  query = {},
+  query = defaultQuery,
   onQueryChange,
   sortMode = "local",
   datasetHeader,
@@ -173,310 +414,3 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       bindingResolver,
       undefined,
       (expression) =>
-        expression.replace(/\[([^\]]+)\]/g, (token, fieldId: string) => structuredRangesRef.current.get(fieldId) ?? token),
-      { formulaMode: calculationAuthority === "host" ? "literal" : "evaluate" },
-    );
-    for (const [address, input] of initialState?.data ?? initialData) initialWorksheet.setInput(address, input);
-    worksheetRef.current = initialWorksheet;
-  }
-  worksheetRef.current.setFormulaMode(calculationAuthority === "host" ? "literal" : "evaluate");
-  const [formats, setFormats] = useState(() => {
-    if (initialState) return initialState.formats.clone();
-    const store = new RangeStore<CellFormat>();
-    for (const entry of initialFormats) store.write(entry.range, entry.value);
-    return store;
-  });
-  const [annotations, setAnnotations] = useState<readonly CellAnnotation[]>(() =>
-    initialState?.annotations ?? initialAnnotations ?? [],
-  );
-  const [selection, setSelection] = useState<GridSelection>(initialState?.selection ?? {
-    anchor: { row: 5, column: 2 },
-    focus: { row: 5, column: 2 },
-  });
-  const [editing, setEditing] = useState<GridPoint | null>(null);
-  const [draft, setDraft] = useState("");
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
-  const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
-  const [fillTarget, setFillTarget] = useState<GridPoint | null>(null);
-  const [columnWidths, setColumnWidths] = useState<number[]>(() => initialState
-    ? [...initialState.columnWidths]
-    : Array.from({ length: columnCount }, (_, index) => initialColumnWidths?.[index] ?? (index < 7 ? 170 : 140)));
-  const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
-    ? [...initialState.rowHeights]
-    : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? ROW_HEIGHT));
-  const [scroll, setScroll] = useState(() => initialState?.scroll ?? { top: 0, left: 0 });
-  const [frozenRowCount, setFrozenRowCount] = useState(initialState?.frozenRows ?? initialFrozenRows);
-  const [frozenColumnCount, setFrozenColumnCount] = useState(initialState?.frozenColumns ?? initialFrozenColumns);
-  const [contextMenu, setContextMenu] = useState<{ axis: "row" | "column"; index: number; x: number; y: number }>();
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(undefined);
-    viewportRef.current?.focus();
-  }, []);
-  const [findPanel, setFindPanel] = useState<"find" | "replace">();
-  const [findQuery, setFindQuery] = useState("");
-  const [replacement, setReplacement] = useState("");
-  const [validationError, setValidationError] = useState<string>();
-  const [writeStates, setWriteStates] = useState(new Map<string, Readonly<{ status: WriteStatus; write: FieldWrite; before?: string }>>());
-  const [announcement, setAnnouncement] = useState("");
-  const announcerTimer = useRef<number | undefined>(undefined);
-  const announce = useCallback((message: string) => {
-    window.clearTimeout(announcerTimer.current);
-    announcerTimer.current = window.setTimeout(() => setAnnouncement(message), 150);
-  }, []);
-  const writeStateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const clickTimingFrame = useRef<number | undefined>(undefined);
-  useEffect(() => () => {
-    for (const timer of writeStateTimers.current.values()) clearTimeout(timer);
-    writeStateTimers.current.clear();
-  }, []);
-  useEffect(() => () => {
-    if (clickTimingFrame.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(clickTimingFrame.current);
-  }, []);
-  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
-
-  const rowVirtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: () => viewportRef.current,
-    estimateSize: (row) => rowHeights[row] ?? ROW_HEIGHT,
-    overscan: 8,
-    useFlushSync: false,
-  });
-  const columnVirtualizer = useVirtualizer({
-    horizontal: true,
-    count: columnCount,
-    getScrollElement: () => viewportRef.current,
-    estimateSize: (column) => columnWidths[column] ?? 140,
-    overscan: 3,
-    useFlushSync: false,
-  });
-
-  const worksheet = worksheetRef.current;
-  const formulaFields = useMemo(() => Array.from({ length: columnCount }, (_, column) => ({
-    column,
-    label: data.get(cellKey({ row: 0, column })) ?? columnLabel(column),
-  })), [columnCount, data]);
-  const formulaRegions = useMemo(() => {
-    const rowsByColumn = new Map<number, number[]>();
-    for (const [address, value] of data) {
-      if (value === "") continue;
-      try {
-        const point = parseAddress(address);
-        if (editing && samePoint(point, editing)) continue;
-        const rows = rowsByColumn.get(point.column) ?? [];
-        rows.push(point.row);
-        rowsByColumn.set(point.column, rows);
-      } catch { /* Ignore non-cell keys. */ }
-    }
-    const regions: { label: string; reference?: string; detail: string; distance: number }[] = [];
-    for (const [column, unsortedRows] of rowsByColumn) {
-      const rows = [...new Set(unsortedRows)].sort((a, b) => a - b);
-      let start = rows[0];
-      let previous = rows[0];
-      const add = (end: number) => {
-        if (end - start < 1) return;
-        const label = `${columnLabel(column)}${start + 1}:${columnLabel(column)}${end + 1}`;
-        const configuredField = datasetHeader?.fields.find((item) => item.column === column);
-        const field = configuredField?.label ?? formulaFields[column]?.label;
-        regions.push({
-          label,
-          reference: configuredField ? `[${configuredField.id}]` : undefined,
-          detail: `${field && field !== columnLabel(column) ? `${field} · ` : ""}${end - start + 1} populated cells`,
-          distance: editing ? Math.abs(column - editing.column) + Math.abs(start - editing.row) / 100 : column,
-        });
-      };
-      for (const row of rows.slice(1)) {
-        if (row !== previous + 1) { add(previous); start = row; }
-        previous = row;
-      }
-      add(previous);
-    }
-    return regions.sort((a, b) => a.distance - b.distance).slice(0, 12);
-  }, [data, datasetHeader, editing, formulaFields]);
-  structuredRangesRef.current = new Map(formulaRegions.flatMap((region) => {
-    const fieldId = /^\[([^\]]+)\]$/.exec(region.reference ?? "")?.[1];
-    return fieldId ? [[fieldId, region.label]] : [];
-  }));
-  const structuredRangeSignature = [...structuredRangesRef.current].map(([field, region]) => `${field}:${region}`).join("|");
-  const suggestions = useMemo(
-    () => editing ? formulaSuggestions(draft, editing.row, formulaFields, formulaRegions) : [],
-    [draft, editing, formulaFields, formulaRegions],
-  );
-  const referencedRanges = useMemo(
-    () => editing ? formulaReferenceRanges(draft).slice(0, 24) : [],
-    [draft, editing],
-  );
-  const suggestedRange = useMemo(() => {
-    const suggestion = suggestions[0];
-    if (!editing || formulaReference || referencedRanges.length > 0 || suggestion?.kind !== "region") return null;
-    const preview = formulaReferenceRanges(`=${suggestion.previewRange ?? suggestion.replacement}`)[0];
-    return preview ?? null;
-  }, [editing, formulaReference, referencedRanges.length, suggestions]);
-  const semanticReferences = useMemo(() => {
-    if (!editing) return [];
-    return [...draft.matchAll(/\[([^\]]+)\]/g)].flatMap((match) => {
-      const label = structuredRangesRef.current.get(match[1]);
-      const reference = label ? formulaReferenceRanges(`=${label}`)[0] : undefined;
-      return reference ? [reference] : [];
-    });
-  }, [draft, editing, structuredRangeSignature]);
-  const displayedReferenceRanges = [
-    ...(suggestedRange ? [suggestedRange] : []),
-    ...semanticReferences,
-    ...referencedRanges,
-  ];
-  const editingField = editing ? datasetHeader?.fields.find((field) => field.column === editing.column) : undefined;
-  const activeCustomEditor = editing && customEditors ? customEditors.find((editor) => editor.matches({ point: editing, field: editingField })) : undefined;
-  const columnOffsets = useMemo(() => {
-    const offsets = [0];
-    for (const width of columnWidths) offsets.push(offsets[offsets.length - 1] + width);
-    return offsets;
-  }, [columnWidths]);
-  const rowOffsets = useMemo(() => {
-    const offsets = [0];
-    for (const height of rowHeights) offsets.push(offsets[offsets.length - 1] + height);
-    return offsets;
-  }, [rowHeights]);
-  const columnLeft = (column: number) => ROW_HEADER_WIDTH + columnOffsets[column] + (column < frozenColumnCount ? scroll.left : 0);
-  const datasetHeaderHeight = 0;
-  const contentWidth = ROW_HEADER_WIDTH + columnVirtualizer.getTotalSize();
-  const contentHeight = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowVirtualizer.getTotalSize();
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const virtualColumns = columnVirtualizer.getVirtualItems();
-  const viewportRange = {
-    rowStart: virtualRows[0]?.index ?? 0,
-    rowEnd: virtualRows.at(-1)?.index ?? 0,
-    columnStart: virtualColumns[0]?.index ?? 0,
-    columnEnd: virtualColumns.at(-1)?.index ?? 0,
-  };
-  const visibleRows = [...new Set([
-    ...Array.from({ length: Math.min(frozenRowCount, rowCount) }, (_, row) => row),
-    ...virtualRows.map((item) => item.index),
-  ])];
-  const renderColumns = [...new Set([
-    ...Array.from({ length: Math.min(frozenColumnCount, columnCount) }, (_, column) => column),
-    ...virtualColumns.map((item) => item.index),
-  ])].map((index) => ({ index }));
-  const range = normaliseSelection(selection);
-  useEffect(() => {
-    const cells = (range.bottom - range.top + 1) * (range.right - range.left + 1);
-    const scope = cells === 1 ? selectionLabel(selection) : `${cells.toLocaleString()} cells selected, ${selectionLabel(selection)}`;
-    announce(scope);
-  }, [announce, range.bottom, range.left, range.right, range.top, selection]);
-  const announcedWrites = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const [address, state] of writeStates) {
-      if (announcedWrites.current.has(address)) continue;
-      announcedWrites.current.add(address);
-      announce(state.status === "saved" ? "Saved" : state.status === "conflict" ? "Save conflict" : state.status === "failed" ? "Save failed" : "Saving");
-      break;
-    }
-  }, [announce, writeStates]);
-  const previewRange = fillTarget ? {
-    top: Math.min(range.top, fillTarget.row),
-    bottom: Math.max(range.bottom, fillTarget.row),
-    left: Math.min(range.left, fillTarget.column),
-    right: Math.max(range.right, fillTarget.column),
-  } : range;
-
-  // Spill-aware selection: resolve the active cell through the worksheet's
-  // spill ownership during render (no engine state in React state) and box
-  // the full spill extent for the dashed spill-range outline below.
-  const activeKey = cellKey(selection.focus);
-  const spillOwner = worksheet.spills.owner(activeKey);
-  const spillBox = (() => {
-    if (!spillOwner) return undefined;
-    const addresses = worksheet.spills.range(spillOwner);
-    if (addresses.length < 2) return undefined;
-    let top = rowCount, left = columnCount, bottom = -1, right = -1;
-    for (const address of addresses) {
-      try {
-        const point = parseAddress(address);
-        if (point.row < 0 || point.column < 0 || point.row >= rowCount || point.column >= columnCount) continue;
-        top = Math.min(top, point.row); left = Math.min(left, point.column);
-        bottom = Math.max(bottom, point.row); right = Math.max(right, point.column);
-      } catch { /* Ignore non-cell keys. */ }
-    }
-    return bottom >= top && right >= left ? { top, left, bottom, right } : undefined;
-  })();
-
-  const pushHistory = useCallback((mutation: GridMutation) => {
-    if (isEmptyMutation(mutation)) return false;
-    past.current.push(mutation);
-    if (past.current.length > 100) past.current.shift();
-    future.current = [];
-    emitMutationAudit(onMutation, mutation);
-    return true;
-  }, [onMutation]);
-
-  const commitMutation = useCallback((mutation: GridMutation) => {
-    if (pushHistory(mutation)) {
-      applyWorksheetMutation(worksheet, mutation);
-      setData((current) => applyCellMutation(current, mutation));
-    }
-  }, [pushHistory, worksheet]);
-
-  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>) => {
-    const mutation = cellMutation(label, data, next, affectedAddresses);
-    commitMutation(mutation);
-  }, [commitMutation, data]);
-
-
-  // Declarative per-column display defaults (units, precision, number format)
-  // from the host's dataset header — display only, never stored values.
-  const columnDisplay = useMemo(
-    () => columnDisplayDefaults(datasetHeader?.fields ?? []),
-    [datasetHeader],
-  );
-
-  const canEdit = useCallback((point: GridPoint) => {
-    if (readOnly) return false;
-    if (readOnlyRows.has(point.row)) return false;
-    const field = datasetHeader?.fields.find((item) => item.column === point.column);
-    return field?.writable !== false;
-  }, [datasetHeader, readOnly, readOnlyRows]);
-
-  const undo = useCallback(() => {
-    const previous = past.current.pop();
-    if (!previous) return;
-    future.current.push(previous);
-    applyWorksheetMutation(worksheet, previous, "backward");
-    setData((current) => applyCellMutation(current, previous, "backward"));
-    setFormats((current) => mutationFormat(current, previous, "backward"));
-    setColumnWidths((current) => applyColumnWidthMutation(current, previous, "backward"));
-    emitMutationAudit(onMutation, previous);
-  }, [onMutation, worksheet]);
-
-  const redo = useCallback(() => {
-    const next = future.current.pop();
-    if (!next) return;
-    past.current.push(next);
-    applyWorksheetMutation(worksheet, next);
-    setData((current) => applyCellMutation(current, next));
-    setFormats((current) => mutationFormat(current, next));
-    setColumnWidths((current) => applyColumnWidthMutation(current, next));
-    emitMutationAudit(onMutation, next);
-  }, [onMutation, worksheet]);
-
-  const writeActiveCell = useCallback((value: string) => {
-    if (readOnly || !canEdit(selection.focus)) return;
-    const key = cellKey(selection.focus);
-    commitMutation(cellChangesMutation("Edit cell", [{
-      address: key,
-      before: data.get(key),
-      after: value === "" ? undefined : value,
-    }]));
-  }, [canEdit, commitMutation, data, selection.focus]);
-
-  const applyFormat = useCallback((patch: Partial<CellFormat>) => {
-    if (readOnly) return;
-    const next = formats.clone();
-    const current = next.get(selection.focus) ?? {};
-    next.write({
-      start: { row: range.top, column: range.left },
-      end: { row: range.bottom, column: range.right },
-    }, { ...current, ...patch });
-    const mutation = formatMutation("Format range", formats, next);
-    if (pushHistory(mutation)) setFormats(next);
-  }, [formats, pushHistory, range.bottom, range.left, range.right, range.top, readOnly, selection.focus]);
-
-  const hydrate = useCallback((cells: ReadonlyMap<string, SpreadsheetHydrationCell>) => {
