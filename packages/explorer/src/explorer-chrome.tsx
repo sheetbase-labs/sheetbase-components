@@ -1,0 +1,93 @@
+import { useState, type ComponentProps, type ReactNode, type RefObject, type SetStateAction } from 'react'
+import { Chart } from '@tanstack/charts/react/tooltip'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons'
+import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popovers'
+import { ROW_ID } from './lib/explore'
+import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
+
+export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, setSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+  menu: Menu
+  spec: ChartSpec
+  dataset: Dataset
+  sources: DataAdapter[]
+  saved: SavedExploration[]
+  libraryName: string
+  exportStatus: string | null
+  importStatus: string | null
+  dark: boolean
+  setSpec(action: SetStateAction<ChartSpec>): void
+  onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
+  onAutoKind(): void
+  onChoosePlot(kind: ChartKind): void
+  onExportSvg(): void
+  onExportPng(): void
+  onCopySpec(): void
+  onCopyLink(): void
+  onSaveExploration(): void
+  onLoadExploration(id: string): void
+  onDeleteExploration(id: string): void
+  onLibraryName(name: string): void
+  onLoadSource(id: string): void
+  onOpenFile(file?: File): void
+  onMenuToggle(id: Exclude<Menu, null>): void
+  onMenuClose(): void
+  onToggleDark(): void
+}) {
+  return (
+    <div className="explorer-commandbar explorer-commandbar-v4">
+      <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
+      <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
+      <span className="command-spacer"/><button className="command-icon" aria-label="Toggle theme" title={dark ? 'Dark' : 'Light'} onClick={onToggleDark}>{dark ? <HugeiconsIcon icon={Sun03Icon} size={14}/> : <HugeiconsIcon icon={Moon02Icon} size={14}/>}</button>{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
+    </div>
+  )
+}
+
+export function ChartStage({ stageRef, seriesValues, palette, hiddenSeries, onToggleSeries, definition, chartHeight, chartLabel, onSelectRowId }: {
+  stageRef: RefObject<HTMLDivElement | null>
+  seriesValues: string[]
+  palette: string[]
+  hiddenSeries: Set<string>
+  onToggleSeries(value: string, isolate?: boolean): void
+  definition: ComponentProps<typeof Chart>['definition']
+  chartHeight: number
+  chartLabel: string
+  onSelectRowId(index: number): void
+}) {
+  return (
+    <div className="chart-stage chart-stage-v3" ref={stageRef}>{seriesValues.length > 1 && <SeriesLegend values={seriesValues} palette={palette} hidden={hiddenSeries} onToggle={onToggleSeries} />}{definition ? <div className="chart-wrap"><Chart definition={definition} height={chartHeight} ariaLabel={chartLabel} renderTooltipBody={({ defaultBody }) => <div className="sheetbase-tooltip-body">{defaultBody}</div>} onSelect={(point) => { const datum = point?.datum as Record<string, unknown> | undefined; if (datum && typeof datum[ROW_ID] === 'number') onSelectRowId(Number(datum[ROW_ID])) }}/></div> : <div className="empty-state"><strong>Choose fields to begin</strong><span>Use Fields in the toolbar to map X and Y.</span></div>}</div>
+  )
+}
+
+/**
+ * Guarded render update (React-sanctioned prop-sync alternative): tracks the
+ * last dataset identity so transient selection and zoom reset exactly once
+ * per swap. The hook owns only its marker; the caller resets its own state,
+ * which keeps render pure of prop-callback invocations.
+ */
+export function useDatasetSwap(dataset: Dataset | null): boolean {
+  const [lastDataset, setLastDataset] = useState<Dataset | null>(null)
+  if (dataset !== lastDataset) {
+    setLastDataset(dataset)
+    return true
+  }
+  return false
+}
+
+export function ExplorerFrame({ framed = true, rootRef, panelCollapsed, panelHeight, children }: {
+  framed?: boolean
+  rootRef: RefObject<HTMLDivElement | null>
+  panelCollapsed: boolean
+  panelHeight: number
+  children: ReactNode
+}) {
+  return (
+    <div ref={rootRef} className={framed ? 'sheetbase-explorer framed' : 'sheetbase-explorer'}>
+      {framed
+        ? <div className="app-shell explorer-app-v3"><div className="explorer-frame explorer-frame-v3 explorer-frame-v4" style={{ gridTemplateRows: panelCollapsed ? 'minmax(0, 1fr) 34px' : `minmax(0, 1fr) ${panelHeight}px` }}>{children}</div></div>
+        : children}
+    </div>
+  )
+}
+
+
