@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ThemeToggleButton, toFieldDataType, type FieldDataType, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
+import { ThemeToggleButton, loadInitialState, toFieldDataType, useIdleSave, type FieldDataType, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 import {
   NODE_WIDTH,
@@ -23,6 +23,8 @@ export interface SchemaEditorProps {
   onThemeChange?: (next: ThemeMode) => void;
   /** Emits table DatasetHeader fields for the selected model whenever the graph changes. */
   onHeaderFieldsChange?: (fields: Array<SheetbaseField & { column: number }>, modelName: string | null) => void;
+  persistKey?: string;
+  adapter?: PersistenceAdapter<SchemaGraph>;
 }
 
 const FIELD_TYPES: FieldDataType[] = ["text", "number", "boolean", "date", "datetime", "relationship"];
@@ -31,9 +33,10 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange }: SchemaEditorProps) {
-  const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(initialGraph ?? { models: [] }));
+export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter }: SchemaEditorProps) {
+  const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
+  useIdleSave(persistKey, graph, adapter);
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
   const activeTheme = theme ?? innerTheme;
   function toggleTheme() {
