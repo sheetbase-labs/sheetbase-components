@@ -4,6 +4,16 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Failed NL parse — the editor should show this instead of inventing a contains clause. */
+export class RuleParseError extends Error {
+  readonly input: string;
+  constructor(message: string, input: string) {
+    super(message);
+    this.name = "RuleParseError";
+    this.input = input;
+  }
+}
+
 function asNumber(raw: string): number | null {
   const n = Number(raw.replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
@@ -26,7 +36,7 @@ const COMPARISONS: Array<{ re: RegExp; operator: RuleOperator; value: (m: RegExp
   { re: /^(.+?)\s+is\s+not\s+empty$/i, operator: "isNotEmpty", value: () => undefined },
   { re: /^(.+?)\s+(contains?)\s+(.+)$/i, operator: "contains", value: (m) => m[3]!.trim().replace(/^["']|["']$/g, "") },
   { re: /^(.+?)\s+(starts\s+with)\s+(.+)$/i, operator: "startsWith", value: (m) => m[3]!.trim().replace(/^["']|["']$/g, "") },
-  { re: /^(.+?)\s+(ends\s+with)\s+(.+)$/i, operator: "endsWith", value: (m) => { const n = asNumber(m[3]!.trim()); return n !== null ? n : m[3]!.trim().replace(/^["']|["']$/g, ""); } },
+  { re: /^(.+?)\s+(ends\s+with)\s+(.+)$/i, operator: "endsWith", value: (m) => m[3]!.trim().replace(/^["']|["']$/g, "") },
   { re: /^(.+?)\s+is\s+not\s+(.+)$/i, operator: "neq", value: (m) => coerceValue(m[2]!.trim()) },
   { re: /^(.+?)\s+(?:is|equals?|=)\s+(.+)$/i, operator: "eq", value: (m) => coerceValue(m[2]!.trim()) },
 ];
@@ -106,7 +116,7 @@ export function parseNaturalLanguageRule(input: string, idPrefix = "rule"): Pipe
     if (parsed) conditions.push(parsed);
   }
   if (conditions.length === 0) {
-    conditions.push({ field: "value", operator: "contains", value: condText.slice(0, 80) || "review" });
+    throw new RuleParseError(`Could not parse conditions from: "${text}"`, text);
   }
 
   const actions = parseActions(actionText || (rejectMatch ? rejectMatch[1]! : "flag for review"));
