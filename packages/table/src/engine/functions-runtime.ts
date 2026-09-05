@@ -116,9 +116,7 @@ export function asDate(value: Scalar): Date {
 }
 
 export function numbersOnly(values: Scalar[]): number[] {
-  return values
-    .filter((value) => typeof value === "number" || (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))))
-    .map((value) => number(value));
+  return values.flatMap((value) => typeof value === "number" || (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) ? [number(value)] : []);
 }
 /**
  * Excel aggregation rule: direct scalar arguments coerce strictly (text that
@@ -322,15 +320,16 @@ export function sample(args: readonly FunctionArg[], ctx: FunctionContext): numb
 /** Excel A-suffix semantics: text counts as 0, TRUE/FALSE as 1/0, numeric
  * strings as their numbers — nothing is skipped. Empty cells are skipped. */
 export function sampleA(args: readonly FunctionArg[], ctx: FunctionContext): number[] {
-  const values = args
-    .flatMap((argument) => flatten(argument, ctx))
-    .filter((value) => value !== null && value !== "")
-    .map((value) => {
-      if (typeof value === "boolean") return value ? 1 : 0;
-      if (value === null) return 0;
+  const flat = args.flatMap((argument) => flatten(argument, ctx));
+  const values: number[] = [];
+  for (const value of flat) {
+    if (value === null || value === "") continue;
+    if (typeof value === "boolean") values.push(value ? 1 : 0);
+    else {
       const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    });
+      values.push(Number.isFinite(parsed) ? parsed : 0);
+    }
+  }
   if (values.length < 1) throw new Error("#DIV/0!");
   return values;
 }
