@@ -21,3 +21,12 @@
 .zoom-controls span { color: var(--muted); font-size: 9px; line-height: 1.25; }
 .chart-wrap .ts-chart-host:focus-visible,
 .chart-wrap [tabindex]:focus-visible { outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -1px; }
+
+.chart-stage-v3 { position: relative; }
+.menu-backdrop { position: fixed; inset: 0; z-index: 1; background: transparent; border: 0; padding: 0; cursor: default; }
+.explorer-commandbar .tool-anchor, .explorer-commandbar .command-icon { position: relative; z-index: 2; }
+.sort-button { display: block; width: 100%; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; padding: 0; }
+.sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.panel-resizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.panel-resizer:focus-visible::after { background: var(--accent); }
