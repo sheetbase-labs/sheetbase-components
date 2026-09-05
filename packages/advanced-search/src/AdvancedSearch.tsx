@@ -19,6 +19,9 @@ import {
   type SearchSpec,
   type SheetbaseField,
   type ThemeMode,
+  loadInitialState,
+  useIdleSave,
+  type PersistenceAdapter,
 } from "sheetbase-shared";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
@@ -39,6 +42,8 @@ export interface AdvancedSearchProps {
   onThemeChange?: (next: ThemeMode) => void;
   /** Fired whenever the tree flattens onto DatasetQuery (undefined when nested/NOT). */
   onDatasetQueryChange?: (query: DatasetQuery | undefined) => void;
+  persistKey?: string;
+  adapter?: PersistenceAdapter<SearchSpec>;
 }
 
 function fieldIdOf(field: SearchFieldInput): string {
@@ -222,9 +227,10 @@ function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: s
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange }: AdvancedSearchProps) {
-  const [draft, setDraft] = useState<SearchSpec>(initialSpec ?? { filter: emptyRoot() });
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter }: AdvancedSearchProps) {
+  const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
+  useIdleSave(persistKey, spec, adapter);
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
   const activeTheme = theme ?? innerTheme;
   function toggleTheme() {
