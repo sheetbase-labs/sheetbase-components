@@ -1,0 +1,23 @@
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.zoom-controls button {
+  height: 27px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--canvas);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 9.5px;
+}
+.zoom-controls button:hover:not(:disabled) { background: var(--panel-2); }
+.zoom-controls button:disabled { opacity: .4; cursor: default; }
+.zoom-controls span { color: var(--muted); font-size: 9px; line-height: 1.25; }
+.chart-wrap .ts-chart-host:focus-visible,
+.chart-wrap [tabindex]:focus-visible { outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: -1px; }

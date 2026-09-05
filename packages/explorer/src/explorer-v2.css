@@ -1,0 +1,233 @@
+/* Explorer interaction layer — builds on the shared Sheetbase tokens. */
+
+.canvas-region {
+  grid-template-rows: 36px 46px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.channel-shelf {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(92px, 1fr));
+  gap: 5px;
+  align-items: center;
+  padding: 6px 9px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.channel-slot {
+  min-width: 0;
+  height: 32px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--muted);
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.channel-slot.filled {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: var(--accent-soft-2);
+}
+
+.channel-slot.drag-over {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.channel-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.channel-slot.filled .channel-label { color: var(--accent-dark); }
+
+.channel-slot strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 550;
+}
+
+.channel-slot:not(.filled) strong {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.channel-slot button {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.channel-slot button:hover { background: var(--accent-soft); color: var(--accent-dark); }
+
+.column-item { cursor: grab; }
+.column-item:active { cursor: grabbing; }
+.column-item[draggable="true"]:hover .grip { color: var(--accent); opacity: 1; }
+
+.column-item.mapped { background: transparent; }
+.column-item.mapped:hover { background: var(--accent-soft-2); }
+
+.mapping-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+  max-width: 86px;
+}
+
+.mapping-badge {
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 8.5px;
+  line-height: 1.2;
+  font-weight: 650;
+}
+
+.drag-hint { display: none; }
+
+.chart-stage {
+  min-height: 0;
+  height: 100%;
+  padding: 4px 6px 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+}
+
+.chart-wrap {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  flex: 1 1 auto;
+}
+
+.chart-wrap > *,
+.chart-wrap > * > *,
+.chart-wrap svg,
+.chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-2);
+}
+
+.plot-grid button {
+  min-height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.plot-grid button svg { display: none; }
+.plot-grid button:hover { background: var(--canvas); color: var(--text); }
+.plot-grid button.active {
+  background: var(--canvas);
+  color: var(--accent-dark);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.compact-control,
+.range-control {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-control select,
+.compact-control input {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.compact-control select:hover,
+.compact-control input:hover { border-color: var(--border-strong); }
+
+.compact-control select:focus,
+.compact-control input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.range-control {
+  grid-template-columns: 64px minmax(0, 1fr) 24px;
+}
+
+.range-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.range-control output {
+  color: var(--text);
+  text-align: right;
+  font: 10px var(--font-mono);
+}
+
+.inspector-section > .field-control:first-of-type,
+.inspector-section > .compact-control:first-of-type,
+.inspector-section > .range-control:first-of-type { margin-top: 0; }
+.inspector-section > .field-control:last-child { margin-bottom: 0; }
+
+@media (max-width: 1200px) {
+  .channel-shelf { grid-template-columns: repeat(5, minmax(72px, 1fr)); }
+  .channel-label { display: none; }
+}
