@@ -140,10 +140,3 @@ button { border: 0; background: transparent; cursor: pointer; }
 .find-panel input:focus { border-color: #7652ef; }
 .find-panel button { height: 27px; padding: 0 8px; border-radius: 5px; background: #f2efff; color: #4d38bd; font-size: 12px; }
 .cell-editor { z-index: 9; margin: 0; padding: 0 8px; border: 0; border-radius: 0; outline: 2px solid #7652ef; background: white; color: #222; font: var(--text-size) var(--font-mono); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); user-select: text; }
-.cell-editor[aria-invalid="true"] { outline-color: #c43d3d; }
-.cell-formula-tokens { position: absolute; z-index: 10; display: flex; align-items: center; overflow: hidden; padding: 0 8px; white-space: pre; pointer-events: none; background: white; font-family: var(--font-mono); font-size: var(--text-size); }
-.typed-options { position: absolute; z-index: 18; display: grid; gap: 2px; max-height: 210px; overflow: auto; padding: 4px; border: 1px solid #d8d8dc; border-radius: 7px; background: white; box-shadow: 0 8px 22px rgb(0 0 0 / 14%); font-size: var(--text-size); }
-.typed-options button { min-height: 28px; padding: 4px 8px; border-radius: 4px; text-align: left; }
-.typed-options button:hover, .typed-options button.active { background: #f0edff; color: #4f37b8; }
-.typed-options.boolean { grid-template-columns: 1fr 1fr; }
-.typed-options.boolean button { text-align: center; }
