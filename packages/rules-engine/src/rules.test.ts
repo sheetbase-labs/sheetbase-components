@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseNaturalLanguageRule } from "./language";
-import { dryRunRule, evaluateRule, matchRules } from "./engine";
+import { parseNaturalLanguageRule, RuleParseError } from "./language";
+import { applyActions, dryRunRule, evaluateRule, matchRules } from "./engine";
 
 describe("parseNaturalLanguageRule", () => {
   it("parses when/then with comparison + route", () => {
@@ -38,5 +38,27 @@ describe("evaluateRule", () => {
   it("dry-runs via filterRows for a numeric Amount rule", () => {
     const rule = parseNaturalLanguageRule("when Amount is greater than 100 then flag");
     expect(dryRunRule(rule, [{ amount: 150 }, { amount: 50 }]).map((r) => r.amount)).toEqual([150]);
+  });
+});
+
+describe("parse failures and suffixes", () => {
+  it("throws instead of inventing a contains clause", () => {
+    expect(() => parseNaturalLanguageRule("please do the thing")).toThrow(RuleParseError);
+  });
+
+  it("keeps endsWith suffixes as text", () => {
+    const rule = parseNaturalLanguageRule('when sku ends with 001 then flag');
+    expect(rule.conditions[0]).toMatchObject({ operator: "endsWith", value: "001" });
+  });
+});
+
+describe("applyActions", () => {
+  it("applies transform and reject effects", () => {
+    const transform = parseNaturalLanguageRule("when amount is greater than 100 then set status to review");
+    const reject = parseNaturalLanguageRule("when amount is greater than 100 then reject");
+    const effects = applyActions({ amount: 150, status: "ok" }, [transform, reject]);
+    expect(effects.rejected).toBe(true);
+    expect(effects.output.status).toBe("review");
+    expect(effects.transforms.status).toBe("review");
   });
 });
