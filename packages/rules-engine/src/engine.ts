@@ -1,5 +1,5 @@
 import { filterRows, testCondition, toFilterClause, type FilterClause } from "sheetbase-shared";
-import type { PipelineRule, Row } from "./types";
+import type { PipelineRule, Row, RuleAction } from "./types";
 
 /** Does a row satisfy a rule (disabled rules never match)?
  * Match behaviour: `when: "all"` is AND, `when: "any"` is OR. */
@@ -19,9 +19,63 @@ export function matchRules(rules: PipelineRule[], row: Row): PipelineRule[] {
     .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 }
 
-/** Partition rows into matched / unmatched for a dry run. */
-export function dryRun(rules: PipelineRule[], rows: Row[]): Array<{ row: Row; matched: PipelineRule[] }> {
-  return rows.map((row) => ({ row, matched: matchRules(rules, row) }));
+export type RuleEffects = Readonly<{
+  rejected: boolean;
+  flags: readonly string[];
+  routes: readonly string[];
+  notifications: readonly string[];
+  transforms: Readonly<Record<string, unknown>>;
+  output: Row;
+}>;
+
+function coerceTransformValue(raw: string): unknown {
+  const clean = raw.replace(/^["']|["']$/g, "").trim();
+  if (/^(true|yes)$/i.test(clean)) return true;
+  if (/^(false|no)$/i.test(clean)) return false;
+  const n = Number(clean.replace(/,/g, ""));
+  return Number.isFinite(n) && clean !== "" ? n : clean;
+}
+
+/** Resolve a transform action into a field write. */
+export function transformWrite(action: RuleAction): { field: string; value: unknown } | undefined {
+  if (action.kind !== "transform") return undefined;
+  if (action.target && action.detail) return { field: action.target, value: coerceTransformValue(action.detail) };
+  const raw = action.target ?? action.detail ?? "";
+  const match = raw.match(/^[\w.]+\s*(?:=|to)\s*(.+)$/i) ?? raw.match(/^[\w.]+\s+(.+)$/);
+  if (!match) return undefined;
+  return { field: match[1]!, value: coerceTransformValue(match[2]!) };
+}
+
+/** Apply matched-rule actions in priority order. Later transforms overwrite earlier ones. */
+export function applyActions(row: Row, rules: PipelineRule[]): RuleEffects {
+  const matched = matchRules(rules, row);
+  let output: Row = { ...row };
+  let rejected = false;
+  const flags: string[] = [];
+  const routes: string[] = [];
+  const notifications: string[] = [];
+  const transforms: Record<string, unknown> = {};
+  for (const rule of matched) {
+    for (const action of rule.actions) {
+      if (action.kind === "reject") rejected = true;
+      if (action.kind === "flag") flags.push(action.detail ?? rule.name);
+      if (action.kind === "route" && action.target) routes.push(action.target);
+      if (action.kind === "notify") notifications.push(action.detail ?? action.target ?? rule.name);
+      if (action.kind === "transform") {
+        const write = transformWrite(action);
+        if (write) {
+          transforms[write.field] = write.value;
+          output = { ...output, [write.field]: write.value };
+        }
+      }
+    }
+  }
+  return { rejected, flags, routes, notifications, transforms, output };
+}
+
+/** Partition rows into matched / unmatched for a dry run, including applied effects. */
+export function dryRun(rules: PipelineRule[], rows: Row[]): Array<{ row: Row; matched: PipelineRule[]; effects: RuleEffects }> {
+  return rows.map((row) => ({ row, matched: matchRules(rules, row), effects: applyActions(row, rules) }));
 }
 
 /**
