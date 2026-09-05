@@ -81,8 +81,10 @@
 .toolbar-button.active { color: var(--accent-dark); background: var(--accent-soft); }
 .icon-button { width: 30px; padding: 0; }
 .toolbar-divider { height: 24px; border-left: 1px solid var(--border); margin: 0 4px; }
-.button.primary { background: #202020; color: white; }
-.sheetbase-explorer[data-theme="dark"] .button.primary { background: #f0f0ed; color: #171717; }
+.button.primary { background: var(--accent); color: #fff; }
+.button.primary:hover { background: var(--accent-dark); color: #fff; }
+.sheetbase-explorer[data-theme="dark"] .button.primary { background: var(--accent); color: #171717; }
+.sheetbase-explorer[data-theme="dark"] .button.primary:hover { background: var(--accent-dark); color: #171717; }
 .button.subtle { color: var(--muted); }
 .workspace { min-height: 0; display: grid; grid-template-columns: 248px minmax(320px, 1fr) 278px; background: var(--panel); }
 .sidebar, .canvas-region { min-height: 0; background: var(--panel); overflow: hidden; }
