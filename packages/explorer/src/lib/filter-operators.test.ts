@@ -13,4 +13,4 @@ describe("filterOperators", () => {
     expect(ops).toContain("between");
     expect(ops).not.toContain("contains");
   });
-};
+});
