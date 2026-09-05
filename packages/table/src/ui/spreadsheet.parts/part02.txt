@@ -1,3 +1,313 @@
+        expression.replace(/\[([^\]]+)\]/g, (token, fieldId: string) => structuredRangesRef.current.get(fieldId) ?? token),
+      { formulaMode: calculationAuthority === "host" ? "literal" : "evaluate" },
+    );
+    for (const [address, input] of initialState?.data ?? initialData) initialWorksheet.setInput(address, input);
+    worksheetRef.current = initialWorksheet;
+  }
+  worksheetRef.current.setFormulaMode(calculationAuthority === "host" ? "literal" : "evaluate");
+  const [formats, setFormats] = useState(() => {
+    if (initialState) return initialState.formats.clone();
+    const store = new RangeStore<CellFormat>();
+    for (const entry of initialFormats) store.write(entry.range, entry.value);
+    return store;
+  });
+  const [annotations, setAnnotations] = useState<readonly CellAnnotation[]>(() =>
+    initialState?.annotations ?? initialAnnotations ?? [],
+  );
+  const [selection, setSelection] = useState<GridSelection>(initialState?.selection ?? {
+    anchor: { row: 5, column: 2 },
+    focus: { row: 5, column: 2 },
+  });
+  const selectionRef = useRef(selection);
+  useEffect(() => { selectionRef.current = selection; }, [selection]);
+  const [editing, setEditing] = useState<GridPoint | null>(null);
+  const [draft, setDraft] = useState("");
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
+  const [fillTarget, setFillTarget] = useState<GridPoint | null>(null);
+  const [columnWidths, setColumnWidths] = useState<number[]>(() => initialState
+    ? [...initialState.columnWidths]
+    : Array.from({ length: columnCount }, (_, index) => initialColumnWidths?.[index] ?? (index < 7 ? 170 : 140)));
+  const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
+    ? [...initialState.rowHeights]
+    : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? ROW_HEIGHT));
+  const [scroll, setScroll] = useState(() => initialState?.scroll ?? { top: 0, left: 0 });
+  const [frozenRowCount, setFrozenRowCount] = useState(initialState?.frozenRows ?? initialFrozenRows);
+  const [frozenColumnCount, setFrozenColumnCount] = useState(initialState?.frozenColumns ?? initialFrozenColumns);
+  const [contextMenu, setContextMenu] = useState<{ axis: "row" | "column"; index: number; x: number; y: number }>();
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(undefined);
+    viewportRef.current?.focus();
+  }, []);
+  const [findPanel, setFindPanel] = useState<"find" | "replace">();
+  const [findQuery, setFindQuery] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [validationError, setValidationError] = useState<string>();
+  const [writeStates, setWriteStates] = useState(new Map<string, Readonly<{ status: WriteStatus; write: FieldWrite; before?: string }>>());
+  const [announcement, setAnnouncement] = useState("");
+  const announcerTimer = useRef<number | undefined>(undefined);
+  const announce = useCallback((message: string) => {
+    window.clearTimeout(announcerTimer.current);
+    announcerTimer.current = window.setTimeout(() => setAnnouncement(message), 150);
+  }, []);
+  const writeStateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const clickTimingFrame = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    for (const timer of writeStateTimers.current.values()) clearTimeout(timer);
+    writeStateTimers.current.clear();
+  }, []);
+  useEffect(() => () => {
+    if (clickTimingFrame.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(clickTimingFrame.current);
+  }, []);
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: (row) => rowHeights[row] ?? ROW_HEIGHT,
+    overscan: 8,
+    useFlushSync: false,
+  });
+  const columnVirtualizer = useVirtualizer({
+    horizontal: true,
+    count: columnCount,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: (column) => columnWidths[column] ?? 140,
+    overscan: 3,
+    useFlushSync: false,
+  });
+
+  const worksheet = worksheetRef.current;
+  const formulaFields = useMemo(() => Array.from({ length: columnCount }, (_, column) => ({
+    column,
+    label: data.get(cellKey({ row: 0, column })) ?? columnLabel(column),
+  })), [columnCount, data]);
+  const formulaRegions = useMemo(() => {
+    const rowsByColumn = new Map<number, number[]>();
+    for (const [address, value] of data) {
+      if (value === "") continue;
+      try {
+        const point = parseAddress(address);
+        if (editing && samePoint(point, editing)) continue;
+        const rows = rowsByColumn.get(point.column) ?? [];
+        rows.push(point.row);
+        rowsByColumn.set(point.column, rows);
+      } catch { /* Ignore non-cell keys. */ }
+    }
+    const regions: { label: string; reference?: string; detail: string; distance: number }[] = [];
+    for (const [column, unsortedRows] of rowsByColumn) {
+      const rows = [...new Set(unsortedRows)].sort((a, b) => a - b);
+      let start = rows[0];
+      let previous = rows[0];
+      const add = (end: number) => {
+        if (end - start < 1) return;
+        const label = `${columnLabel(column)}${start + 1}:${columnLabel(column)}${end + 1}`;
+        const configuredField = datasetHeader?.fields.find((item) => item.column === column);
+        const field = configuredField?.label ?? formulaFields[column]?.label;
+        regions.push({
+          label,
+          reference: configuredField ? `[${configuredField.id}]` : undefined,
+          detail: `${field && field !== columnLabel(column) ? `${field} · ` : ""}${end - start + 1} populated cells`,
+          distance: editing ? Math.abs(column - editing.column) + Math.abs(start - editing.row) / 100 : column,
+        });
+      };
+      for (const row of rows.slice(1)) {
+        if (row !== previous + 1) { add(previous); start = row; }
+        previous = row;
+      }
+      add(previous);
+    }
+    return regions.sort((a, b) => a.distance - b.distance).slice(0, 12);
+  }, [data, datasetHeader, editing, formulaFields]);
+  const structuredRanges = useMemo(() => new Map<string, string>(formulaRegions.flatMap((region) => {
+    const fieldId = /^\[([^\]]+)\]$/.exec(region.reference ?? "")?.[1];
+    return fieldId ? [[fieldId, region.label]] : [];
+  })), [formulaRegions]);
+  useEffect(() => { structuredRangesRef.current = structuredRanges; }, [structuredRanges]);
+  const structuredRangeSignature = [...structuredRanges].map(([field, region]) => `${field}:${region}`).join("|");
+  const suggestions = useMemo(
+    () => editing ? formulaSuggestions(draft, editing.row, formulaFields, formulaRegions) : [],
+    [draft, editing, formulaFields, formulaRegions],
+  );
+  const referencedRanges = useMemo(
+    () => editing ? formulaReferenceRanges(draft).slice(0, 24) : [],
+    [draft, editing],
+  );
+  const suggestedRange = useMemo(() => {
+    const suggestion = suggestions[0];
+    if (!editing || formulaReference || referencedRanges.length > 0 || suggestion?.kind !== "region") return null;
+    const preview = formulaReferenceRanges(`=${suggestion.previewRange ?? suggestion.replacement}`)[0];
+    return preview ?? null;
+  }, [editing, formulaReference, referencedRanges.length, suggestions]);
+  const semanticReferences = useMemo(() => {
+    if (!editing) return [];
+    return [...draft.matchAll(/\[([^\]]+)\]/g)].flatMap((match) => {
+      const label = structuredRanges.get(match[1]);
+      const reference = label ? formulaReferenceRanges(`=${label}`)[0] : undefined;
+      return reference ? [reference] : [];
+    });
+  }, [draft, editing, structuredRanges, structuredRangeSignature]);
+  const displayedReferenceRanges = [
+    ...(suggestedRange ? [suggestedRange] : []),
+    ...semanticReferences,
+    ...referencedRanges,
+  ];
+  const editingField = editing ? datasetHeader?.fields.find((field) => field.column === editing.column) : undefined;
+  const activeCustomEditor = editing && customEditors ? customEditors.find((editor) => editor.matches({ point: editing, field: editingField })) : undefined;
+  const columnOffsets = useMemo(() => {
+    const offsets = [0];
+    for (const width of columnWidths) offsets.push(offsets[offsets.length - 1] + width);
+    return offsets;
+  }, [columnWidths]);
+  const rowOffsets = useMemo(() => {
+    const offsets = [0];
+    for (const height of rowHeights) offsets.push(offsets[offsets.length - 1] + height);
+    return offsets;
+  }, [rowHeights]);
+  const columnLeft = (column: number) => ROW_HEADER_WIDTH + columnOffsets[column] + (column < frozenColumnCount ? scroll.left : 0);
+  const datasetHeaderHeight = 0;
+  const contentWidth = ROW_HEADER_WIDTH + columnVirtualizer.getTotalSize();
+  const contentHeight = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowVirtualizer.getTotalSize();
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const virtualColumns = columnVirtualizer.getVirtualItems();
+  const viewportRange = {
+    rowStart: virtualRows[0]?.index ?? 0,
+    rowEnd: virtualRows.at(-1)?.index ?? 0,
+    columnStart: virtualColumns[0]?.index ?? 0,
+    columnEnd: virtualColumns.at(-1)?.index ?? 0,
+  };
+  const visibleRows = [...new Set([
+    ...Array.from({ length: Math.min(frozenRowCount, rowCount) }, (_, row) => row),
+    ...virtualRows.map((item) => item.index),
+  ])];
+  const renderColumns = [...new Set([
+    ...Array.from({ length: Math.min(frozenColumnCount, columnCount) }, (_, column) => column),
+    ...virtualColumns.map((item) => item.index),
+  ])].map((index) => ({ index }));
+  const range = normaliseSelection(selection);
+  useEffect(() => {
+    const cells = (range.bottom - range.top + 1) * (range.right - range.left + 1);
+    const scope = cells === 1 ? selectionLabel(selection) : `${cells.toLocaleString()} cells selected, ${selectionLabel(selection)}`;
+    announce(scope);
+  }, [announce, range.bottom, range.left, range.right, range.top, selection]);
+  const announcedWrites = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const [address, state] of writeStates) {
+      if (announcedWrites.current.has(address)) continue;
+      announcedWrites.current.add(address);
+      announce(state.status === "saved" ? "Saved" : state.status === "conflict" ? "Save conflict" : state.status === "failed" ? "Save failed" : "Saving");
+      break;
+    }
+  }, [announce, writeStates]);
+  const previewRange = fillTarget ? {
+    top: Math.min(range.top, fillTarget.row),
+    bottom: Math.max(range.bottom, fillTarget.row),
+    left: Math.min(range.left, fillTarget.column),
+    right: Math.max(range.right, fillTarget.column),
+  } : range;
+
+  // Spill-aware selection: resolve the active cell through the worksheet's
+  // spill ownership during render (no engine state in React state) and box
+  // the full spill extent for the dashed spill-range outline below.
+  const activeKey = cellKey(selection.focus);
+  const spillOwner = worksheet.spills.owner(activeKey);
+  const spillBox = (() => {
+    if (!spillOwner) return undefined;
+    const addresses = worksheet.spills.range(spillOwner);
+    if (addresses.length < 2) return undefined;
+    let top = rowCount, left = columnCount, bottom = -1, right = -1;
+    for (const address of addresses) {
+      try {
+        const point = parseAddress(address);
+        if (point.row < 0 || point.column < 0 || point.row >= rowCount || point.column >= columnCount) continue;
+        top = Math.min(top, point.row); left = Math.min(left, point.column);
+        bottom = Math.max(bottom, point.row); right = Math.max(right, point.column);
+      } catch { /* Ignore non-cell keys. */ }
+    }
+    return bottom >= top && right >= left ? { top, left, bottom, right } : undefined;
+  })();
+
+  const pushHistory = useCallback((mutation: GridMutation) => {
+    if (isEmptyMutation(mutation)) return false;
+    past.current.push(mutation);
+    if (past.current.length > 100) past.current.shift();
+    future.current = [];
+    emitMutationAudit(onMutation, mutation);
+    return true;
+  }, [onMutation]);
+
+  const commitMutation = useCallback((mutation: GridMutation) => {
+    if (pushHistory(mutation)) {
+      applyWorksheetMutation(worksheet, mutation);
+      setData((current) => applyCellMutation(current, mutation));
+    }
+  }, [pushHistory, worksheet]);
+
+  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>) => {
+    const mutation = cellMutation(label, data, next, affectedAddresses);
+    commitMutation(mutation);
+  }, [commitMutation, data]);
+
+
+  // Declarative per-column display defaults (units, precision, number format)
+  // from the host's dataset header — display only, never stored values.
+  const columnDisplay = useMemo(
+    () => columnDisplayDefaults(datasetHeader?.fields ?? []),
+    [datasetHeader],
+  );
+
+  const canEdit = useCallback((point: GridPoint) => {
+    if (readOnly) return false;
+    if (readOnlyRows.has(point.row)) return false;
+    const field = datasetHeader?.fields.find((item) => item.column === point.column);
+    return field?.writable !== false;
+  }, [datasetHeader, readOnly, readOnlyRows]);
+
+  const undo = useCallback(() => {
+    const previous = past.current.pop();
+    if (!previous) return;
+    future.current.push(previous);
+    applyWorksheetMutation(worksheet, previous, "backward");
+    setData((current) => applyCellMutation(current, previous, "backward"));
+    setFormats((current) => mutationFormat(current, previous, "backward"));
+    setColumnWidths((current) => applyColumnWidthMutation(current, previous, "backward"));
+    emitMutationAudit(onMutation, previous);
+  }, [onMutation, worksheet]);
+
+  const redo = useCallback(() => {
+    const next = future.current.pop();
+    if (!next) return;
+    past.current.push(next);
+    applyWorksheetMutation(worksheet, next);
+    setData((current) => applyCellMutation(current, next));
+    setFormats((current) => mutationFormat(current, next));
+    setColumnWidths((current) => applyColumnWidthMutation(current, next));
+    emitMutationAudit(onMutation, next);
+  }, [onMutation, worksheet]);
+
+  const writeActiveCell = useCallback((value: string) => {
+    if (readOnly || !canEdit(selection.focus)) return;
+    const key = cellKey(selection.focus);
+    commitMutation(cellChangesMutation("Edit cell", [{
+      address: key,
+      before: data.get(key),
+      after: value === "" ? undefined : value,
+    }]));
+  }, [canEdit, commitMutation, data, readOnly, selection.focus]);
+
+  const applyFormat = useCallback((patch: Partial<CellFormat>) => {
+    if (readOnly) return;
+    const next = formats.clone();
+    const current = next.get(selection.focus) ?? {};
+    next.write({
+      start: { row: range.top, column: range.left },
+      end: { row: range.bottom, column: range.right },
+    }, { ...current, ...patch });
+    const mutation = formatMutation("Format range", formats, next);
+    if (pushHistory(mutation)) setFormats(next);
+  }, [formats, pushHistory, range.bottom, range.left, range.right, range.top, readOnly, selection.focus]);
+
+  const hydrate = useCallback((cells: ReadonlyMap<string, SpreadsheetHydrationCell>) => {
     const changes = [...cells].map(([address, cell]) => ({ address, after: cell.display }));
     for (const [address, cell] of cells) worksheet.set(address, cell.binding);
     setData((current) => applyCellMutation(current, cellChangesMutation("Hydrate page", changes)));
@@ -94,308 +404,8 @@
   }, [columnVirtualizer, rowVirtualizer]);
 
   const move = useCallback((delta: GridPoint, extend: boolean) => {
-    setSelection((current) => {
-      if (extend && samePoint(current.anchor, current.focus)) {
-        // First Shift+arrow from a spill child covers the whole spill extent,
-        // so keyboard expansion starts from the dynamic array, not one cell.
-        const owner = worksheet.spills.owner(cellKey(current.focus));
-        const addresses = owner ? worksheet.spills.range(owner) : [];
-        if (addresses.length > 1) {
-          let top = rowCount, left = columnCount, bottom = -1, right = -1;
-          for (const address of addresses) {
-            try {
-              const point = parseAddress(address);
-              if (point.row < 0 || point.column < 0 || point.row >= rowCount || point.column >= columnCount) continue;
-              top = Math.min(top, point.row); left = Math.min(left, point.column);
-              bottom = Math.max(bottom, point.row); right = Math.max(right, point.column);
-            } catch { /* Ignore non-cell keys. */ }
-          }
-          if (bottom >= top && right >= left) {
-            const spillSelection = { anchor: { row: top, column: left }, focus: { row: bottom, column: right } };
-            queueMicrotask(() => reveal(spillSelection.focus));
-            return spillSelection;
-          }
-        }
-      }
-      const next = moveSelection(current, delta, rowCount, columnCount, extend);
-      queueMicrotask(() => reveal(next.focus));
-      return next;
-    });
-  }, [columnCount, reveal, rowCount, worksheet]);
-
-  const beginEdit = useCallback((point: GridPoint, replaceWith?: string) => {
-    if (!canEdit(point)) return;
-    setSelection({ anchor: point, focus: point });
-    setEditing(point);
-    setDraft(replaceWith ?? data.get(cellKey(point)) ?? "");
-    setSuggestionIndex(0);
-    setFormulaReference(null);
-    setValidationError(undefined);
-  }, [canEdit, data]);
-
-  const [heldWrites, setHeldWrites] = useState<ReadonlyMap<string, HeldFieldWrite>>(() => new Map());
-  const heldWritesRef = useRef(heldWrites);
-  heldWritesRef.current = heldWrites;
-  /** Authoritative write pipeline: write-state tracking + onFieldWrite. */
-  const emitFieldWrite = useCallback((write: FieldWrite, before?: string) => {
-    if (!onFieldWrite) return;
-    const update = (status: WriteStatus) => {
-      const existingTimer = writeStateTimers.current.get(write.address);
-      if (existingTimer) clearTimeout(existingTimer);
-      writeStateTimers.current.delete(write.address);
-      setWriteStates((current) => new Map(current).set(write.address, { status, write, before }));
-      onWriteStateChange?.(write.address, status);
-      if (status === "saved") {
-        writeStateTimers.current.set(write.address, setTimeout(() => {
-          writeStateTimers.current.delete(write.address);
-          setWriteStates((current) => {
-            if (current.get(write.address)?.status !== "saved") return current;
-            const next = new Map(current);
-            next.delete(write.address);
-            return next;
-          });
-        }, 1400));
-      }
-    };
-    update("pending");
-    Promise.resolve(onFieldWrite(write)).then(() => update("saved")).catch((error: unknown) => {
-      const status = typeof error === "object" && error !== null && "status" in error && error.status === 409 ? "conflict" : "failed";
-      update(status);
-    });
-  }, [onFieldWrite, onWriteStateChange]);
-
-  const runFieldWrite = useCallback((write: FieldWrite, before?: string) => {
-    if (!onFieldWrite) return;
-    if (fieldWritePolicy?.(write) === "hold") {
-      // Field-write policy: the write stays local (visible, undoable) and the
-      // host owns persistence. A re-edit of the same cell replaces its held
-      // write; the host flushes or discards through the handle.
-      setHeldWrites((current) => {
-        const next = holdFieldWrite(current, write, before);
-        onHeldFieldWritesChange?.([...next.values()].map((entry) => entry.write));
-        return next;
-      });
-      return;
-    }
-    emitFieldWrite(write, before);
-  }, [emitFieldWrite, fieldWritePolicy, onHeldFieldWritesChange]);
-
-  const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
-    if (!editing) return;
-    if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
-    if (save) {
-      const key = cellKey(editing);
-      const completedDraft = completeFormula(explicitDraft ?? draft);
-      const field = datasetHeader?.fields.find((item) => item.column === editing.column);
-      const invalid = field ? validateTypedCell(completedDraft, field.dataType, field.required, field.options) : undefined;
-      if (invalid) { setValidationError(invalid); return; }
-      const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editing.row, column: item.column })) ?? "").trim()) : false;
-      commitMutation(cellChangesMutation("Edit cell", [{
-        address: key,
-        before: data.get(key),
-        after: completedDraft === "" ? undefined : completedDraft,
-      }]));
-      const recordId = datasetHeader?.recordIdForRow?.(editing.row);
-      if (field && (!rowWasBlank || recordId)) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: completedDraft }, data.get(key));
-      if (rowWasBlank && datasetHeader && completedDraft !== "") {
-        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? completedDraft : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
-        if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editing.row, values })).catch(() => undefined);
-      }
-    }
-    setEditing(null);
-    setFormulaReference(null);
-    if (movement) move(movement, false);
-    queueMicrotask(() => viewportRef.current?.focus());
-  }, [commitMutation, data, datasetHeader, draft, editing, move, onRecordCreate, readOnly, runFieldWrite]);
-
-  const editActiveInput = useCallback((value: string) => {
-    if (readOnly) return;
-    if (editing) setDraft(value);
-    else beginEdit(selection.focus, value);
-  }, [beginEdit, editing, readOnly, selection.focus]);
-
-  const autoFitRow = useCallback((row = selection.focus.row) => {
-    let lines = 1;
-    for (const [address, value] of data) {
-      try { if (parseAddress(address).row === row) lines = Math.max(lines, value.split("\n").length); } catch { /* Ignore non-cell keys. */ }
-    }
-    const after = Math.max(ROW_HEIGHT, Math.min(180, lines * 20 + 11));
-    setRowHeights((current) => { const next = [...current]; next[row] = after; onRowHeightsChange?.(next); return next; });
-  }, [data, onRowHeightsChange, selection.focus.row]);
-  const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
-    if (readOnly) return;
-    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`);
-  }, [commit, data, range.bottom, range.top, readOnly]);
-
-  const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
-    if (readOnly) return;
-    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`);
-  }, [commit, data, range.left, range.right, readOnly]);
-
-  const autoFitColumn = useCallback((column = selection.focus.column) => {
-    let characters = datasetHeader?.fields.find((field) => field.column === column)?.label.length ?? 1;
-    for (const [address, value] of data) {
-      try { if (parseAddress(address).column === column) characters = Math.max(characters, value.length); } catch { /* Ignore non-cell keys. */ }
-    }
-    const before = columnWidths[column] ?? 140;
-    const after = Math.max(72, Math.min(360, characters * 8 + 28));
-    const mutation = columnWidthMutation({ column, before, after });
-    if (pushHistory(mutation)) setColumnWidths((current) => { const next = applyColumnWidthMutation(current, mutation); onColumnWidthsChange?.(next); return next; });
-  }, [columnWidths, data, datasetHeader, onColumnWidthsChange, pushHistory, selection.focus.column]);
-
-  // Ctrl+D / Ctrl+R: duplicate the leading edge (top row for down, left
-  // column for right — Excel semantics) across the selection through the
-  // autofill tiling helper, so formulas shift relatively. Single-cell (or
-  // single-row for down, single-column for right) selections are a no-op.
-  const fillDown = useCallback(() => {
-    if (readOnly || range.bottom === range.top) return;
-    const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.top, column: range.right } };
-    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    commit(filled.data, "Fill down", selectionAddresses(filled.selection));
-    setSelection(filled.selection);
-    announce("Filled down");
-  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
-
-  const fillRight = useCallback(() => {
-    if (readOnly || range.right === range.left) return;
-    const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.bottom, column: range.left } };
-    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    commit(filled.data, "Fill right", selectionAddresses(filled.selection));
-    setSelection(filled.selection);
-    announce("Filled right");
-  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
-
-  const findText = useCallback((query: string) => {
-    const normalized = query.toLocaleLowerCase();
-    const match = [...data].find(([, value]) => value.toLocaleLowerCase().includes(normalized));
-    if (!match) return undefined;
-    const point = parseAddress(match[0]);
-    setSelection({ anchor: point, focus: point });
-    reveal(point);
-    return match[0];
-  }, [data, reveal]);
-
-  const replaceAll = useCallback((query: string, replacement: string) => {
-    if (readOnly || !query) return 0;
-    let count = 0;
-    const next = new Map(data);
-    for (const [address, value] of data) {
-      if (!value.includes(query)) continue;
-      next.set(address, value.split(query).join(replacement));
-      count++;
-    }
-    if (count) commit(next, "Replace all");
-    return count;
-  }, [commit, data, readOnly]);
-
-  const annotate = useCallback((address: string, note: string, meta?: { author?: string; createdAt?: string }) => {
-    if (readOnly) return;
-    setAnnotations((current) => {
-      const next = setAnnotationIn(current, address, note, meta);
-      onAnnotationsChange?.(next);
-      return next;
-    });
-  }, [onAnnotationsChange, readOnly]);
-  const removeAnnotationAt = useCallback((address: string) => {
-    if (readOnly) return;
-    setAnnotations((current) => {
-      const next = removeFromAnnotations(current, address);
-      onAnnotationsChange?.(next);
-      return next;
-    });
-  }, [onAnnotationsChange, readOnly]);
-
-  const clearWriteState = useCallback((address: string) => {
-    clearTimeout(writeStateTimers.current.get(address));
-    writeStateTimers.current.delete(address);
-    setWriteStates((current) => {
-      if (!current.has(address)) return current;
-      const next = new Map(current);
-      next.delete(address);
-      return next;
-    });
-  }, []);
-
-  useImperativeHandle(forwardedRef, () => ({
-    undo,
-    redo,
-    setActiveInput: writeActiveCell,
-    editActiveInput,
-    commitEdit: () => finishEdit(true),
-    cancelEdit: () => finishEdit(false),
-    snapshot: () => ({ data, formats: formats.clone(), columnWidths: [...columnWidths], rowHeights: [...rowHeights], selection, scroll, frozenRows: frozenRowCount, frozenColumns: frozenColumnCount, annotations: [...annotations] }),
-    insertRows: (index, count) => changeRows("insert", index, count),
-    deleteRows: (index, count) => changeRows("delete", index, count),
-    insertColumns: (index, count) => changeColumns("insert", index, count),
-    deleteColumns: (index, count) => changeColumns("delete", index, count),
-    autoFitColumn,
-    autoFitRow,
-    find: findText,
-    replaceAll,
-    applyFormat,
-    focus: () => viewportRef.current?.focus(),
-    hydrate,
-    clearWriteState,
-    setFilter,
-    clearFilter,
-    setAnnotation: annotate,
-    removeAnnotation: removeAnnotationAt,
-    heldFieldWrites: () => [...heldWritesRef.current.values()].map((entry) => entry.write),
-    commitHeldFieldWrites: () => {
-      const held = [...heldWritesRef.current.values()];
-      const empty = new Map<string, HeldFieldWrite>();
-      heldWritesRef.current = empty;
-      setHeldWrites(empty);
-      onHeldFieldWritesChange?.([]);
-      held.forEach(({ write, before }) => emitFieldWrite(write, before));
-    },
-    discardHeldFieldWrites: () => {
-      const empty = new Map<string, HeldFieldWrite>();
-      heldWritesRef.current = empty;
-      setHeldWrites(empty);
-      onHeldFieldWritesChange?.([]);
-    },
-  }), [annotate, annotations, clearWriteState, emitFieldWrite, heldWrites, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, redo, removeAnnotationAt, replaceAll, rowHeights, scroll, selection, setFilter, undo, writeActiveCell]);
-
-  useEffect(() => {
-    if (editing) onEditChange?.(draft);
-  }, [draft, editing, onEditChange]);
-
-  useEffect(() => onFormatsChange?.(formats.entries()), [formats, onFormatsChange]);
-
-  const updateFormulaReference = useCallback((next: FormulaReferenceSelection) => {
-    setFormulaReference(next);
-    setDraft((current) => applyFormulaReference(current, next));
-    setSuggestionIndex(0);
-  }, []);
-
-  const navigateFormulaReference = useCallback((delta: GridPoint, extend: boolean) => {
-    if (!editing) return;
-    const next = moveFormulaReference(
-      formulaReference, editing, delta, extend, rowCount, columnCount, draft.length,
-    );
-    updateFormulaReference(next);
-    reveal(next.focus);
-  }, [columnCount, draft.length, editing, formulaReference, reveal, rowCount, updateFormulaReference]);
-
-  const selectFormulaColumn = useCallback((column: number, append = false) => {
-    if (!editing || !draft.startsWith("=")) return false;
-    const range = populatedColumnSelection(data, column, editing);
-    if (!range) return false;
-    const field = datasetHeader?.fields.find((item) => item.column === column);
-    const reference = field ? `[${field.id}]` : selectionLabel(range);
-    const separator = append && !/[=(,+\-*/]\s*$/.test(draft) ? "," : "";
-    setDraft((current) => current + separator + reference);
-    setFormulaReference({ ...range, tokenStart: draft.length + separator.length });
-    setSuggestionIndex(0);
-    return true;
-  }, [data, datasetHeader, draft, editing]);
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (editing) return;
-    const command = event.metaKey || event.ctrlKey;
-    if (!command && event.key === "?") { event.preventDefault(); setShowShortcutHelp(true); return; }
-    if (command && event.key.toLowerCase() === "z") {
-      event.preventDefault();
-      event.shiftKey ? redo() : undo();
-      return;
-    }
+    const current = selectionRef.current;
+    if (extend && samePoint(current.anchor, current.focus)) {
+      // First Shift+arrow from a spill child covers the whole spill extent,
+      // so keyboard expansion starts from the dynamic array, not one cell.
+      const owner = worksheet.spills.owner(cellKey(current.focus));
