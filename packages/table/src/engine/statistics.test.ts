@@ -65,6 +65,7 @@ describe("chi-squared distribution", () => {
       D1: 9, E1: 9,
       D2: 9, E2: 9,
     };
+    // χ² = (12−9)²/9 + (8−9)²/9 + (5−9)²/9 + (10−9)²/9 = 3.0, df = 1.
     const p = call("CHISQ.TEST", range("A1", "B2"), range("D1", "E2")) as number;
     expect(p).toBeGreaterThan(0);
     expect(p).toBeLessThan(1);
@@ -146,7 +147,9 @@ describe("hypothesis tests", () => {
   });
 
   it("computes a two-sample equal-variance p-value", () => {
+    // means 10 vs 12, sample variances 1 vs 1 → pooled sd 1, t = -3.1623, df 8.
     const p = call("T.TEST", range("A1", "A5"), range("B1", "B5"), 2, 2) as number;
+    // t = −2.236 on 8 df → p ≈ 0.0558.
     expect(p).toBeGreaterThan(0.01);
     expect(p).toBeLessThan(0.1);
   });
