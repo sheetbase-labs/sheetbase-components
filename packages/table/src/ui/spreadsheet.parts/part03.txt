@@ -193,7 +193,7 @@
     if (!range) return false;
     const field = datasetHeader?.fields.find((item) => item.column === column);
     const reference = field ? `[${field.id}]` : selectionLabel(range);
-    const separator = append && !/[=(,+−*/]\s*$/.test(draft) ? "," : "";
+    const separator = append && !/[=(,+\-*/]\s*$/.test(draft) ? "," : "";
     setDraft((current) => current + separator + reference);
     setFormulaReference({ ...range, tokenStart: draft.length + separator.length });
     setSuggestionIndex(0);
