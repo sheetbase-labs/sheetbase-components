@@ -294,7 +294,7 @@ function DefaultTable({ readOnly = false }: { readOnly?: boolean }) {
     saveActiveSheet();
     const target = workbook.sheets.find((sheet) => sheet.id === sheetId);
     if (!target) return;
-    const quoted = `'${target.label.replace(/'/g, "''")}!'`;
+    const quoted = `'${target.label.replace(/'/g, "''")}'!`;
     const referenced = workbook.sheets.some((sheet) => sheet.id !== sheetId && [...(sheet.state.spreadsheet?.data ?? sheet.state.initialData).values()].some((input) => input.startsWith("=") && (input.includes(`${target.label}!`) || input.includes(quoted))));
     if (referenced && !window.confirm(`Delete ${target.label}? Formulas on other sheets refer to it.`)) return;
     workbook.remove(sheetId);
