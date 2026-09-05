@@ -22,11 +22,14 @@
   box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   height: 100%; padding: 0 10px;
-  border-left: 1px solid var(--border);
+  background: var(--accent); color: #fff;
   font: inherit; font-size: var(--text-size); font-weight: 500;
-  color: var(--text); cursor: pointer; white-space: nowrap;
+  cursor: pointer; white-space: nowrap;
 }
-.sb-nl-row .sb-nl-action.is-muted { color: var(--muted); pointer-events: none; cursor: default; }
+.sb-nl-row .sb-nl-action:hover { background: var(--accent-dark); color: #fff; }
+.sb-nl-row .sb-nl-action.is-muted { opacity: 0.45; pointer-events: none; cursor: default; }
+:where(.sheetbase-scope)[data-theme="dark"] .sb-nl-row .sb-nl-action { color: #171717; }
+:where(.sheetbase-scope)[data-theme="dark"] .sb-nl-row .sb-nl-action:hover { color: #171717; }
 .sb-rule-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .sb-rule { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .sb-rule-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
