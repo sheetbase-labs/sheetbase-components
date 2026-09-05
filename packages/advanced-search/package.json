@@ -1,0 +1,40 @@
+{
+  "name": "sheetbase-advanced-search",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "./dist-lib/sheetbase-advanced-search.js",
+  "module": "./dist-lib/sheetbase-advanced-search.js",
+  "types": "./dist-types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "import": "./dist-lib/sheetbase-advanced-search.js"
+    },
+    "./styles.css": "./dist-lib/style.css"
+  },
+  "files": ["dist-lib", "dist-types", "README.md"],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sheetbase-shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
+  }
+}
