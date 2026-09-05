@@ -1,5 +1,52 @@
-import { fieldFromSchema, toFieldDataType } from "sheetbase-shared";
-import type { SchemaGraph, SchemaModel, SchemaRelation } from "./types";
+import { fieldFromSchema, toFieldDataType, type SheetbaseField } from "sheetbase-shared";
+import type { SchemaField, SchemaGraph, SchemaModel, SchemaRelation } from "./types";
+
+export const NODE_WIDTH = 232;
+export const NODE_HEADER_HEIGHT = 48;
+export const NODE_FIELD_HEIGHT = 22;
+
+export type ReferenceChange =
+  | { kind: "rename-model"; from: string; to: string }
+  | { kind: "delete-model"; name: string }
+  | { kind: "rename-field"; model: string; from: string; to: string }
+  | { kind: "delete-field"; model: string; key: string };
+
+export function nodeHeight(model: SchemaModel): number {
+  return NODE_HEADER_HEIGHT + model.fields.length * NODE_FIELD_HEIGHT;
+}
+
+function rewriteFieldRef(field: SchemaField, change: ReferenceChange): SchemaField {
+  const ref = field.references;
+  if (!ref) return field;
+  if (change.kind === "rename-model" && ref.model === change.from) {
+    return { ...field, references: { ...ref, model: change.to } };
+  }
+  if (change.kind === "delete-model" && ref.model === change.name) {
+    return { ...field, references: undefined, type: field.type === "relationship" ? "text" : field.type };
+  }
+  if (change.kind === "rename-field" && ref.model === change.model && (ref.field ?? undefined) === change.from) {
+    return { ...field, references: { ...ref, field: change.to } };
+  }
+  if (change.kind === "delete-field" && ref.model === change.model && (ref.field ?? undefined) === change.key) {
+    return { ...field, references: { model: ref.model } };
+  }
+  return field;
+}
+
+/** Rewrite or drop FK pointers so rename/delete cannot leave dangling identity. */
+export function rewriteReferences(graph: SchemaGraph, change: ReferenceChange): SchemaGraph {
+  return {
+    models: graph.models.map((model) => ({
+      ...model,
+      fields: model.fields.map((field) => rewriteFieldRef(field, change)),
+    })),
+  };
+}
+
+/** Sheetbase fields plus table column indices for DatasetHeaderConfig. */
+export function tableHeaderFields(model: SchemaModel): Array<SheetbaseField & { column: number }> {
+  return sheetbaseFieldsOf(model).map((field, column) => ({ ...field, column }));
+}
 
 /** Extract FK-style edges from relationship fields + explicit references.
  * Dangling refs are omitted here (colour them in the inspector via validateGraph). */
@@ -78,7 +125,24 @@ export function graphBounds(graph: SchemaGraph): { x: number; y: number; w: numb
   for (const m of positioned) {
     const p = m.position!;
     minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x + 240); maxY = Math.max(maxY, p.y + 120);
+    maxX = Math.max(maxX, p.x + NODE_WIDTH); maxY = Math.max(maxY, p.y + nodeHeight(m));
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Pan + zoom that fits `bounds` inside a viewport, clamped to the editor zoom range. */
+export function fitTransform(
+  bounds: { x: number; y: number; w: number; h: number },
+  viewportWidth: number,
+  viewportHeight: number,
+  pad = 48,
+): { zoom: number; x: number; y: number } {
+  const availW = Math.max(1, viewportWidth - pad);
+  const availH = Math.max(1, viewportHeight - pad);
+  const zoom = Math.min(2, Math.max(0.4, Math.min(availW / Math.max(bounds.w, 1), availH / Math.max(bounds.h, 1))));
+  return {
+    zoom,
+    x: pad / 2 - bounds.x * zoom,
+    y: pad / 2 - bounds.y * zoom,
+  };
 }
