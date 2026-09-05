@@ -1,6 +1,11 @@
 import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addressKey } from "../engine";
-import { DataPageCache, RevisionedCommitCoordinator, ViewportPageLoader, conflictKey, isAbortError, materializeDatasetPage, queryKey, type DatasetQuery, type PagedDataAdapter, type RecordFieldWrite } from "../data";
+import { addressKey } from "../engine/coordinates";
+import { DataPageCache } from "../data/page-cache";
+import { RevisionedCommitCoordinator, conflictKey } from "../data/conflicts";
+import { ViewportPageLoader, isAbortError } from "../data/viewport-loader";
+import { materializeDatasetPage } from "../data/projection";
+import { queryKey, type DatasetQuery } from "../data/query";
+import type { PagedDataAdapter, RecordFieldWrite } from "../data/adapter";
 import { cellChangesMutation, emitMutationAudit } from "../grid/mutations";
 import { ConflictPanel, type ConflictPanelEntry } from "./ConflictPanel";
 import { Spreadsheet, type FieldWrite, type SpreadsheetHandle, type SpreadsheetLoadingRange, type SpreadsheetProps, type SpreadsheetViewport } from "./Spreadsheet";
@@ -32,13 +37,15 @@ export type PagedSpreadsheetProps = Omit<SpreadsheetProps,
   showLoadTimings?: boolean;
 }>;
 
+const defaultQuery = {};
+
 /** Connects a single Spreadsheet renderer to a paged, revision-aware data adapter. */
 export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsheetProps>(function PagedSpreadsheet(props, forwardedRef) {
   const {
     adapter,
     datasetId,
     fieldIds,
-    query = {},
+    query = defaultQuery,
     pageSize = 200,
     prefetchPages = 1,
     cachePages = 24,
@@ -53,8 +60,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   } = props;
   const tableRef = useRef<SpreadsheetHandle>(null);
   const recordIdsRef = useRef(new Map<number, string>());
-  const cacheRef = useRef(pageCache ?? sharedAdapterCache(adapter, cachePages));
-  const coordinatorRef = useRef(new RevisionedCommitCoordinator(adapter));
+  const fallbackCache = useMemo(() => sharedAdapterCache(adapter, cachePages), [adapter, cachePages]);
+  const cacheRef = useRef(pageCache ?? fallbackCache);
+  const [coordinator] = useState(() => new RevisionedCommitCoordinator(adapter));
   const loadedPagesRef = useRef(new Map<number, number>());
   const initialLoadRef = useRef(true);
   const [conflicts, setConflicts] = useState<readonly ConflictPanelEntry[]>([]);
@@ -64,7 +72,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   const auditRef = useRef(spreadsheet.onMutation);
   const renderFrameRef = useRef<number | undefined>(undefined);
   const [loadingRanges, setLoadingRanges] = useState<readonly SpreadsheetLoadingRange[]>([]);
-  auditRef.current = spreadsheet.onMutation;
+  useEffect(() => { auditRef.current = spreadsheet.onMutation; });
   const [status, setStatus] = useState({ loading: false, loadedRows: 0, totalRows: spreadsheet.rowCount ?? 0, apiMs: 0, hydrationMs: 0, renderMs: 0, cellClickMs: 0 });
   const stableQueryKey = queryKey(query);
   const fieldIdKey = fieldIds.join("\u0000");
@@ -77,9 +85,6 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     prefetchPages,
   }), [adapter, datasetId, pageSize, prefetchPages, stableQueryKey]);
 
-  // Spreadsheet's imperative methods close over the current selection and formats.
-  // Compose the caller's ref straight onto the inner Spreadsheet so the forwarded
-  // handle always reflects its latest render, even when memo skips this component.
   const composeRefs = useCallback((instance: SpreadsheetHandle | null) => {
     tableRef.current = instance;
     if (typeof forwardedRef === "function") forwardedRef(instance);
@@ -115,7 +120,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       const cells = new Map();
       let totalRows = 0;
       for (const page of pages) {
-        coordinatorRef.current.acceptRevision(page.revision);
+        coordinator.acceptRevision(page.revision);
         totalRows = page.totalRows;
         onTotalRowsChange?.(page.totalRows);
         loadedPagesRef.current.set(page.request.rowStart, page.records.length);
@@ -142,7 +147,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       setStatus((current) => ({ ...current, loading: false }));
       onLoadError?.(error);
     }
-  }, [loader, onLoadError, onTotalRowsChange, stableFieldIds]);
+  }, [coordinator, loader, onLoadError, onTotalRowsChange, stableFieldIds]);
 
   const mergeConflicts = useCallback((entries: readonly ConflictPanelEntry[]) => {
     if (entries.length === 0) return;
@@ -179,7 +184,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       fieldId: write.fieldId,
       after: write.value,
     };
-    const result = await coordinatorRef.current.commit([recordWrite]);
+    const result = await coordinator.commit([recordWrite]);
     if (result.status === "conflict") {
       mergeConflicts(result.conflicts.map((conflict) => ({ conflict, write: conflict.write, currentRevision: result.currentRevision })));
       throw Object.assign(new Error("Revision conflict"), { status: 409, conflict: result });
@@ -188,10 +193,8 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   };
 
   const keepMine = useCallback(async (entry: ConflictPanelEntry) => {
-    // Retry the held write at the conflict's revision: the grid already shows
-    // the local value, so a successful recommit only clears badges + audits.
-    coordinatorRef.current.acceptRevision(entry.currentRevision);
-    const result = await coordinatorRef.current.commit([entry.write]);
+    coordinator.acceptRevision(entry.currentRevision);
+    const result = await coordinator.commit([entry.write]);
     if (result.status === "conflict") {
       mergeConflicts(result.conflicts.map((conflict) => ({ conflict, write: conflict.write, currentRevision: result.currentRevision })));
       return;
@@ -207,10 +210,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
         after: entry.write.after,
       }]), result.result.revision);
     }
-  }, [addressFor, dropConflict, mergeConflicts]);
+  }, [addressFor, coordinator, dropConflict, mergeConflicts]);
 
   const takeServer = useCallback((entry: ConflictPanelEntry) => {
-    // Hydrate the authoritative value with no undo history and drop the held write.
     const address = addressFor(entry.write);
     if (address) {
       tableRef.current?.hydrate(new Map([[address, {
@@ -242,9 +244,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
 
   const createRecord = async ({ row, values }: Readonly<{ row: number; values: Readonly<Record<string, string>> }>) => {
     if (!adapter.createRecord) throw new Error("This adapter does not support record creation");
-    const created = await adapter.createRecord(datasetId, values, coordinatorRef.current.revision);
+    const created = await adapter.createRecord(datasetId, values, coordinator.revision);
     recordIdsRef.current.set(row, created.recordId);
-    coordinatorRef.current.acceptRevision(created.revision);
+    coordinator.acceptRevision(created.revision);
     cacheRef.current.invalidateDataset(datasetId);
     const cells = new Map(stableFieldIds.map((fieldId, column) => [addressKey({ row, column }), {
       display: values[fieldId] ?? "",
