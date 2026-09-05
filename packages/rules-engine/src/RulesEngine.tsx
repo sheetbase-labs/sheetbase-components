@@ -83,6 +83,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
     onThemeChange?.(next);
   }
   const [draftText, setDraftText] = useState("");
+  const canGenerate = Boolean(draftText.trim());
   const [parseError, setParseError] = useState<string | null>(null);
   const [probe, setProbe] = useState<string>('{"status": "failed", "amount": 1200}');
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -150,7 +151,12 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
                   value={draftText} onChange={(e) => setDraftText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") addFromText(); }}
                 />
-                <button className="sb-btn primary" onClick={addFromText} disabled={!draftText.trim()}>Generate</button>
+                <button
+                  type="button"
+                  className={canGenerate ? "sb-btn" : "sb-btn is-muted"}
+                  aria-disabled={!canGenerate}
+                  onClick={() => { if (canGenerate) addFromText(); }}
+                >Generate</button>
               </div>
               {parseError && <p className="sb-error">{parseError}</p>}
             </div>
