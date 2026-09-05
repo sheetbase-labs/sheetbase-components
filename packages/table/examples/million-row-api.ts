@@ -43,6 +43,7 @@ function matches(value: Scalar, filter: { operator: string; value?: unknown }): 
   if (filter.operator === "neq") return value !== expected;
   if (filter.operator === "contains") return String(value ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase());
   if (filter.operator === "startsWith") return String(value ?? "").toLowerCase().startsWith(String(expected ?? "").toLowerCase());
+  if (filter.operator === "endsWith") return String(value ?? "").toLowerCase().endsWith(String(expected ?? "").toLowerCase());
   if (filter.operator === "in") return Array.isArray(filter.value) && filter.value.includes(value);
   if (filter.operator === "between") {
     const [min, max] = Array.isArray(filter.value) ? filter.value : [];
