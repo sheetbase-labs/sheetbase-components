@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Spreadsheet.tsx still exceeds the GitHub contents limit, so it is stored as ordered parts. */
 function assemble(partsDir, dest) {
   const dir = join(root, partsDir);
   const files = readdirSync(dir).filter((name) => name.endsWith(".txt")).sort();
@@ -12,5 +13,3 @@ function assemble(partsDir, dest) {
 }
 
 assemble("src/ui/spreadsheet.parts", "src/ui/Spreadsheet.tsx");
-assemble("src/ui/styles.parts", "src/ui/styles.css");
-assemble("src/engine/functions.parts", "src/engine/functions.ts");
