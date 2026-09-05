@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ThemeToggleButton,
   compileToDatasetQuery,
@@ -12,35 +12,51 @@ import {
   operatorsForField,
   type Combinator,
   type ConditionNode,
+  type DatasetQuery,
   type FilterNode,
   type FilterOperator,
   type GroupNode,
   type SearchSpec,
+  type SheetbaseField,
   type ThemeMode,
 } from "sheetbase-shared";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
 
+export type SearchFieldInput = string | SheetbaseField;
+
 export interface AdvancedSearchProps {
   value?: SearchSpec;
   initialSpec?: SearchSpec;
   onChange?: (next: SearchSpec) => void;
-  /** Candidate fields for condition editors. */
-  fields?: string[];
+  /** Candidate fields for condition editors. Strings are treated as text columns. */
+  fields?: readonly SearchFieldInput[];
   /** Optional dataset — enables live match counts + table preview. */
   rows?: SearchRow[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
   onThemeChange?: (next: ThemeMode) => void;
+  /** Fired whenever the tree flattens onto DatasetQuery (undefined when nested/NOT). */
+  onDatasetQueryChange?: (query: DatasetQuery | undefined) => void;
 }
 
-const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
-  ...operatorsForField({ dataType: "text" }),
-  ...operatorsForField({ dataType: "number" }),
-  ...operatorsForField({ dataType: "date" }),
-  ...operatorsForField({ dataType: "boolean" }),
-])];
+function fieldIdOf(field: SearchFieldInput): string {
+  return typeof field === "string" ? field : field.id;
+}
+
+function fieldLabelOf(field: SearchFieldInput): string {
+  return typeof field === "string" ? field : field.label;
+}
+
+function asSheetbaseField(field: SearchFieldInput): SheetbaseField {
+  if (typeof field !== "string") return field;
+  return { id: field, label: field, dataType: "text" };
+}
+
+function fieldIds(fields: readonly SearchFieldInput[]): string[] {
+  return fields.map(fieldIdOf);
+}
 
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
@@ -106,7 +122,7 @@ function boundsOf(value: unknown): [number, number] {
 function GroupEditor({ node, depth, fields, onPatch }: {
   node: GroupNode;
   depth: number;
-  fields: string[];
+  fields: readonly SearchFieldInput[];
   onPatch: (id: string, fn: (node: FilterNode) => FilterNode | null) => void;
 }) {
   return (
@@ -119,7 +135,7 @@ function GroupEditor({ node, depth, fields, onPatch }: {
         </div>
         <span className="sb-muted">{node.combinator === "NOT" ? "matches rows where none of the children match" : node.combinator === "OR" ? "any child matches" : "every child matches"}</span>
         <span className="sb-group-btns">
-          <button className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { ...emptyCondition(fields[0] ?? ""), id: uid("cnd") }] } : n))}>+ Condition</button>
+          <button className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { ...emptyCondition(fieldIdOf(fields[0] ?? "")), id: uid("cnd") }] } : n))}>+ Condition</button>
           <button className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { type: "group", id: uid("grp"), combinator: "AND", children: [] }] } : n))}>+ Group</button>
           {depth > 0 && <button className="sb-remove" title="Remove group" onClick={() => onPatch(node.id, () => null)}>×</button>}
         </span>
@@ -140,27 +156,31 @@ function GroupEditor({ node, depth, fields, onPatch }: {
 
 function ConditionRow({ node, fields, onPatch }: {
   node: ConditionNode;
-  fields: string[];
+  fields: readonly SearchFieldInput[];
   onPatch: (id: string, fn: (node: FilterNode) => FilterNode | null) => void;
 }) {
   function patch(next: Partial<ConditionNode>) {
     onPatch(node.id, (n) => (n.type === "condition" ? { ...n, ...next } : n));
   }
+  const selected = fields.find((field) => fieldIdOf(field) === node.field) ?? node.field;
+  const typed = asSheetbaseField(selected);
+  const ops = operatorsForField(typed);
   const canon = normaliseOperator(node.operator) ?? node.operator;
   const empty = canon === "isNull" || canon === "notNull";
   const [low, high] = boundsOf(node.value);
+  const ids = fieldIds(fields);
   return (
     <div className={canon === "between" ? "sb-filter-rule between" : "sb-filter-rule"}>
       {fields.length > 0 ? (
         <select aria-label="Field" value={node.field} onChange={(e) => patch({ field: e.target.value })}>
-          {!fields.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
-          {fields.map((f) => <option key={f} value={f}>{f}</option>)}
+          {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
+          {fields.map((f) => <option key={fieldIdOf(f)} value={fieldIdOf(f)}>{fieldLabelOf(f)}</option>)}
         </select>
       ) : (
         <input aria-label="Field" placeholder="field" value={node.field} onChange={(e) => patch({ field: e.target.value })} />
       )}
       <select aria-label="Operator" value={canon} onChange={(e) => patch({ operator: e.target.value as SearchOperator })}>
-        {OPERATOR_OPTIONS.map((op) => <option key={op} value={op}>{operatorShortLabel(op)}</option>)}
+        {ops.map((op) => <option key={op} value={op}>{operatorShortLabel(op)}</option>)}
       </select>
       {canon === "between" ? (
         <>
@@ -202,7 +222,7 @@ function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: s
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange }: AdvancedSearchProps) {
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange }: AdvancedSearchProps) {
   const [draft, setDraft] = useState<SearchSpec>(initialSpec ?? { filter: emptyRoot() });
   const spec = value ?? draft;
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
@@ -227,6 +247,11 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
     spec.filter,
     spec.sort ? [{ fieldId: spec.sort.field, direction: spec.sort.direction }] : undefined,
   );
+  const ids = fieldIds(fields);
+
+  useEffect(() => {
+    onDatasetQueryChange?.(flattened);
+  }, [flattened, onDatasetQueryChange]);
 
   return (
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
@@ -248,13 +273,13 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                 <label className="sb-compact"><span>Group by</span>
                   <select className="sb-select" value={spec.groupBy ?? ""} onChange={(e) => commit({ ...spec, groupBy: e.target.value || undefined })}>
                     <option value="">No grouping</option>
-                    {fields.map((f) => <option key={f} value={f}>{f}</option>)}
+                    {fields.map((f) => <option key={fieldIdOf(f)} value={fieldIdOf(f)}>{fieldLabelOf(f)}</option>)}
                   </select>
                 </label>
                 <label className="sb-compact"><span>Sort</span>
                   <select className="sb-select" value={spec.sort?.field ?? ""} onChange={(e) => commit({ ...spec, sort: e.target.value ? { field: e.target.value, direction: spec.sort?.direction ?? "asc" } : undefined })}>
                     <option value="">Unsorted</option>
-                    {fields.map((f) => <option key={f} value={f}>{f}</option>)}
+                    {fields.map((f) => <option key={fieldIdOf(f)} value={fieldIdOf(f)}>{fieldLabelOf(f)}</option>)}
                   </select>
                 </label>
                 {spec.sort && (
@@ -275,9 +300,9 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             {!matches ? (
               <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
             ) : spec.groupBy ? (
-              <GroupedPreview matches={matches} fields={fields} groupBy={spec.groupBy} />
+              <GroupedPreview matches={matches} fields={ids} groupBy={spec.groupBy} />
             ) : (
-              <PreviewTable rows={matches} fields={fields} />
+              <PreviewTable rows={matches} fields={ids} />
             )}
           </aside>
         </div>
