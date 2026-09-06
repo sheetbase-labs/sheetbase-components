@@ -5,14 +5,14 @@
 .explorer-canvas-v3 { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: 42px minmax(0, 1fr); background: var(--canvas); }
 .explorer-commandbar { position: relative; z-index: 20; display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .tool-anchor { position: relative; flex: 0 0 auto; }
-.explorer-tool { height: 29px; display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
+.explorer-tool { height: 24px; display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
 .explorer-tool:hover,.explorer-tool.active { background: var(--panel-2); }
 .explorer-tool.active { color: var(--accent-dark); }
 .explorer-tool small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 9px; }
 .explorer-tool b { color: var(--faint); font-size: 9px; font-weight: 500; }
 .tool-popover { position: absolute; top: 34px; left: 0; z-index: 100; min-width: 180px; padding: 5px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--canvas); box-shadow: 0 10px 28px rgb(0 0 0 / 14%); }
 .plot-popover { display: grid; grid-template-columns: repeat(2, 1fr); width: 230px; }
-.plot-popover button { min-height: 30px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 12px; }
+.plot-popover button { height: 24px; min-height: 24px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 12px; }
 .plot-popover button:hover { background: var(--panel-2); }
 .plot-popover button.selected { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
 .inspector-popover { width: 310px; padding: 6px 8px 8px; }
@@ -31,8 +31,8 @@
 .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool small, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool b { color: #ac9cff; }
 .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool:hover, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool.active { background: #3a3158; color: #f1edff; }
 .command-spacer { flex: 1 1 auto; }
-.command-action,.command-icon { flex: 0 0 auto; height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #4f38c6; cursor: pointer; font-size: 12px; }
-.command-icon { width: 28px; padding: 0; }
+.command-action,.command-icon { flex: 0 0 auto; height: 24px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #4f38c6; cursor: pointer; font-size: 12px; }
+.command-icon { width: 24px; padding: 0; }
 .command-action:hover,.command-icon:hover { background: #e3dcff; }
 .sheetbase-explorer[data-theme="dark"] .command-action, .sheetbase-explorer[data-theme="dark"] .command-icon { color: #c8bcff; }
 .sheetbase-explorer[data-theme="dark"] .command-action:hover, .sheetbase-explorer[data-theme="dark"] .command-icon:hover { background: #3a3158; }
@@ -50,14 +50,14 @@
 .popover-title-row h4 { margin: 0; }
 .popover-title-row button,.popover-clear { border: 0; background: transparent; color: var(--accent-dark); font-size: 10px; cursor: pointer; }
 .filter-rule { display: grid; grid-template-columns: minmax(110px,1.2fr) minmax(90px,.9fr) minmax(110px,1fr) auto auto; gap: 4px; align-items: start; margin: 3px 0; }
-.filter-rule select,.filter-rule input { width: 100%; min-width: 0; min-height: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: var(--canvas); color: var(--text); padding: 0 5px; font-size: 10px; }
+.filter-rule select,.filter-rule input { width: 100%; min-width: 0; min-height: 24px; height: 24px; border: 1px solid var(--border); border-radius: 5px; background: var(--canvas); color: var(--text); padding: 0 6px; font-size: 10px; }
 .filter-rule select[multiple] { height: 64px; padding: 3px 4px; }
-.filter-remove { width: 26px; height: 26px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.filter-remove { width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
 .filter-remove:hover { background: var(--panel-2); color: var(--danger); }
 .popover-clear { margin-top: 4px; color: var(--muted); }
 .axis-range-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin:4px 0; }
 .axis-range-grid label { display:grid; grid-template-columns:42px 1fr; gap:5px; align-items:center; color:var(--muted); font-size:10px; }
-.axis-range-grid input { width:100%; height:22px; border:1px solid var(--border); border-radius:5px; background:var(--canvas); color:var(--text); padding:0 6px; }
+.axis-range-grid input { width:100%; height:24px; border:1px solid var(--border); border-radius:5px; background:var(--canvas); color:var(--text); padding:0 6px; }
 .series-legend { position:absolute; top:10px; right:14px; z-index:12; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; max-width:55%; padding:4px; border:1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius:7px; background:color-mix(in srgb,var(--canvas) 92%,transparent); backdrop-filter:blur(5px); }
 .series-legend button { height:24px; display:inline-flex; align-items:center; gap:5px; padding:0 6px; border:0; border-radius:4px; background:transparent; color:var(--muted); cursor:pointer; font-size:9.5px; }
 .series-legend button:hover { background:var(--panel-2); color:var(--text); }
