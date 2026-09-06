@@ -1,0 +1,46 @@
+{
+  "name": "sheetbase-explorer",
+  "private": false,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist-lib/sheetbase-explorer.js",
+  "module": "./dist-lib/sheetbase-explorer.js",
+  "types": "./dist-types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "import": "./dist-lib/sheetbase-explorer.js"
+    },
+    "./styles.css": "./dist-lib/style.css"
+  },
+  "files": ["dist-lib", "dist-types", "README.md"],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "bench": "vitest bench --run"
+  },
+  "dependencies": {
+    "@hugeicons/core-free-icons": "^4.3.0",
+    "@hugeicons/react": "^1.1.10",
+    "@tanstack/charts": "0.16.0",
+    "alasql": "^4.6.6",
+    "papaparse": "^5.5.3",
+    "sheetbase-shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.3.16",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
+  }
+}

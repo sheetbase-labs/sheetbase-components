@@ -1,0 +1,4 @@
+[test]
+preload = []
+# Playwright specs are run via packages/table `bun run test:e2e`, not bun test.
+root = "."

@@ -1,0 +1,18 @@
+.column-item { cursor: pointer; }
+.column-item.selected { background: var(--canvas); box-shadow: inset 0 0 0 1.5px var(--text); }
+.column-item.selected.mapped { background: var(--accent-soft-2); }
+
+.field-assignment { border-top: 1px solid var(--border); padding: 10px 12px 11px; background: var(--panel); }
+.field-assignment-head { display: flex; align-items: end; justify-content: space-between; margin-bottom: 8px; }
+.field-assignment-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.field-assignment-head span, .field-assignment-head small { color: var(--muted); font-size: 9.5px; }
+.field-assignment-head strong { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assignment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.assignment-grid button { min-height: 27px; border: 1px solid var(--border); border-radius: 5px; background: var(--canvas); color: var(--muted); font-size: 9.5px; cursor: pointer; }
+.assignment-grid button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft-2); color: var(--accent-dark); }
+.assignment-grid button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); font-weight: 650; }
+.assignment-grid button:disabled { opacity: .38; cursor: not-allowed; }
+.assignment-grid button.clear { color: var(--muted); background: var(--panel-2); }
+
+.source-footer { margin-top: 0; }
+.column-list { flex: 1 1 auto; min-height: 120px; }

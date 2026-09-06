@@ -1,0 +1,23 @@
+{
+  "name": "sheetbase-components",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.5",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "bun run --filter '*' test",
+    "dev:table": "bun run --filter sheetbase-table dev",
+    "dev:explorer": "bun run --filter sheetbase-explorer dev",
+    "dev:schema": "bun run --filter sheetbase-schemaeditor dev",
+    "dev:rules": "bun run --filter sheetbase-rulesengine dev",
+    "dev:search": "bun run --filter sheetbase-advanced-search dev"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
+  }
+}
