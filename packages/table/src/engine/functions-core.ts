@@ -1,3 +1,79 @@
+import type { Scalar } from "./types";
+import type { FunctionImpl } from "./functions-runtime";
+import {
+  aggregateNumbers,
+  arabicNumeral,
+  asDate,
+  boolean,
+  correlation,
+  covariance,
+  flatten,
+  matchesCriteria,
+  matrixOf,
+  matrixPair,
+  number,
+  percentile,
+  romanNumeral,
+  sample,
+  sampleA,
+  scalarOf,
+  skewness,
+  stdev,
+  text,
+  throwNumeric,
+  trimNumeric,
+} from "./functions-runtime";
+
+export const CORE_FUNCTIONS: Record<string, FunctionImpl> = {
+  // --- logical ---
+  IFNA: (args) => {
+    const value = scalarOf(args[0]);
+    return value === "#N/A" ? scalarOf(args[1] ?? null) : value;
+  },
+  IFS: (args) => {
+    for (let index = 0; index + 1 < args.length; index += 2) {
+      if (boolean(scalarOf(args[index]))) return scalarOf(args[index + 1]);
+    }
+    throw new Error("#N/A");
+  },
+  AND: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).every((value) => value === null || value === "" || boolean(value)),
+  OR: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).some((value) => value !== null && value !== "" && boolean(value)),
+  NOT: (args) => !boolean(scalarOf(args[0])),
+  XOR: (args, ctx) => {
+    const flags = args.flatMap((argument) => flatten(argument, ctx)).map(boolean);
+    const truthy = flags.filter(Boolean).length;
+    return truthy % 2 === 1;
+  },
+  SWITCH: (args, _ctx) => {
+    const expression = scalarOf(args[0]);
+    for (let index = 1; index + 1 < args.length; index += 2) {
+      if (matchesCriteria(expression, scalarOf(args[index]))) return scalarOf(args[index + 1]);
+    }
+    if (args.length % 2 === 0) return scalarOf(args[args.length - 1]);
+    throw new Error("#N/A");
+  },
+
+  // --- core (original engine surface) ---
+  SUM: (args, ctx) => aggregateNumbers(args, ctx).reduce((total, value) => total + value, 0),
+  AVERAGE: (args, ctx) => {
+    const values = aggregateNumbers(args, ctx);
+    if (values.length === 0) throw new Error("#DIV/0!");
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  },
+  MIN: (args, ctx) => {
+    const values = aggregateNumbers(args, ctx);
+    return values.length === 0 ? 0 : Math.min(...values);
+  },
+  MAX: (args, ctx) => {
+    const values = aggregateNumbers(args, ctx);
+    return values.length === 0 ? 0 : Math.max(...values);
+  },
+  COUNT: (args, ctx) =>
+    args
+      .flatMap((argument) => flatten(argument, ctx))
+      .filter((value) => typeof value === "number" || (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))).length,
+  COUNTA: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).filter((value) => value !== null && value !== "").length,
+  SEQUENCE: (args) => {
     const rows = Math.trunc(number(scalarOf(args[0])));
     const columns = args[1] === undefined ? 1 : Math.trunc(number(scalarOf(args[1])));
     const start = args[2] === undefined ? 1 : number(scalarOf(args[2]));
@@ -362,85 +438,4 @@
   ROMAN: (args) => romanNumeral(Math.trunc(number(scalarOf(args[0])))),
   ARABIC: (args) => arabicNumeral(text(scalarOf(args[0]))),
 
-  // --- text ---
-  LEN: (args) => text(scalarOf(args[0])).length,
-  LEFT: (args) => text(scalarOf(args[0])).slice(0, args[1] === undefined ? 1 : number(scalarOf(args[1]))),
-  RIGHT: (args) => {
-    const value = text(scalarOf(args[0]));
-    const count = args[1] === undefined ? 1 : number(scalarOf(args[1]));
-    return count === 0 ? "" : value.slice(-count);
-  },
-  MID: (args) => {
-    const value = text(scalarOf(args[0]));
-    const start = Math.trunc(number(scalarOf(args[1])));
-    const count = number(scalarOf(args[2]));
-    if (start < 1 || count < 0) throw new Error("#VALUE!");
-    return value.slice(start - 1, start - 1 + count);
-  },
-  UPPER: (args) => text(scalarOf(args[0])).toUpperCase(),
-  LOWER: (args) => text(scalarOf(args[0])).toLowerCase(),
-  PROPER: (args) =>
-    text(scalarOf(args[0]))
-      .toLowerCase()
-      .replace(/(^|[^a-z])([a-z])/g, (_, prefix, letter) => prefix + letter.toUpperCase()),
-  TRIM: (args) => text(scalarOf(args[0])).trim().replace(/\s+/g, " "),
-  CLEAN: (args) => text(scalarOf(args[0])).replace(/[\u0000-\u001f]/g, ""),
-  REPT: (args) => {
-    const count = Math.trunc(number(scalarOf(args[1])));
-    if (count < 0) throw new Error("#VALUE!");
-    return text(scalarOf(args[0])).repeat(count);
-  },
-  CONCATENATE: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).map(text).join(""),
-  TEXTJOIN: (args, ctx) => {
-    const delimiter = text(scalarOf(args[0]));
-    const ignoreEmpty = boolean(scalarOf(args[1]));
-    const pieces = args.slice(2).flatMap((argument) => flatten(argument, ctx)).map(text);
-    return (ignoreEmpty ? pieces.filter((piece) => piece !== "") : pieces).join(delimiter);
-  },
-  VALUE: (args) => {
-    const value = text(scalarOf(args[0])).trim().replace(/,/g, "");
-    if (value === "") return 0;
-    const percent = value.endsWith("%");
-    const numeric = Number(percent ? value.slice(0, -1) : value);
-    if (!Number.isFinite(numeric)) throw new Error("#VALUE!");
-    return percent ? numeric / 100 : numeric;
-  },
-  TEXT: (args) => {
-    const value = number(scalarOf(args[0]));
-    const mask = text(scalarOf(args[1]));
-    const percent = mask.includes("%");
-    const working = percent ? value * 100 : value;
-    const decimalPlaces = Math.max(0, (/\.0+/.exec(mask)?.[0].length ?? 1) - 1);
-    const grouped = mask.includes(",");
-    let body = working.toFixed(Math.max(0, decimalPlaces ?? 0));
-    if (grouped) {
-      const [integers, decimals] = body.split(".");
-      body = Number(integers).toLocaleString("en-GB") + (decimals ? `.${decimals}` : "");
-    }
-    return percent ? `${body}%` : body;
-  },
-  FIND: (args) => {
-    const needle = text(scalarOf(args[0]));
-    const haystack = text(scalarOf(args[1]));
-    const start = args[2] === undefined ? 1 : Math.trunc(number(scalarOf(args[2])));
-    const index = haystack.indexOf(needle, start - 1);
-    if (index < 0) throw new Error("#VALUE!");
-    return index + 1;
-  },
-  SEARCH: (args) => {
-    const needle = text(scalarOf(args[0])).toLowerCase();
-    const haystack = text(scalarOf(args[1])).toLowerCase();
-    const start = args[2] === undefined ? 1 : Math.trunc(number(scalarOf(args[2])));
-    const index = haystack.indexOf(needle, start - 1);
-    if (index < 0) throw new Error("#VALUE!");
-    return index + 1;
-  },
-  REPLACE: (args) => {
-    const value = text(scalarOf(args[0]));
-    const start = Math.trunc(number(scalarOf(args[1])));
-    const count = number(scalarOf(args[2]));
-    const replacement = text(scalarOf(args[3]));
-    if (start < 1) throw new Error("#VALUE!");
-    return value.slice(0, start - 1) + replacement + value.slice(start - 1 + count);
-  },
-  SUBSTITUTE: (args) => {
+};
