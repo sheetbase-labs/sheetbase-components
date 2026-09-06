@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRelations, sheetbaseFieldsOf, validateGraph, withAutoLayout } from "./graph";
+import { fitTransform, getRelations, rewriteReferences, sheetbaseFieldsOf, tableHeaderFields, validateGraph, withAutoLayout } from "./graph";
 import type { SchemaGraph } from "./types";
 
 const graph: SchemaGraph = {
@@ -49,5 +49,41 @@ describe("withAutoLayout", () => {
 describe("sheetbaseFieldsOf", () => {
   it("normalises schema fields onto the shared contract", () => {
     expect(sheetbaseFieldsOf(graph.models[0]!).map((f) => f.dataType)).toEqual(["text", "text"]);
+  });
+});
+
+describe("rewriteReferences", () => {
+  it("rewrites FK model names when a model is renamed", () => {
+    const next = rewriteReferences(
+      { models: graph.models.map((m) => (m.name === "customer" ? { ...m, name: "client" } : m)) },
+      { kind: "rename-model", from: "customer", to: "client" },
+    );
+    expect(next.models.find((m) => m.name === "order")?.fields[1]?.references).toEqual({ model: "client" });
+  });
+
+  it("clears FKs when a model is deleted", () => {
+    const next = rewriteReferences(
+      { models: graph.models.filter((m) => m.name !== "customer") },
+      { kind: "delete-model", name: "customer" },
+    );
+    expect(next.models[0]?.fields.find((f) => f.key === "customer_id")?.references).toBeUndefined();
+  });
+});
+
+describe("tableHeaderFields", () => {
+  it("assigns column indices for DatasetHeader", () => {
+    expect(tableHeaderFields(graph.models[1]!).map((f) => [f.id, f.column, f.dataType])).toEqual([
+      ["id", 0, "text"],
+      ["customer_id", 1, "relationship"],
+    ]);
+  });
+});
+
+describe("fitTransform", () => {
+  it("scales zoom to fit the viewport", () => {
+    const view = fitTransform({ x: 0, y: 0, w: 800, h: 400 }, 400, 400, 0);
+    expect(view.zoom).toBe(0.5);
+    expect(view.x).toBe(0);
+    expect(view.y).toBe(0);
   });
 });

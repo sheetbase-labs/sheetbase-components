@@ -5,4 +5,4 @@ export type {
   SortClause,
   SortDirection,
 } from "sheetbase-shared";
-export { queryKey } from "sheetbase-shared";
+export { compileToDatasetQuery, queryKey } from "sheetbase-shared";

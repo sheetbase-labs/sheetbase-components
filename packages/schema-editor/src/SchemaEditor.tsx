@@ -1,7 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { ThemeToggleButton, toFieldDataType, type FieldDataType, type ThemeMode } from "sheetbase-shared";
+import { ThemeToggleButton, toFieldDataType, type FieldDataType, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
-import { getRelations, graphBounds, validateGraph, withAutoLayout } from "./graph";
+import {
+  NODE_WIDTH,
+  fitTransform,
+  getRelations,
+  graphBounds,
+  rewriteReferences,
+  tableHeaderFields,
+  validateGraph,
+  withAutoLayout,
+} from "./graph";
 
 export interface SchemaEditorProps {
   /** Controlled graph. Omit for uncontrolled (uses initialGraph once). */
@@ -12,16 +21,17 @@ export interface SchemaEditorProps {
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
   onThemeChange?: (next: ThemeMode) => void;
+  /** Emits table DatasetHeader fields for the selected model whenever the graph changes. */
+  onHeaderFieldsChange?: (fields: Array<SheetbaseField & { column: number }>, modelName: string | null) => void;
 }
 
-const NODE_W = 232;
 const FIELD_TYPES: FieldDataType[] = ["text", "number", "boolean", "date", "datetime", "relationship"];
 
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange }: SchemaEditorProps) {
+export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange }: SchemaEditorProps) {
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(initialGraph ?? { models: [] }));
   const graph = withAutoLayout(value ?? draft);
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
@@ -35,18 +45,24 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const nodeDragRef = useRef<{ name: string; x: number; y: number } | null>(null);
+  const [nodeDrag, setNodeDrag] = useState<{ name: string; x: number; y: number } | null>(null);
 
   const relations = useMemo(() => getRelations(graph), [graph]);
   const errors = useMemo(() => validateGraph(graph), [graph]);
   const selectedModel = graph.models.find((m) => m.name === selected) ?? null;
 
-  function commit(next: SchemaGraph) {
+  function commit(next: SchemaGraph, selectName?: string | null) {
     const laid = withAutoLayout(next);
     if (value === undefined) setDraft(laid);
     onChange?.(laid);
-    if (selected && !laid.models.some((m) => m.name === selected)) {
-      setSelected(laid.models[0]?.name ?? null);
-    }
+    const nextSelected = selectName !== undefined
+      ? selectName
+      : (selected && laid.models.some((m) => m.name === selected) ? selected : laid.models[0]?.name ?? null);
+    if (nextSelected !== selected) setSelected(nextSelected);
+    const model = laid.models.find((m) => m.name === nextSelected) ?? null;
+    onHeaderFieldsChange?.(model ? tableHeaderFields(model) : [], model?.name ?? null);
   }
 
   function addModel() {
@@ -58,16 +74,18 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
         fields: [{ key: "id", type: "text", primaryKey: true }],
         position: { x: 24 + graph.models.length * 24, y: 24 + graph.models.length * 24 },
       }],
-    });
-    setSelected(name);
+    }, name);
   }
 
   function patchModel(name: string, patch: Partial<SchemaModel>) {
-    commit({ models: graph.models.map((m) => (m.name === name ? { ...m, ...patch } : m)) });
+    const renamed = typeof patch.name === "string" && patch.name !== name;
+    let next: SchemaGraph = { models: graph.models.map((m) => (m.name === name ? { ...m, ...patch } : m)) };
+    if (renamed) next = rewriteReferences(next, { kind: "rename-model", from: name, to: patch.name! });
+    commit(next, renamed ? patch.name : undefined);
   }
 
   function removeModel(name: string) {
-    commit({ models: graph.models.filter((m) => m.name !== name) });
+    commit(rewriteReferences({ models: graph.models.filter((m) => m.name !== name) }, { kind: "delete-model", name }));
   }
 
   function addField(modelName: string) {
@@ -79,34 +97,47 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   }
 
   function patchField(modelName: string, index: number, patch: Partial<SchemaField>) {
-    commit({
+    const current = graph.models.find((m) => m.name === modelName)?.fields[index];
+    let next: SchemaGraph = {
       models: graph.models.map((m) =>
         m.name === modelName ? { ...m, fields: m.fields.map((f, i) => (i === index ? { ...f, ...patch } : f)) } : m,
       ),
-    });
+    };
+    if (current && typeof patch.key === "string" && patch.key !== current.key) {
+      next = rewriteReferences(next, { kind: "rename-field", model: modelName, from: current.key, to: patch.key });
+    }
+    commit(next);
   }
 
   function removeField(modelName: string, index: number) {
-    commit({ models: graph.models.map((m) => (m.name === modelName ? { ...m, fields: m.fields.filter((_, i) => i !== index) } : m)) });
+    const current = graph.models.find((m) => m.name === modelName)?.fields[index];
+    let next: SchemaGraph = { models: graph.models.map((m) => (m.name === modelName ? { ...m, fields: m.fields.filter((_, i) => i !== index) } : m)) };
+    if (current) next = rewriteReferences(next, { kind: "delete-field", model: modelName, key: current.key });
+    commit(next);
   }
 
-  function moveNode(modelName: string, dx: number, dy: number) {
+  function finishNodeDrag() {
+    const drag = nodeDragRef.current;
+    nodeDragRef.current = null;
+    setNodeDrag(null);
+    if (!drag) return;
     commit({
-      models: graph.models.map((m) =>
-        m.name === modelName && m.position ? { ...m, position: { x: m.position.x + dx / zoom, y: m.position.y + dy / zoom } } : m,
-      ),
+      models: graph.models.map((m) => (m.name === drag.name ? { ...m, position: { x: drag.x, y: drag.y } } : m)),
     });
   }
 
   function fitView() {
     const bounds = graphBounds(graph);
-    if (!bounds) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
-    setZoom(1);
-    setPan({ x: -bounds.x + 24, y: -bounds.y + 24 });
+    const el = canvasRef.current;
+    if (!bounds || !el) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
+    const view = fitTransform(bounds, el.clientWidth, el.clientHeight);
+    setZoom(view.zoom);
+    setPan({ x: view.x, y: view.y });
   }
 
   const posByModel: Record<string, { x: number; y: number }> = {};
   for (const m of graph.models) posByModel[m.name] = m.position ?? { x: 24, y: 24 };
+  if (nodeDrag) posByModel[nodeDrag.name] = { x: nodeDrag.x, y: nodeDrag.y };
 
   return (
     <div className="sheetbase-scope sb-schema" data-theme={activeTheme}>
@@ -146,6 +177,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
             )}
           </aside>
           <div
+            ref={canvasRef}
             className="sb-schema-canvas sb-plate"
             onWheel={(e) => { if (e.ctrlKey || e.metaKey) setZoom((z) => Math.min(2, Math.max(0.4, z - Math.sign(e.deltaY) * 0.08))); }}
             onMouseDown={(e) => { if ((e.target as HTMLElement).dataset.pane === "1") dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y }; }}
@@ -157,7 +189,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
               <svg className="sb-schema-edges" data-pane="1">
                 {relations.map((r) => {
                   const a = posByModel[r.fromModel]!, b = posByModel[r.toModel]!;
-                  const x1 = a.x + NODE_W, y1 = a.y + 44, x2 = b.x, y2 = b.y + 44;
+                  const x1 = a.x + NODE_WIDTH, y1 = a.y + 44, x2 = b.x, y2 = b.y + 44;
                   const mx = (x1 + x2) / 2;
                   return <path key={r.id} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#sb-arrow)" />;
                 })}
@@ -173,13 +205,27 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                   <div
                     key={m.name}
                     className={m.name === selected ? "sb-node active" : "sb-node"}
-                    style={{ left: p.x, top: p.y, width: NODE_W }}
+                    style={{ left: p.x, top: p.y, width: NODE_WIDTH }}
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       setSelected(m.name);
+                      const origin = m.position ?? { x: 24, y: 24 };
+                      nodeDragRef.current = { name: m.name, x: origin.x, y: origin.y };
+                      setNodeDrag(nodeDragRef.current);
                       let lx = e.clientX, ly = e.clientY;
-                      const track = (ev: MouseEvent) => { moveNode(m.name, ev.clientX - lx, ev.clientY - ly); lx = ev.clientX; ly = ev.clientY; };
-                      const stop = () => window.removeEventListener("mousemove", track);
+                      const track = (ev: MouseEvent) => {
+                        const current = nodeDragRef.current;
+                        if (!current) return;
+                        const next = { name: current.name, x: current.x + (ev.clientX - lx) / zoom, y: current.y + (ev.clientY - ly) / zoom };
+                        lx = ev.clientX;
+                        ly = ev.clientY;
+                        nodeDragRef.current = next;
+                        setNodeDrag(next);
+                      };
+                      const stop = () => {
+                        window.removeEventListener("mousemove", track);
+                        finishNodeDrag();
+                      };
                       window.addEventListener("mousemove", track);
                       window.addEventListener("mouseup", stop, { once: true });
                     }}
