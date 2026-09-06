@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
@@ -12,5 +12,4 @@ export default defineConfig({
     port: 4202,
     strictPort: false,
   },
-  test: { environment: "node" },
 });
