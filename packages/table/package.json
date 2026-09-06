@@ -48,6 +48,6 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest",
-    "vitest": "latest"
+    "vitest": "^3.2.7"
   }
 }
