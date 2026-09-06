@@ -1,8 +1,12 @@
 .sb-rules-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 560px; }
 .sb-rules-main { min-width: 0; }
 .sb-nl { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-.sb-nl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
-.sb-nl-row .sb-input { height: 24px; background: var(--canvas); border-color: var(--border-strong); }
+.sb-nl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.sb-nl-row .sb-input,
+.sb-nl-row .sb-btn {
+  height: 24px; min-height: 24px; max-height: 24px;
+}
+.sb-nl-row .sb-input { background: var(--canvas); border-color: var(--border-strong); }
 .sb-rule-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .sb-rule { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); overflow: hidden; }
 .sb-rule-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
