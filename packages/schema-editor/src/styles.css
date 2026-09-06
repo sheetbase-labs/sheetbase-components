@@ -1,6 +1,6 @@
 .sb-schema-body { min-height: 0; display: grid; grid-template-columns: 232px minmax(0, 1fr) 300px; min-height: 560px; }
 .sb-schema-list-items { overflow-y: auto; padding: 6px 8px; }
-.sb-schema-row { width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
+.sb-schema-row { width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 5px 6px; border: 0; border-radius: 5px; background: transparent; text-align: left; }
 .sb-schema-row:hover { background: var(--accent-soft-2); }
 .sb-schema-row.active { background: var(--accent-soft); }
 .sb-schema-row-copy { display: flex; flex-direction: column; min-width: 0; }
@@ -24,27 +24,27 @@
 .sb-edge-arrow { stroke: var(--accent); }
 .sb-node { position: absolute; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow); overflow: hidden; user-select: none; }
 .sb-node.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
-.sb-node header { padding: 7px 10px; background: var(--accent-soft); color: var(--accent-ink); display: flex; flex-direction: column; }
+.sb-node header { padding: 5px 8px; background: var(--accent-soft); color: var(--accent-ink); display: flex; flex-direction: column; }
 .sb-node header strong { font-size: 12px; font-weight: 500; }
 .sb-node header small { font-size: 10px; opacity: 0.75; font-family: var(--font-mono); }
 .sb-node ul { list-style: none; margin: 0; padding: 4px; }
-.sb-node li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; font-size: 11.5px; }
+.sb-node li { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 .sb-node li:hover { background: var(--panel-2); }
 .sb-type { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; flex: none; }
 .sb-node-field { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-chip.link { background: var(--green-soft); color: var(--green); }
 .sb-inspector-scroll { overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
-.sb-inspector-scroll section { padding: 11px 12px 12px; border-bottom: 1px solid var(--border); }
-.sb-inspector-scroll section h3 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 650; }
-.sb-inspector-scroll .sb-compact { margin: 7px 0; }
+.sb-inspector-scroll section { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.sb-inspector-scroll section h3 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 650; }
+.sb-inspector-scroll .sb-compact { margin: 3px 0; }
 .sb-inspector-scroll .sb-input, .sb-inspector-scroll .sb-select { width: 100%; }
 .sb-mono { font-family: var(--font-mono) !important; font-size: 11.5px !important; }
 .sb-row-btns { display: flex; gap: 2px; align-items: center; }
 .sb-link-btn.danger { color: var(--danger); }
 .sb-link-btn.danger:hover { background: color-mix(in srgb, var(--danger) 8%, transparent); }
-.sb-field { padding: 8px 0; border-top: 1px solid var(--border); }
+.sb-field { padding: 4px 0; border-top: 1px solid var(--border); }
 .sb-field:first-of-type { border-top: 0; padding-top: 0; }
 .sb-field-key { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; margin-bottom: 2px; }
-.sb-toggle-row { display: flex; align-items: center; gap: 14px; font-size: 11.5px; min-height: 30px; }
+.sb-toggle-row { display: flex; align-items: center; gap: 10px; font-size: 11px; min-height: 22px; }
 .sb-toggle-row label { display: inline-flex; align-items: center; gap: 6px; }
 .sb-toggle-row input { accent-color: var(--accent); }

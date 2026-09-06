@@ -15,9 +15,9 @@
 .plot-popover button { min-height: 30px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 12px; }
 .plot-popover button:hover { background: var(--panel-2); }
 .plot-popover button.selected { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
-.inspector-popover { width: 310px; padding: 10px 11px 11px; }
-.inspector-popover h4 { margin: 0 0 8px; color: var(--muted); font-size: 9.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
-.inspector-popover .field-control,.inspector-popover .compact-control,.inspector-popover .range-control,.inspector-popover .toggle-row { margin: 5px 0; }
+.inspector-popover { width: 310px; padding: 6px 8px 8px; }
+.inspector-popover h4 { margin: 0 0 4px; color: var(--muted); font-size: 9.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.inspector-popover .field-control,.inspector-popover .compact-control,.inspector-popover .range-control,.inspector-popover .toggle-row { margin: 3px 0; }
 .chart-stage-v3 { position: relative; min-width: 0; min-height: 0; width: 100%; height: 100%; padding: 4px 6px 6px; overflow: hidden; background: var(--canvas); }
 .chart-stage-v3 .chart-wrap,.chart-stage-v3 .chart-wrap > * { width: 100% !important; height: 100% !important; min-height: 0 !important; max-height: none !important; }
 .bottom-panel-v3 { position: relative; margin: 0; border-radius: 0; box-shadow: none; }
@@ -38,9 +38,9 @@
 .sheetbase-explorer[data-theme="dark"] .command-action:hover, .sheetbase-explorer[data-theme="dark"] .command-icon:hover { background: #3a3158; }
 .style-popover { width: 340px; }
 .style-popover .range-control { grid-template-columns: 82px minmax(120px, 1fr) 36px; }
-.colour-control { min-height: 34px; display: grid; grid-template-columns: 82px 32px minmax(0,1fr); gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+.colour-control { min-height: 24px; display: grid; grid-template-columns: 72px 28px minmax(0,1fr); gap: 6px; align-items: center; color: var(--muted); font-size: 11px; }
 .colour-control input[type="color"] { width: 28px; height: 24px; padding: 2px; border: 1px solid var(--border); border-radius: 5px; background: var(--canvas); cursor: pointer; }
-.palette-editor { display: grid; grid-template-columns: 82px minmax(0,1fr); gap: 8px; align-items: center; min-height: 34px; color: var(--muted); font-size: 12px; }
+.palette-editor { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 6px; align-items: center; min-height: 24px; color: var(--muted); font-size: 11px; }
 .palette-swatches { display: flex; gap: 5px; align-items: center; }
 .palette-swatches label { position: relative; width: 24px; height: 24px; display: block; cursor: pointer; }
 .palette-swatches input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
@@ -49,15 +49,15 @@
 .popover-title-row { display: flex; align-items: center; justify-content: space-between; }
 .popover-title-row h4 { margin: 0; }
 .popover-title-row button,.popover-clear { border: 0; background: transparent; color: var(--accent-dark); font-size: 10px; cursor: pointer; }
-.filter-rule { display: grid; grid-template-columns: minmax(110px,1.2fr) minmax(90px,.9fr) minmax(110px,1fr) auto auto; gap: 5px; align-items: start; margin: 6px 0; }
-.filter-rule select,.filter-rule input { width: 100%; min-width: 0; min-height: 29px; border: 1px solid var(--border); border-radius: 5px; background: var(--canvas); color: var(--text); padding: 0 6px; font-size: 10px; }
-.filter-rule select[multiple] { height: 78px; padding: 4px 5px; }
+.filter-rule { display: grid; grid-template-columns: minmax(110px,1.2fr) minmax(90px,.9fr) minmax(110px,1fr) auto auto; gap: 4px; align-items: start; margin: 3px 0; }
+.filter-rule select,.filter-rule input { width: 100%; min-width: 0; min-height: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px; background: var(--canvas); color: var(--text); padding: 0 5px; font-size: 10px; }
+.filter-rule select[multiple] { height: 64px; padding: 3px 4px; }
 .filter-remove { width: 26px; height: 26px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
 .filter-remove:hover { background: var(--panel-2); color: var(--danger); }
 .popover-clear { margin-top: 4px; color: var(--muted); }
-.axis-range-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin:7px 0; }
+.axis-range-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin:4px 0; }
 .axis-range-grid label { display:grid; grid-template-columns:42px 1fr; gap:5px; align-items:center; color:var(--muted); font-size:10px; }
-.axis-range-grid input { width:100%; height:28px; border:1px solid var(--border); border-radius:5px; background:var(--canvas); color:var(--text); padding:0 6px; }
+.axis-range-grid input { width:100%; height:22px; border:1px solid var(--border); border-radius:5px; background:var(--canvas); color:var(--text); padding:0 6px; }
 .series-legend { position:absolute; top:10px; right:14px; z-index:12; display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; max-width:55%; padding:4px; border:1px solid color-mix(in srgb,var(--border) 80%,transparent); border-radius:7px; background:color-mix(in srgb,var(--canvas) 92%,transparent); backdrop-filter:blur(5px); }
 .series-legend button { height:24px; display:inline-flex; align-items:center; gap:5px; padding:0 6px; border:0; border-radius:4px; background:transparent; color:var(--muted); cursor:pointer; font-size:9.5px; }
 .series-legend button:hover { background:var(--panel-2); color:var(--text); }
