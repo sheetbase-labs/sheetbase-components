@@ -67,6 +67,7 @@ export type PresentationMigration = Readonly<{
 }>;
 
 const migrations: PresentationMigration[] = [];
+const migrationByVersion = new Map<number, PresentationMigration>();
 
 /** v1 → v2: annotations join the persisted overlay (empty for existing states). */
 registerPresentationMigration({
@@ -78,6 +79,7 @@ registerPresentationMigration({
 /** Register a step that upgrades stored state from one schema version to the next. */
 export function registerPresentationMigration(migration: PresentationMigration): void {
   migrations.push(migration);
+  if (!migrationByVersion.has(migration.from)) migrationByVersion.set(migration.from, migration);
 }
 
 /**
@@ -91,7 +93,7 @@ export function migratePresentationState(value: unknown): unknown {
   let version = typeof current.version === "number" ? current.version : CURRENT_PRESENTATION_VERSION;
   if (version > CURRENT_PRESENTATION_VERSION) return undefined;
   while (version < CURRENT_PRESENTATION_VERSION) {
-    const migration = migrations.find((candidate) => candidate.from === version);
+    const migration = migrationByVersion.get(version);
     if (!migration) break;
     current = { ...migration.migrate(current), version: migration.to };
     version = migration.to;

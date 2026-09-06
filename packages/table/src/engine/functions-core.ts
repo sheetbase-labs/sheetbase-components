@@ -36,12 +36,19 @@ export const CORE_FUNCTIONS: Record<string, FunctionImpl> = {
     }
     throw new Error("#N/A");
   },
-  AND: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).every((value) => value === null || value === "" || boolean(value)),
-  OR: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).some((value) => value !== null && value !== "" && boolean(value)),
+  AND: (args, ctx) => {
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    return flat.every((value) => value === null || value === "" || boolean(value));
+  },
+  OR: (args, ctx) => {
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    return flat.some((value) => value !== null && value !== "" && boolean(value));
+  },
   NOT: (args) => !boolean(scalarOf(args[0])),
   XOR: (args, ctx) => {
-    const flags = args.flatMap((argument) => flatten(argument, ctx)).map(boolean);
-    const truthy = flags.filter(Boolean).length;
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    let truthy = 0;
+    for (const value of flat) if (boolean(value)) truthy += 1;
     return truthy % 2 === 1;
   },
   SWITCH: (args, _ctx) => {
@@ -68,11 +75,18 @@ export const CORE_FUNCTIONS: Record<string, FunctionImpl> = {
     const values = aggregateNumbers(args, ctx);
     return values.length === 0 ? 0 : Math.max(...values);
   },
-  COUNT: (args, ctx) =>
-    args
-      .flatMap((argument) => flatten(argument, ctx))
-      .filter((value) => typeof value === "number" || (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))).length,
-  COUNTA: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).filter((value) => value !== null && value !== "").length,
+  COUNT: (args, ctx) => {
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    let total = 0;
+    for (const value of flat) if (typeof value === "number" || (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))) total += 1;
+    return total;
+  },
+  COUNTA: (args, ctx) => {
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    let total = 0;
+    for (const value of flat) if (value !== null && value !== "") total += 1;
+    return total;
+  },
   SEQUENCE: (args) => {
     const rows = Math.trunc(number(scalarOf(args[0])));
     const columns = args[1] === undefined ? 1 : Math.trunc(number(scalarOf(args[1])));
@@ -309,13 +323,15 @@ export const CORE_FUNCTIONS: Record<string, FunctionImpl> = {
     return Math.round(result);
   },
   GCD: (args, ctx) => {
-    const values = args.flatMap((argument) => flatten(argument, ctx)).map((value) => Math.trunc(number(value)));
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    const values = flat.map((value) => Math.trunc(number(value)));
     if (values.some((value) => value < 0)) throw new Error("#NUM!");
     const gcd = (left: number, right: number): number => (right === 0 ? left : gcd(right, left % right));
     return values.reduce((left, right) => gcd(left, right), 0);
   },
   LCM: (args, ctx) => {
-    const values = args.flatMap((argument) => flatten(argument, ctx)).map((value) => Math.trunc(number(value)));
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    const values = flat.map((value) => Math.trunc(number(value)));
     if (values.some((value) => value < 0)) throw new Error("#NUM!");
     const gcd = (left: number, right: number): number => (right === 0 ? left : gcd(right, left % right));
     return values.reduce((left, right) => (left === 0 || right === 0 ? 0 : (left * right) / gcd(left, right)), 1);

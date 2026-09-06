@@ -29,10 +29,9 @@ export function planRecalculation(
     remaining.set(address, count);
   }
 
-  let ready = [...remaining]
-    .filter(([, count]) => count === 0)
-    .map(([address]) => address)
-    .sort();
+  let ready: string[] = [];
+  for (const [address, count] of remaining) if (count === 0) ready.push(address);
+  ready.sort();
   const batches: string[][] = [];
   const scheduled = new Set<string>();
 

@@ -262,14 +262,19 @@ function tokenize(source: string): Token[] {
   return tokens;
 }
 
+const comparisonOperators: ReadonlySet<string> = new Set(["=", "<>", "<", ">", "<=", ">="]);
+const concatenationOperators: ReadonlySet<string> = new Set(["&"]);
+const additiveOperators: ReadonlySet<string> = new Set(["+", "-"]);
+const multiplicativeOperators: ReadonlySet<string> = new Set(["*", "/"]);
+
 class FormulaCompiler {
   #index = 0;
   constructor(private readonly tokens: readonly Token[], private readonly names?: FormulaNameTable) {}
   parse(): FormulaNode { const root = this.#comparison(); this.#expect("eof"); return root; }
-  #comparison(): FormulaNode { return this.#leftAssociative(() => this.#concatenation(), ["=", "<>", "<", ">", "<=", ">="]); }
-  #concatenation(): FormulaNode { return this.#leftAssociative(() => this.#additive(), ["&"]); }
-  #additive(): FormulaNode { return this.#leftAssociative(() => this.#multiplicative(), ["+", "-"]); }
-  #multiplicative(): FormulaNode { return this.#leftAssociative(() => this.#power(), ["*", "/"]); }
+  #comparison(): FormulaNode { return this.#leftAssociative(() => this.#concatenation(), comparisonOperators); }
+  #concatenation(): FormulaNode { return this.#leftAssociative(() => this.#additive(), concatenationOperators); }
+  #additive(): FormulaNode { return this.#leftAssociative(() => this.#multiplicative(), additiveOperators); }
+  #multiplicative(): FormulaNode { return this.#leftAssociative(() => this.#power(), multiplicativeOperators); }
   #power(): FormulaNode { const left = this.#unary(); if (this.#peek().value !== "^") return left; this.#next(); return { kind: "binary", operator: "^", left, right: this.#power() }; }
   #unary(): FormulaNode {
     if (["+", "-"].includes(this.#peek().value)) return { kind: "unary", operator: this.#next().value as "+" | "-", operand: this.#unary() };
@@ -302,9 +307,9 @@ class FormulaCompiler {
     if (token.value === "(") { const value = this.#comparison(); this.#expect("operator", ")"); return value; }
     throw new Error("#VALUE!");
   }
-  #leftAssociative(next: () => FormulaNode, operators: readonly string[]): FormulaNode {
+  #leftAssociative(next: () => FormulaNode, operators: ReadonlySet<string>): FormulaNode {
     let value = next();
-    while (operators.includes(this.#peek().value)) { const operator = this.#next().value; value = { kind: "binary", operator, left: value, right: next() }; }
+    while (operators.has(this.#peek().value)) { const operator = this.#next().value; value = { kind: "binary", operator, left: value, right: next() }; }
     return value;
   }
   #peek(): Token { return this.tokens[this.#index]; }

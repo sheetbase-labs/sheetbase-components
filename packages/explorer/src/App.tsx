@@ -1,432 +1,272 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DataTable, type DataTableHandle } from "./components/DataTable";
-import { FieldSelect } from "./components/FieldSelect";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { FileUploadIcon, Moon02Icon, PlayIcon, ReloadIcon, Sun03Icon } from '@hugeicons/core-free-icons'
+import { DataTable } from './components/DataTable'
+import { datasetFromFile } from './lib/adapters/file'
+import { sampleAdapter } from './lib/adapters/sample'
+import { buildChart } from './lib/chart'
+import { filteredRows, ROW_ID } from './lib/explore'
+import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
+import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
+import { runSqlAsync } from './lib/sql'
+import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 import {
-  DATASETS,
-  DATASET_BY_ID,
-  type DatasetId,
-} from "./data/adapters";
+  ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
+} from './explorer-chrome'
 import {
-  explore,
-  type AxisKind,
-  type ExploreSpec,
-  type FilterCondition,
-} from "./lib/explore";
-import { ChartRenderer, type ChartKind } from "./lib/chart";
-import {
-  loadPersistedState,
-  persistState,
-  type PersistedExploreState,
-} from "./lib/persistence";
-import { SchemaEditor } from "@sheetbase/schema-editor";
-import { RulesEngine } from "@sheetbase/rules-engine";
-import { AdvancedSearch } from "@sheetbase/advanced-search";
-import {
-  compileToDatasetQuery,
-  type SearchGroup,
-} from "@sheetbase/advanced-search/engine";
-import type { FieldDescriptor } from "@sheetbase/shared";
+  BottomPanel, initialSpec, initialSql, smartKindFor, type BottomTab, type Menu,
+} from './explorer-popovers'
 
-const persisted = loadPersistedState();
-const initialDatasetId: DatasetId =
-  persisted && DATASET_BY_ID.has(persisted.datasetId)
-    ? persisted.datasetId
-    : DATASETS[0].id;
-
-function defaultSpec(datasetId: DatasetId): ExploreSpec {
-  const ds = DATASET_BY_ID.get(datasetId)!;
-  const x = ds.fields.find((f) => f.kind === "categorical")?.id ?? ds.fields[0].id;
-  const y = ds.fields.find((f) => f.kind === "numeric")?.id ?? ds.fields[0].id;
-  return {
-    datasetId,
-    xField: x,
-    yField: y,
-    seriesField: null,
-    aggregation: "count",
-    filters: [],
-  };
+export interface AppProps {
+  /** Dataset sources listed under Import. Defaults to the built-in sample. */
+  sources?: DataAdapter[]
+  /** Source loaded on mount. Defaults to the first source. Ignored when dataset is controlled. */
+  initialSourceId?: string
+  /**
+   * Controlled dataset pushed by the host. Re-adopted on every identity
+   * change, preserving spec and SQL; the host should memoize it. Wins over
+   * sources while present.
+   */
+  dataset?: Dataset
+  /**
+   * Controlled chart spec. When provided, the explorer renders it and
+   * reports edits through onSpecChange instead of owning state.
+   */
+  spec?: ChartSpec
+  /** Receives every spec edit; the host persists it into block data. */
+  onSpecChange?(spec: ChartSpec): void
+  /**
+   * Draw the stage frame (padded surround, bordered card). Default true;
+   * false renders just the explorer, e.g. inside a host surface.
+   */
+  frame?: boolean
+  /**
+   * Fixed chart height in pixels. Unframed auto-height hosts should pass
+   * this: without an independent bound, measuring the stage feeds back
+   * into the rendered height and the layout grows without limit.
+   */
+  chartHeight?: number
 }
-
-function restoredSpec(saved: PersistedExploreState | null, datasetId: DatasetId): ExploreSpec {
-  const base = defaultSpec(datasetId);
-  if (!saved || saved.datasetId !== datasetId) return base;
-  const ds = DATASET_BY_ID.get(datasetId)!;
-  const ids = new Set(ds.fields.map((f) => f.id));
-  return {
-    ...base,
-    xField: ids.has(saved.xField) ? saved.xField : base.xField,
-    yField: ids.has(saved.yField) ? saved.yField : base.yField,
-    seriesField:
-      saved.seriesField && ids.has(saved.seriesField) ? saved.seriesField : null,
-    aggregation: saved.aggregation,
-    filters: saved.filters.filter((f) => ids.has(f.field)),
-  };
-}
-
-function restoredChartKind(
-  saved: PersistedExploreState | null,
-  spec: ExploreSpec,
-): ChartKind {
-  const ds = DATASET_BY_ID.get(spec.datasetId)!;
-  const xKind = ds.fields.find((f) => f.id === spec.xField)?.kind;
-  const allowed: ChartKind[] =
-    spec.seriesField != null || xKind === "categorical"
-      ? ["bar", "line", "area"]
-      : ["bar", "line", "area", "scatter"];
-  if (saved && allowed.includes(saved.chartKind)) return saved.chartKind;
-  return allowed[0];
-}
-
-function App() {
-  const [datasetId, setDatasetId] = useState<DatasetId>(initialDatasetId);
-  const [spec, setSpec] = useState<ExploreSpec>(() =>
-    restoredSpec(persisted, initialDatasetId),
-  );
-  const [chartKind, setChartKind] = useState<ChartKind>(() =>
-    restoredChartKind(persisted, restoredSpec(persisted, initialDatasetId)),
-  );
-  const [pane, setPane] = useState<"chart" | "table">("chart");
-  const [schemaOpen, setSchemaOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState<SearchGroup | null>(null);
-  const tableRef = useRef<DataTableHandle>(null);
-  const dataset = DATASET_BY_ID.get(datasetId)!;
-
+export function App(props: AppProps = {}) {
+  const baseDatasetRef = useRef<Dataset | null>(null)
+  const [internalDataset, setInternalDataset] = useState<Dataset | null>(null)
+  const dataset = props.dataset ?? internalDataset
+  const [restored] = useState<PersistedExplorerState>(() => {
+    const base = loadInitialExplorerState({ version: CURRENT_EXPLORATION_VERSION, theme: 'light', spec: initialSpec, sql: initialSql, saved: [], updatedAt: new Date().toISOString() }, defaultExplorerAdapter)
+    const shared = typeof window === 'undefined' ? undefined : decodeShareHash(window.location.hash)
+    return shared ? { ...base, spec: shared.spec, sql: shared.sql } : base
+  })
+  const [internalSpec, setInternalSpec] = useState<ChartSpec>(restored.spec)
+  const spec = props.spec ?? internalSpec
+  const onSpecChangeRef = useRef(props.onSpecChange)
+  const controlledSpecRef = useRef(props.spec)
+  const specRef = useRef(internalSpec)
   useEffect(() => {
-    persistState({
-      datasetId,
-      xField: spec.xField,
-      yField: spec.yField,
-      seriesField: spec.seriesField,
-      aggregation: spec.aggregation,
-      filters: spec.filters,
-      chartKind,
-    });
-  }, [datasetId, spec, chartKind]);
+    // Latest-ref sync for the stable setSpec below; effects run post-commit,
+    // so handlers always observe committed values and render stays pure.
+    onSpecChangeRef.current = props.onSpecChange
+    controlledSpecRef.current = props.spec
+    specRef.current = spec
+  }, [props.onSpecChange, props.spec, spec])
+  const setSpec = useCallback((action: SetStateAction<ChartSpec>) => {
+    // Resolved outside the updater: React may replay updaters, so the parent
+    // notification must not live inside one.
+    const next = typeof action === 'function' ? action(specRef.current) : action
+    if (controlledSpecRef.current === undefined) {
+      specRef.current = next
+      setInternalSpec(next)
+    }
+    onSpecChangeRef.current?.(next)
+  }, [])
+  const [sql, setSql] = useState(restored.sql)
+  const [saved, setSaved] = useState<SavedExploration[]>(restored.saved)
+  const [sqlError, setSqlError] = useState<string | null>(null)
+  const [sqlRunning, setSqlRunning] = useState(false)
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
+  useEffect(() => {
+    try { window.history.replaceState(null, '', encodeShareHash(spec, sql)) } catch { /* Non-http contexts have no URL to share. */ }
+  }, [spec, sql])
+  const [tab, setTab] = useState<BottomTab>('data')
+  const [dark, setDark] = useState(restored.theme === 'dark')
+  const [menu, setMenu] = useState<Menu>(null)
+  const [measuredHeight, setMeasuredHeight] = useState(420)
+  const chartHeight = props.chartHeight ?? measuredHeight
+  const [selectedRow, setSelectedRow] = useState<number | undefined>()
+  const [panelHeight, setPanelHeight] = useState(250)
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const [libraryName, setLibraryName] = useState('')
+  const sources = useMemo<DataAdapter[]>(() => props.sources ?? [sampleAdapter], [props.sources])
+  const [importStatus, setImportStatus] = useState<string | null>(null)
+  const chartStageRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const persisted = useMemo<PersistedExplorerState>(() => ({ version: CURRENT_EXPLORATION_VERSION, theme: dark ? 'dark' : 'light', spec, sql, saved, updatedAt: new Date().toISOString() }), [spec, sql, saved, dark])
+  useIdleExplorerSave(EXPLORER_STORAGE_KEY, persisted, defaultExplorerAdapter)
+  const adoptDataset = useCallback((loaded: Dataset) => {
+    baseDatasetRef.current = loaded
+    setInternalDataset(loaded); setSql(initialSql); setSqlError(null); setSelectedRow(undefined)
+    const numeric = loaded.columns.filter((column) => column.kind === 'number')
+    const x = numeric[0]?.key ?? loaded.columns[0]?.key
+    const y = numeric[1]?.key ?? numeric[0]?.key
+    setSpec((current) => ({ ...current, x, y, group: undefined, color: undefined, facet: undefined, errorMode: 'none', errorLow: undefined, errorHigh: undefined, filters: [], filterLogic: 'and', aggregate: 'none', hiddenSeries: [], zoomX: undefined }))
+  }, [setSpec])
+  const didInitialLoadRef = useRef(false)
+  useEffect(() => {
+    if (props.dataset || didInitialLoadRef.current) return
+    didInitialLoadRef.current = true
+    const first = sources.find((source) => source.id === props.initialSourceId) ?? sources[0]
+    if (!first) return
+    first.load().then(adoptDataset, (error: unknown) => setSqlError(error instanceof Error ? error.message : String(error)))
+  }, [props.dataset, props.initialSourceId, sources, adoptDataset])
+  const datasetSwapped = useDatasetSwap(dataset)
+  if (datasetSwapped) {
+    if (selectedRow !== undefined) setSelectedRow(undefined)
+    if (spec.zoomX !== undefined && props.spec === undefined) setInternalSpec({ ...spec, zoomX: undefined })
+  }
 
-  const result = useMemo(
-    () => explore(dataset, spec, searchQuery),
-    [dataset, spec, searchQuery],
-  );
+  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = dark ? 'dark' : 'light' }, [dark, dataset])
+  useEffect(() => {
+    if (props.frame === false && props.chartHeight === undefined) return
+    const stage = chartStageRef.current
+    if (!stage) return
+    const resize = () => setMeasuredHeight(Math.max(260, Math.floor(stage.clientHeight)))
+    resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
+  }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
 
-  const xField = dataset.fields.find((f) => f.id === spec.xField)!;
-  const yField = dataset.fields.find((f) => f.id === spec.yField)!;
-  const xKind: AxisKind = xField.kind;
+  const definition = useMemo(() => dataset ? buildChart(dataset, spec, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window }))) : null, [dataset, spec, selectedRow, setSpec])
+  const visibleRows = useMemo(() => dataset ? filteredRows(dataset, spec) : [], [dataset, spec])
+  const seriesField = spec.color ?? spec.group
+  const hiddenSeries = useMemo(() => new Set(spec.hiddenSeries ?? []), [spec.hiddenSeries])
+  const seriesValues = useMemo(() => {
+    if (!dataset || !seriesField) return []
+    const seen = new Set<string>()
+    const values: string[] = []
+    for (const row of visibleRows) {
+      const value = String(row[seriesField] ?? '')
+      if (!value || seen.has(value)) continue
+      seen.add(value)
+      values.push(value)
+    }
+    return values
+  }, [dataset, seriesField, visibleRows])
 
-  const compiledSearch = useMemo(
-    () => (searchQuery ? compileToDatasetQuery(searchQuery) : null),
-    [searchQuery],
-  );
+  async function openFile(file?: File) {
+    if (!file) return
+    try { adoptDataset(await datasetFromFile(file)) }
+    catch (error) { setSqlError(error instanceof Error ? error.message : String(error)) }
+  }
+  async function loadSource(id: string) {
+    const source = sources.find((item) => item.id === id)
+    if (!source) return
+    setImportStatus(`Loading ${source.label}…`)
+    try { adoptDataset(await source.load()); setMenu(null); setImportStatus(null) }
+    catch (error) { setImportStatus(error instanceof Error ? error.message : String(error)) }
+  }
 
-  const searchFields: FieldDescriptor[] = useMemo(
-    () =>
-      dataset.fields.map((f) => ({
-        id: f.id,
-        name: f.label,
-        type: f.kind === "numeric" ? "number" : f.kind === "temporal" ? "date" : "text",
-      })),
-    [dataset],
-  );
+  function saveCurrentExploration() {
+    const name = libraryName.trim()
 
-  const changeDataset = useCallback((id: DatasetId) => {
-    setDatasetId(id);
-    const next = defaultSpec(id);
-    setSpec(next);
-    setChartKind("bar");
-    setSearchQuery(null);
-  }, []);
+  if (!name) return
+    const now = new Date().toISOString()
+    setSaved((current) => [{ id: crypto.randomUUID(), name, createdAt: now, updatedAt: now, spec, sql }, ...current])
+    setLibraryName('')
+  }
 
-  const addFilter = () => {
-    const field = dataset.fields[0];
-    setSpec((s) => ({
-      ...s,
-      filters: [
-        ...s.filters,
-        { field: field.id, op: field.kind === "numeric" ? "gte" : "eq", value: "" },
-      ],
-    }));
-  };
+  function loadExploration(id: string) {
+    const entry = saved.find((item) => item.id === id)
+    if (!entry) return
+    setSpec({ ...entry.spec }); setSql(entry.sql); setMenu(null)
+  }
 
-  const updateFilter = (i: number, patch: Partial<FilterCondition>) => {
-    setSpec((s) => ({
-      ...s,
-      filters: s.filters.map((f, j) => (j === i ? { ...f, ...patch } : f)),
-    }));
-  };
+  function deleteExploration(id: string) {
+    setSaved((current) => current.filter((entry) => entry.id !== id))
+  }
 
-  const removeFilter = (i: number) => {
-    setSpec((s) => ({ ...s, filters: s.filters.filter((_, j) => j !== i) }));
-  };
+  async function executeSql() {
+    if (!baseDatasetRef.current || sqlRunning) return
+    setSqlRunning(true)
+    try { const result = await runSqlAsync(baseDatasetRef.current, sql); setInternalDataset(result); setSqlError(null); setTab('data'); setSelectedRow(undefined); setSpec((current) => ({ ...current, zoomX: undefined })) }
+    catch (error) { setSqlError(error instanceof Error ? error.message : String(error)) }
+    finally { setSqlRunning(false) }
+  }
+  function resetSql() { setSql(initialSql); setInternalDataset(baseDatasetRef.current); setSqlError(null); setSpec((current) => ({ ...current, zoomX: undefined })) }
+  function flashExportStatus(message: string) { setExportStatus(message); setTimeout(() => setExportStatus((current) => current === message ? null : current), 2500) }
+  function exportSvgFile() {
+    const stage = chartStageRef.current
+    if (!stage) return
+    const serialized = serializeChartSvg(stage)
+    if (!serialized) { flashExportStatus('No chart to export yet.'); return }
+    downloadText(`${dataset?.name ?? 'chart'} · ${spec.kind}.svg`, serialized, 'image/svg+xml;charset=utf-8')
+    flashExportStatus('SVG downloaded.')
+  }
+  async function exportPngFile() {
+    const stage = chartStageRef.current
+    if (!stage) return
+    try { await exportChartPng(stage, `${dataset?.name ?? 'chart'} · ${spec.kind}.png`); flashExportStatus('PNG downloaded.') }
+    catch (error) { flashExportStatus(error instanceof Error ? error.message : String(error)) }
+  }
+  async function copySpecJson() {
+    try { await navigator.clipboard.writeText(specJson(spec, sql)); flashExportStatus('Spec copied.') }
+    catch { flashExportStatus('Clipboard unavailable.') }
+  }
+  async function copyShareLink() {
+    const hash = encodeShareHash(spec, sql)
+    try { await navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}${hash}`); window.history.replaceState(null, '', hash); flashExportStatus('Link copied.') }
+    catch { flashExportStatus('Clipboard unavailable.') }
+  }
 
-  const seriesAllowed = xKind === "categorical";
-  const scatterAllowed = xKind !== "categorical" && spec.seriesField == null;
-  const allowedCharts: ChartKind[] = scatterAllowed
-    ? ["bar", "line", "area", "scatter"]
-    : ["bar", "line", "area"];
 
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          <div>
-            <div className="brand-title">Explorer</div>
-            <div className="brand-sub">Visual analysis over typed datasets</div>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <button type="button" className="ghost" onClick={() => setSchemaOpen(true)}>
-            Schema
-          </button>
-          <button type="button" className="ghost" onClick={() => setRulesOpen(true)}>
-            Rules
-          </button>
-          <button type="button" className="ghost" onClick={() => setSearchOpen(true)}>
-            Search
-          </button>
-        </div>
-      </header>
+  function setField(role: 'x' | 'y' | 'color' | 'facet', value?: string) {
+    setSpec((current) => {
+      const next: ChartSpec = { ...current, [role]: value, hiddenSeries: role === 'color' ? [] : current.hiddenSeries, zoomX: role === 'x' ? undefined : current.zoomX }
+      if (role === 'x' || role === 'y') {
+        const inferred = smartKindFor(dataset, role === 'x' ? value : next.x, role === 'y' ? value : next.y)
+        if (inferred) next.kind = inferred
+      }
+      return next
+    })
+  }
 
-      <aside className="sidebar">
-        <label className="field">
-          <span>Dataset</span>
-          <select
-            value={datasetId}
-            onChange={(e) => changeDataset(e.target.value as DatasetId)}
-          >
-            {DATASETS.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-        </label>
+  function choosePlot(kind: ChartKind) {
+    setSpec((current) => ({ ...current, kind, aggregate: ['bar', 'horizontal-bar', 'area'].includes(kind) && current.aggregate === 'none' ? 'mean' : current.aggregate, barLayout: ['bar', 'horizontal-bar'].includes(kind) ? 'grouped' : current.barLayout }))
+    setMenu(null)
+  }
 
-        <label className="field">
-          <span>X axis</span>
-          <FieldSelect
-            fields={dataset.fields}
-            value={spec.xField}
-            onChange={(id) =>
-              setSpec((s) => ({
-                ...s,
-                xField: id,
-                seriesField: null,
-              }))
-            }
-          />
-        </label>
 
-        <label className="field">
-          <span>Y axis</span>
-          <FieldSelect
-            fields={dataset.fields}
-            value={spec.yField}
-            onChange={(id) => setSpec((s) => ({ ...s, yField: id }))}
-            kinds={["numeric"]}
-          />
-        </label>
 
-        <label className="field">
-          <span>Series (optional)</span>
-          <select
-            value={spec.seriesField ?? ""}
-            disabled={!seriesAllowed}
-            onChange={(e) =>
-              setSpec((s) => ({
-                ...s,
-                seriesField: e.target.value || null,
-              }))
-            }
-          >
-            <option value="">None</option>
-            {dataset.fields
-              .filter((f) => f.kind === "categorical" && f.id !== spec.xField)
-              .map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-          </select>
-        </label>
+  function toggleSeries(value: string, isolate = false) {
+    setSpec((current) => {
+      const hidden = new Set(current.hiddenSeries ?? [])
+      if (isolate) {
+        const all = seriesValues
+        const alreadyIsolated = all.every((item) => item === value || hidden.has(item))
+        return { ...current, hiddenSeries: alreadyIsolated ? [] : all.filter((item) => item !== value) }
+      }
+      hidden.has(value) ? hidden.delete(value) : hidden.add(value)
+      return { ...current, hiddenSeries: [...hidden] }
+    })
+  }
 
-        <label className="field">
-          <span>Aggregation</span>
-          <select
-            value={spec.aggregation}
-            onChange={(e) =>
-              setSpec((s) => ({
-                ...s,
-                aggregation: e.target.value as ExploreSpec["aggregation"],
-              }))
-            }
-          >
-            <option value="count">Count</option>
-            <option value="sum">Sum</option>
-            <option value="avg">Average</option>
-            <option value="min">Min</option>
-            <option value="max">Max</option>
-          </select>
-        </label>
+  function startResize(event: ReactPointerEvent) {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = panelHeight
+    const move = (moveEvent: globalThis.PointerEvent) => setPanelHeight(Math.max(120, Math.min(560, startHeight + startY - moveEvent.clientY)))
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+  }
 
-        <div className="field">
-          <span>Chart</span>
-          <div className="chip-row">
-            {allowedCharts.map((k) => (
-              <button
-                key={k}
-                type="button"
-                className={chartKind === k ? "chip on" : "chip"}
-                onClick={() => setChartKind(k)}
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-        </div>
+  function resizeBy(delta: number) {
+    setPanelHeight((height) => Math.max(120, Math.min(560, height + delta)))
+  }
 
-        <div className="filters">
-          <div className="filters-head">
-            <span>Filters</span>
-            <button type="button" className="ghost sm" onClick={addFilter}>
-              Add
-            </button>
-          </div>
-          {spec.filters.map((f, i) => {
-            const field = dataset.fields.find((x) => x.id === f.field);
-            return (
-              <div className="filter-row" key={i}>
-                <select
-                  value={f.field}
-                  onChange={(e) => updateFilter(i, { field: e.target.value })}
-                >
-                  {dataset.fields.map((ff) => (
-                    <option key={ff.id} value={ff.id}>
-                      {ff.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={f.op}
-                  onChange={(e) =>
-                    updateFilter(i, { op: e.target.value as FilterCondition["op"] })
-                  }
-                >
-                  <option value="eq">=</option>
-                  <option value="neq">≠</option>
-                  {field?.kind === "numeric" || field?.kind === "temporal" ? (
-                    <>
-                      <option value="gt">&gt;</option>
-                      <option value="gte">≥</option>
-                      <option value="lt">&lt;</option>
-                      <option value="lte">≤</option>
-                    </>
-                  ) : (
-                    <option value="contains">contains</option>
-                  )}
-                </select>
-                <input
-                  value={String(f.value)}
-                  onChange={(e) => updateFilter(i, { value: e.target.value })}
-                />
-                <button type="button" className="ghost sm" onClick={() => removeFilter(i)}>
-                  ×
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
+  if (!dataset) return <div className="loading">Loading Explorer…</div>
 
-      <main className="main">
-        <div className="pane-toggle">
-          <button
-            type="button"
-            className={pane === "chart" ? "chip on" : "chip"}
-            onClick={() => setPane("chart")}
-          >
-            Chart
-          </button>
-          <button
-            type="button"
-            className={pane === "table" ? "chip on" : "chip"}
-            onClick={() => setPane("table")}
-          >
-            Table
-          </button>
-          {compiledSearch ? (
-            <span className="search-badge">search active</span>
-          ) : null}
-        </div>
-        {pane === "chart" ? (
-          <div className="chart-wrap">
-            <ChartRenderer
-              kind={chartKind}
-              result={result}
-              xLabel={xField.label}
-              yLabel={`${spec.aggregation}(${yField.label})`}
-            />
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <DataTable
-              ref={tableRef}
-              rows={dataset.rows}
-              fields={dataset.fields}
-              query={compiledSearch}
-            />
-          </div>
-        )}
-      </main>
-
-      {schemaOpen ? (
-        <div className="overlay" role="dialog">
-          <div className="overlay-panel wide">
-            <div className="overlay-head">
-              <strong>Schema editor</strong>
-              <button type="button" className="ghost" onClick={() => setSchemaOpen(false)}>
-                Close
-              </button>
-            </div>
-            <SchemaEditor />
-          </div>
-        </div>
-      ) : null}
-
-      {rulesOpen ? (
-        <div className="overlay" role="dialog">
-          <div className="overlay-panel wide">
-            <div className="overlay-head">
-              <strong>Rules engine</strong>
-              <button type="button" className="ghost" onClick={() => setRulesOpen(false)}>
-                Close
-              </button>
-            </div>
-            <RulesEngine />
-          </div>
-        </div>
-      ) : null}
-
-      {searchOpen ? (
-        <div className="overlay" role="dialog">
-          <div className="overlay-panel wide">
-            <div className="overlay-head">
-              <strong>Advanced search</strong>
-              <button type="button" className="ghost" onClick={() => setSearchOpen(false)}>
-                Close
-              </button>
-            </div>
-            <AdvancedSearch
-              fields={searchFields}
-              value={searchQuery ?? undefined}
-              onChange={setSearchQuery}
-            />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+  const body = (<>
+    <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
+    <CommandBar menu={menu} spec={spec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={dark} setSpec={setSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={() => setDark((value) => !value)} />
+    <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={spec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${spec.kind} chart of ${spec.y} by ${spec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
+  </section></main>
+  <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="button subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>
+  </>)
+  return <ExplorerFrame framed={props.frame} rootRef={rootRef} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }
-
-export default App;

@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useRef, useState, Profiler } from "react";
-import { HttpPagedDataAdapter } from "../data";
+import { HttpPagedDataAdapter } from "../data/http-adapter";
 import { PagedSpreadsheet } from "./PagedSpreadsheet";
 import { TableControls } from "./TableControls";
 import { ConditionalFormattingInspector, TableFormattingToolbar, TableSurface } from "./TableSurface";
 import type { SpreadsheetHandle, SpreadsheetSelection } from "./Spreadsheet";
 import type { ConditionalFormatRule } from "../grid/conditional-formatting";
 import type { DatasetQuery } from "../data";
-import { parseAddress, type CellRange } from "../engine";
+import { parseAddress } from "../engine/coordinates";
+import type { CellRange } from "../engine/types";
 import { createHttpPresentationAdapter, createLocalStoragePresentationAdapter, useResolvedTheme, useTablePresentationState, type ColumnPresentation, type TablePresentationState } from "./presentation-state";
 
 const fields = [
@@ -69,7 +70,16 @@ export function PagedDemo() {
   const theme = useResolvedTheme(presentation.theme);
   const adapter = useMemo(() => new HttpPagedDataAdapter("/api/table"), []);
   const [totalRows, setTotalRows] = useState(1_000_000);
-  const visibleFields = useMemo(() => presentation.columns.filter((column) => !column.hidden).map((column, index) => ({ ...fields.find((field) => field.id === column.fieldId)!, column: index })).filter(Boolean), [presentation.columns]);
+  const visibleFields = useMemo(() => {
+    const byId = new Map(fields.map((field) => [field.id, field] as const));
+    const visible: Array<(typeof fields)[number] & { column: number }> = [];
+    for (const column of presentation.columns) {
+      if (column.hidden) continue;
+      const field = byId.get(column.fieldId);
+      if (field) visible.push({ ...field, column: visible.length });
+    }
+    return visible;
+  }, [presentation.columns]);
   const fieldIds = useMemo(() => visibleFields.map((field) => field.id), [visibleFields]);
   const fieldColumns = useMemo(() => new Set(visibleFields.map((field) => field.column)), [visibleFields]);
   const datasetHeader = useMemo(() => ({ fields: visibleFields }), [visibleFields]);
@@ -98,7 +108,7 @@ export function PagedDemo() {
   }) })), [setPresentation, visibleFields]);
   const setColumnVisibility = useCallback((fieldId: string, visible: boolean) => updateColumns(presentation.columns.map((column) => column.fieldId === fieldId ? { ...column, hidden: !visible } : column)), [presentation.columns, updateColumns]);
   const applyToolbarFormat = useCallback((format: Parameters<SpreadsheetHandle["applyFormat"]>[0]) => tableRef.current?.applyFormat(format), []);
-  return <TableSurface theme={theme} className="paged-demo-surface" action={<button className="open-formatting" aria-label="Open conditional formatting" onClick={() => updateObject({ open: true })}><span>◧</span> Rules</button>} table={<div className="formatted-table"><TableFormattingToolbar selection={selection.range} format={selection.format} mixedFormats={selection.mixedFormats} onFormat={applyToolbarFormat} theme={theme} themeMode={presentation.theme} onThemeChange={(mode) => setPresentation((current) => ({ ...current, theme: mode }))} viewControls={<TableControls fields={fields} query={presentation.query} onQueryChange={setQuery} columns={presentation.columns} onColumnsChange={updateColumns} onFrozenColumnsChange={setFrozenColumns} theme={theme} />} /><Profiler id="paged-grid" onRender={countGridCommit}><PagedSpreadsheet
+  return <TableSurface theme={theme} className="paged-demo-surface" action={<button className="open-formatting" aria-label="Open conditional formatting" onClick={() => updateObject({ open: true })}><span>◩</span> Rules</button>} table={<div className="formatted-table"><TableFormattingToolbar selection={selection.range} format={selection.format} mixedFormats={selection.mixedFormats} onFormat={applyToolbarFormat} theme={theme} themeMode={presentation.theme} onThemeChange={(mode) => setPresentation((current) => ({ ...current, theme: mode }))} viewControls={<TableControls fields={fields} query={presentation.query} onQueryChange={setQuery} columns={presentation.columns} onColumnsChange={updateColumns} onFrozenColumnsChange={setFrozenColumns} theme={theme} />} /><Profiler id="paged-grid" onRender={countGridCommit}><PagedSpreadsheet
     key={fieldIds.join("|")}
     ref={tableRef}
     adapter={adapter}

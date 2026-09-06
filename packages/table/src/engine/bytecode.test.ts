@@ -17,7 +17,7 @@ describe("formula bytecode", () => {
     const evaluate = (formula: string) => evaluateBytecode(lowerFormula(compileFormula(formula)), (address) => values[address] ?? null);
     expect(evaluate('=XLOOKUP("b",A1:A2,B1:B2)')).toBe(20);
     expect(evaluate('=MATCH("a",A1:A2)')).toBe(1);
-    expect(evaluate("=YEAR(DATE(2026,9,2))+MONTH(DATE(2026,9,2))+DAY(DATE(2026,9,2))").toBe(2037);
+    expect(evaluate("=YEAR(DATE(2026,9,2))+MONTH(DATE(2026,9,2))+DAY(DATE(2026,9,2))")).toBe(2037);
   });
 
   it("returns a bare range as a dynamic array", () => {

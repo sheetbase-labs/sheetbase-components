@@ -40,11 +40,15 @@ export const TEXT_FUNCTIONS: Record<string, FunctionImpl> = {
     if (count < 0) throw new Error("#VALUE!");
     return text(scalarOf(args[0])).repeat(count);
   },
-  CONCATENATE: (args, ctx) => args.flatMap((argument) => flatten(argument, ctx)).map(text).join(""),
+  CONCATENATE: (args, ctx) => {
+    const flat = args.flatMap((argument) => flatten(argument, ctx));
+    return flat.map(text).join("");
+  },
   TEXTJOIN: (args, ctx) => {
     const delimiter = text(scalarOf(args[0]));
     const ignoreEmpty = boolean(scalarOf(args[1]));
-    const pieces = args.slice(2).flatMap((argument) => flatten(argument, ctx)).map(text);
+    const flat = args.slice(2).flatMap((argument) => flatten(argument, ctx));
+    const pieces = flat.map(text);
     return (ignoreEmpty ? pieces.filter((piece) => piece !== "") : pieces).join(delimiter);
   },
   VALUE: (args) => {

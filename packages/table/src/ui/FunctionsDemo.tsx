@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Worksheet, type Scalar } from "../engine";
+import { Worksheet } from "../engine/workbook";
+import type { Scalar } from "../engine/types";
 import { FUNCTION_NAMES } from "../engine/functions";
 import { displayValue } from "../grid/model";
 
@@ -297,14 +298,14 @@ export function FunctionsDemo({ theme = "light" }: Readonly<{ theme?: "light" | 
     return computed;
   }, []);
   const query = filter.trim().toUpperCase();
-  const visibleSections = useMemo(
-    () =>
-      DEMO_SECTIONS.map((section) => ({
-        ...section,
-        entries: section.entries.filter((entry) => entry.fn.includes(query)),
-      })).filter((section) => section.entries.length > 0),
-    [query],
-  );
+  const visibleSections = useMemo(() => {
+    const visible: DemoSection[] = [];
+    for (const section of DEMO_SECTIONS) {
+      const entries = section.entries.filter((entry) => entry.fn.includes(query));
+      if (entries.length > 0) visible.push({ ...section, entries });
+    }
+    return visible;
+  }, [query]);
   const covered = new Set(FUNCTION_DEMO_ENTRIES.map((entry) => entry.fn));
   const total = FUNCTION_NAMES.length;
   const shown = FUNCTION_NAMES.filter((name) => covered.has(name)).length;
@@ -333,8 +334,8 @@ export function FunctionsDemo({ theme = "light" }: Readonly<{ theme?: "light" | 
               <tr><th>Function</th><th>Example</th><th>Result</th></tr>
             </thead>
             <tbody>
-              {section.entries.map((entry, index) => (
-                <tr key={`${entry.fn}-${index}`}>
+              {section.entries.map((entry) => (
+                <tr key={`${entry.fn} ${entry.formula}`}>
                   <td><code>{entry.fn}</code></td>
                   <td><code>{entry.formula}</code></td>
                   <td><code>{results.get(`${entry.fn} ${entry.formula}`)}</code></td>

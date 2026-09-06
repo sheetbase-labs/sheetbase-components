@@ -33,9 +33,6 @@ function visibleRows(rows: DataRow[], spec: ChartSpec) {
   return rows.filter((row) => !hidden.has(String(row[seriesField] ?? '')))
 }
 
-// Explorer materialises rows locally, so raw scatter input is stride-sampled
-// past this budget. Aggregated/grouped paths are unaffected; the regression
-// overlay below still fits the full series.
 const MAX_SCATTER_POINTS = 8000
 
 export function decimatePoints(rows: DataRow[], max: number): DataRow[] {
@@ -47,10 +44,17 @@ export function decimatePoints(rows: DataRow[], max: number): DataRow[] {
 }
 
 function numericExtent(rows: DataRow[], field: string) {
-  const values = rows.map((row) => Number(row[field])).filter(Number.isFinite)
-  if (!values.length) return undefined
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  let min = Infinity
+  let max = -Infinity
+  let found = false
+  for (const row of rows) {
+    const value = Number(row[field])
+    if (!Number.isFinite(value)) continue
+    found = true
+    if (value < min) min = value
+    if (value > max) max = value
+  }
+  if (!found) return undefined
   if (min === max) return [min - 0.5, max + 0.5] as const
   return [min, max] as const
 }

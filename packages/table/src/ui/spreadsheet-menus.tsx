@@ -31,73 +31,6 @@ export function MultiOptionPicker({ options, current, onCommit, onCancel }: Read
   </div>;
 }
 
-/** "client": the engine parses and evaluates "=..." formulas locally (default). "host": the host owns calculation, so "=..." inputs are kept as inert text and computed values arrive through hydration. */
-export type CalculationAuthority = "client" | "host";
-
-export type SpreadsheetProps = {
-  initialData: ReadonlyMap<string, string>;
-  initialState?: SpreadsheetState;
-  rowCount?: number;
-  columnCount?: number;
-  fieldColumns?: ReadonlySet<number>;
-  computedColumns?: ReadonlySet<number>;
-  frozenRows?: number;
-  frozenColumns?: number;
-  initialColumnWidths?: readonly number[];
-  /** Per-row initial heights by index; absent entries (or the whole prop) mean automatic height. */
-  initialRowHeights?: readonly number[];
-  readOnlyRows?: ReadonlySet<number>;
-  /** Blocks value/structure mutations; selection, copy, sorting and filtering stay live. */
-  readOnly?: boolean;
-  /** Resolved light/dark theme owned by the grid itself. */
-  theme?: "light" | "dark";
-  onSelectionChange?(selection: SpreadsheetSelection): void;
-  onEditChange?(value: string): void;
-  /** Audit/provenance hook: fired synchronously for every committed, undone, redone, or conflict-resolved mutation. Never blocks the grid when the sink throws. */
-  onMutation?(mutation: GridMutation & { at: string; revision?: string }): void;
-  onViewportChange?(viewport: SpreadsheetViewport): void;
-  bindingResolver?: BindingResolver;
-  fieldIds?: readonly (string | undefined)[];
-  query?: DatasetQuery;
-  onQueryChange?(query: DatasetQuery): void;
-  sortMode?: "local" | "server";
-  datasetHeader?: DatasetHeaderConfig;
-  onFieldWrite?(write: FieldWrite): void | Promise<void>;
-  /**
-   * Intercepts the automatic authoritative field-write commit. Return "hold"
-   * to keep the write local (visible, undoable) without committing — the host
-   * owns persistence and reads/flushes the held writes via the handle.
-   * Absent, or "commit", keeps the default immediate commit.
-   */
-  fieldWritePolicy?: (write: FieldWrite) => "commit" | "hold";
-  /** Fired whenever the set of held writes changes (hold, replace, flush, discard). */
-  onHeldFieldWritesChange?(writes: readonly FieldWrite[]): void;
-  onRecordCreate?(record: Readonly<{ row: number; values: Readonly<Record<string, string>> }>): void | Promise<void>;
-  onWriteStateChange?(address: string, status: WriteStatus): void;
-  loadingRanges?: readonly SpreadsheetLoadingRange[];
-  conditionalFormats?: readonly ConditionalFormatRule[];
-  initialFormats?: readonly SpreadsheetFormatEntry[];
-  onFormatsChange?(formats: readonly SpreadsheetFormatEntry[]): void;
-  /** Per-cell provenance notes / review comments, rendered as an overlay marker. */
-  initialAnnotations?: readonly CellAnnotation[];
-  onAnnotationsChange?(annotations: readonly CellAnnotation[]): void;
-  onConditionalFormattingRequest?(fieldId: string | undefined, column: number): void;
-  onCellClickTiming?(milliseconds: number): void;
-  onColumnMove?(from: number, to: number): void;
-  onColumnVisibilityChange?(fieldId: string, visible: boolean): void;
-  onFrozenColumnsChange?(count: number): void;
-  onColumnWidthsChange?(widths: readonly number[]): void;
-  onRowHeightsChange?(heights: readonly number[]): void;
-  /** "host": the host supplies computed values for formula cells; the engine renders "=" inputs as inert text and never evaluates them. Default "client". */
-  calculationAuthority?: CalculationAuthority;
-  /** Replaces the default cell content. Return undefined to keep the built-in rendering. */
-  renderCell?(context: SpreadsheetCellRenderContext): ReactNode | undefined;
-  /** Custom in-cell editors; the first matching editor replaces the built-in input for that field. */
-  customEditors?: readonly SpreadsheetCustomEditor[];
-  /** Extra actions appended to the column and row context menus. */
-  contextMenuActions?: readonly SpreadsheetMenuAction[];
-};
-
 export function menuKeys(onClose: () => void) {
   return (event: React.KeyboardEvent) => {
     if (event.key === "Escape") {
@@ -115,36 +48,6 @@ export function menuKeys(onClose: () => void) {
     items[next]!.focus();
   };
 }
-
-export type SpreadsheetCellRenderContext = Readonly<{
-  address: string;
-  point: GridPoint;
-  display: string;
-  field?: DatasetHeaderConfig["fields"][number];
-  selected: boolean;
-  active: boolean;
-  loading: boolean;
-}>;
-
-export type SpreadsheetMenuAction = Readonly<{
-  label: string;
-  onSelect(context: { axis: "row" | "column"; index: number; fieldId?: string }): void;
-}>;
-
-export type SpreadsheetCustomEditorContext = Readonly<{
-  point: GridPoint;
-  address: string;
-  field?: DatasetHeaderConfig["fields"][number];
-  initialDraft: string;
-  commit(value: string): void;
-  cancel(): void;
-}>;
-
-export type SpreadsheetCustomEditor = Readonly<{
-  matches(context: { point: GridPoint; field?: DatasetHeaderConfig["fields"][number] }): boolean;
-  render(context: SpreadsheetCustomEditorContext): ReactNode;
-}>;
-
 
 export function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFit, onHide, onMove, onFreeze, onUnfreeze, onFormat, actions, onClose }: Readonly<{
   x: number; y: number; column: number;

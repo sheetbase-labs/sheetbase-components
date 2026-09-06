@@ -1,4 +1,4 @@
-import type { SheetbaseField } from "./fields";
+import type { FieldDataType, SheetbaseField } from "./fields";
 import type { FilterOperator } from "./operators";
 import { ensureOperator } from "./operators";
 
@@ -38,7 +38,7 @@ export type FilterValueInput = Readonly<{ value?: string; value2?: string; value
  * Returns undefined when the input is incomplete so callers skip adding the filter.
  */
 export function buildFilterValue(
-  field: Pick<SheetbaseField, "dataType">,
+  field: { dataType?: FieldDataType },
   operator: FilterOperator,
   input: FilterValueInput,
 ): { value?: unknown } | undefined {
@@ -61,7 +61,7 @@ export function buildFilterValue(
 }
 
 function typedPair(
-  field: Pick<SheetbaseField, "dataType">,
+  field: { dataType?: FieldDataType },
   first: string,
   second: string,
 ): readonly [unknown, unknown] | readonly [undefined, undefined] {
@@ -70,7 +70,7 @@ function typedPair(
   return min === undefined || max === undefined ? [undefined, undefined] : [min, max];
 }
 
-function typedScalar(field: Pick<SheetbaseField, "dataType">, raw: string): unknown {
+function typedScalar(field: { dataType?: FieldDataType }, raw: string): unknown {
   if (field.dataType === "number") return raw === "" ? undefined : Number(raw);
   if (field.dataType === "boolean") return raw === "true";
   return raw;

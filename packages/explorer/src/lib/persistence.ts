@@ -53,8 +53,9 @@ export function migrateExplorerState(value: unknown): unknown {
   let version = typeof current.version === 'number' ? current.version : CURRENT_EXPLORATION_VERSION
   // State written by a newer explorer falls back instead of misreading unknown fields.
   if (version > CURRENT_EXPLORATION_VERSION) return undefined
+  const migrationBySource = new Map(migrations.map((migration) => [migration.from, migration] as const))
   while (version < CURRENT_EXPLORATION_VERSION) {
-    const migration = migrations.find((candidate) => candidate.from === version)
+    const migration = migrationBySource.get(version)
     if (!migration) break
     current = { ...migration.migrate(current), version: migration.to }
     version = migration.to

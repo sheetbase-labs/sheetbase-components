@@ -61,13 +61,13 @@ export function DataTable({ dataset, rows: suppliedRows, selectedRow, onSelectRo
   return (
     <div className="table-shell" ref={shellRef} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
       <table>
-        <thead><tr><th className="row-number">#</th>{dataset.columns.map((column) => <th key={column.key} onClick={() => toggleSort(column.key)} className="sortable-header">{column.key}<span>{sort?.key === column.key ? (sort.direction === 'asc' ? '↑' : '↓') : column.kind}</span></th>)}</tr></thead>
+        <thead><tr><th className="row-number">#</th>{dataset.columns.map((column) => <th key={column.key} aria-sort={sort?.key === column.key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined} className="sortable-header"><button type="button" className="sort-button" onClick={() => toggleSort(column.key)} aria-label={`Sort by ${column.key}`}>{column.key}<span aria-hidden>{sort?.key === column.key ? (sort.direction === 'asc' ? '↑' : '↓') : column.kind}</span></button></th>)}</tr></thead>
         <tbody>
           {start > 0 && <tr className="spacer-row" aria-hidden><td colSpan={columnCount} style={{ height: start * ROW_HEIGHT, padding: 0, border: 0 }} /></tr>}
           {windowed.map((row, index) => {
             const rowId = typeof row[ROW_ID] === 'number' ? Number(row[ROW_ID]) : start + index
             return (
-              <tr key={`${rowId}-${start + index}`} className={selectedRow === rowId ? 'selected-data-row' : ''} onClick={() => onSelectRow?.(rowId)}>
+              <tr key={`${rowId}-${start + index}`} className={selectedRow === rowId ? 'selected-data-row' : ''} onClick={() => onSelectRow?.(rowId)} onKeyDown={(event) => { if ((event.key === 'Enter' || event.key === ' ') && onSelectRow) { event.preventDefault(); onSelectRow(rowId) } }} tabIndex={onSelectRow ? 0 : undefined} aria-selected={selectedRow === rowId ? true : undefined}>
                 <td className="row-number">{rowId + 1}</td>
                 {dataset.columns.map((column) => <td key={column.key}>{String(row[column.key] ?? '')}</td>)}
               </tr>

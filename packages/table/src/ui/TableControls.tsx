@@ -50,12 +50,14 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
   const filters = useMemo(() => query.filters ?? [], [query.filters]);
   const fieldLabels = useMemo(() => Object.fromEntries(fields.map((field) => [field.id, field.label])), [fields]);
   const searchable = columnSearch.trim().toLocaleLowerCase();
-  const visibleRows = useMemo(() => columns
-    .map((column, index) => ({ column, index }))
-    .filter(({ column }) => {
+  const visibleRows = useMemo(() => {
+    const rows: { column: ColumnPresentation; index: number }[] = [];
+    columns.forEach((column, index) => {
       const label = fieldLabels[column.fieldId] ?? column.fieldId;
-      return !searchable || label.toLocaleLowerCase().includes(searchable) || column.fieldId.toLocaleLowerCase().includes(searchable);
-    }), [columns, fieldLabels, searchable]);
+      if (!searchable || label.toLocaleLowerCase().includes(searchable) || column.fieldId.toLocaleLowerCase().includes(searchable)) rows.push({ column, index });
+    });
+    return rows;
+  }, [columns, fieldLabels, searchable]);
 
   const addFilter = useCallback((clause: FilterClause) => {
     onQueryChange({ ...query, filters: [...filters, clause] });
@@ -78,20 +80,20 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
     onColumnsChange(next);
   }, [columns, onColumnsChange]);
 
-  const startDrag = useCallback((index: number, fieldId: string, event: DragEvent<HTMLDivElement>) => {
+  const startDrag = useCallback((index: number, fieldId: string, event: DragEvent<HTMLLIElement>) => {
     dragSource.current = { index, fieldId };
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", fieldId);
   }, []);
 
-  const dragOverRow = useCallback((fieldId: string, event: DragEvent<HTMLDivElement>) => {
+  const dragOverRow = useCallback((fieldId: string, event: DragEvent<HTMLLIElement>) => {
     if (!dragSource.current || dragSource.current.fieldId === fieldId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDragOverFieldId(fieldId);
   }, []);
 
-  const dropOnRow = useCallback((fieldId: string, event: DragEvent<HTMLDivElement>) => {
+  const dropOnRow = useCallback((fieldId: string, event: DragEvent<HTMLLIElement>) => {
     event.preventDefault();
     const source = dragSource.current;
     dragSource.current = null;
@@ -145,7 +147,7 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
             <button onClick={resetColumns}>Reset</button>
           </header>
           <input aria-label="Search columns" placeholder="Search fields…" value={columnSearch} onChange={(event) => setColumnSearch(event.target.value)} />
-          <div role="list" aria-label="Column order">
+          <ul className="column-manager-list" aria-label="Column order">
             {visibleRows.map(({ column, index }) => <ColumnRow
               key={column.fieldId}
               column={column}
@@ -160,7 +162,7 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
               onDrop={(event) => dropOnRow(column.fieldId, event)}
               onDragEnd={endDrag}
             />)}
-          </div>
+          </ul>
         </div>,
       document.body,
     )}
@@ -214,9 +216,10 @@ function FilterValueControls({ field, operator, builder, onBuilder }: Readonly<{
 }>) {
   if (operator === "isNull" || operator === "notNull") return null;
   if (operator === "in" && field.options) {
+    const selected = new Set(builder.values);
     return <fieldset className="filter-options" aria-label="Filter values">
       {field.options.map((option) => <label key={option}>
-        <input type="checkbox" checked={builder.values.includes(option)} onChange={(event) => onBuilder({
+        <input type="checkbox" checked={selected.has(option)} onChange={(event) => onBuilder({
           ...builder,
           values: event.target.checked ? [...builder.values, option] : builder.values.filter((entry) => entry !== option),
         })} />
@@ -258,13 +261,12 @@ function ColumnRow({ column, index, last, label, dragOver, onToggleVisibility, o
   dragOver: boolean;
   onToggleVisibility(): void;
   onMove(direction: -1 | 1): void;
-  onDragStart(event: DragEvent<HTMLDivElement>): void;
-  onDragOver(event: DragEvent<HTMLDivElement>): void;
-  onDrop(event: DragEvent<HTMLDivElement>): void;
+  onDragStart(event: DragEvent<HTMLLIElement>): void;
+  onDragOver(event: DragEvent<HTMLLIElement>): void;
+  onDrop(event: DragEvent<HTMLLIElement>): void;
   onDragEnd(): void;
 }>) {
-  return <div
-    role="listitem"
+  return <li
     className={`column-manager-row${dragOver ? " drag-over" : ""}`}
     draggable
     onDragStart={onDragStart}
@@ -280,5 +282,5 @@ function ColumnRow({ column, index, last, label, dragOver, onToggleVisibility, o
     <small>{column.width ? `${Math.round(column.width)}px` : "Auto"}</small>
     <button aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
     <button aria-label={`Move ${label} down`} disabled={last} onClick={() => onMove(1)}>↓</button>
-  </div>;
+  </li>;
 }

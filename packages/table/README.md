@@ -57,7 +57,7 @@ bun run test
 bun run dev
 ```
 
-Open the URL printed by Vite, normally `http://localhost:5173`.
+Open the URL printed by Vite, normally `http://localhost:5173`. Set `PORT` to move it and `SHEETBASE_API_PORT` to move the example API together with Vite's proxy (the Herdr workspace honours both).
 
 Run the repeatable performance suite with `bun run bench`.
 
@@ -69,7 +69,7 @@ The simplest option is to launch both persistent processes in a labelled Herdr w
 bun run dev:herdr
 ```
 
-This creates separate `API · :8787` and `Table · :5173` tabs, focuses the new workspace, and refuses to replace an existing process on either port. Herdr must already be running.
+This creates separate `API · :8787` and `Table · :5173` tabs, focuses the new workspace, and refuses to replace an existing process on either port. Herdr must already be running. `PORT` and `SHEETBASE_API_PORT` override the defaults.
 
 Run the synthetic API and the Vite app in separate terminals:
 

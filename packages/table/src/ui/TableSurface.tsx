@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { CellFormat, CellRange } from "../engine";
 import { usePortalPopover } from "./use-portal-popover";
@@ -28,31 +28,34 @@ export type TableSurfaceObject = Readonly<{
   onResize?(size: number): void;
 }>;
 
-/** A compact work surface that can grow to hold table-adjacent tools and charts. */
-export function TableSurface({ table, companion, companionWidth = 292, className = "", action, theme = "light", objects = [], frame = true }: TableSurfaceProps) {
-  if (!frame) return <>{table}</>;
-  const resolvedObjects = objects.length > 0 ? objects : companion ? [{ id: "companion", placement: "right" as const, size: companionWidth, content: companion }] : [];
-  const rightObject = resolvedObjects.find((object) => object.placement === "right");
-  const bottomObject = resolvedObjects.find((object) => object.placement === "bottom");
-  const resizeWithKeys = (object: TableSurfaceObject) => (event: React.KeyboardEvent) => {
+function resizeWithKeys(object: TableSurfaceObject) {
+  return (event: React.KeyboardEvent) => {
     const grow = object.placement === "right" ? event.key === "ArrowLeft" : event.key === "ArrowDown";
     const shrink = object.placement === "right" ? event.key === "ArrowRight" : event.key === "ArrowUp";
     if (!grow && !shrink) return;
     event.preventDefault();
     object.onResize?.(Math.max(220, Math.min(520, object.size + (grow ? 16 : -16))));
   };
-  const startResize = (event: React.PointerEvent, object: TableSurfaceObject) => {
-    event.preventDefault();
-    const start = object.placement === "right" ? event.clientX : event.clientY;
-    const initial = object.size;
-    const move = (next: PointerEvent) => {
-      const delta = object.placement === "right" ? start - next.clientX : start - next.clientY;
-      object.onResize?.(Math.max(220, Math.min(520, initial + delta)));
-    };
-    const finish = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish, { once: true });
+}
+function startResize(event: React.PointerEvent, object: TableSurfaceObject) {
+  event.preventDefault();
+  const start = object.placement === "right" ? event.clientX : event.clientY;
+  const initial = object.size;
+  const move = (next: PointerEvent) => {
+    const delta = object.placement === "right" ? start - next.clientX : start - next.clientY;
+    object.onResize?.(Math.max(220, Math.min(520, initial + delta)));
   };
+  const finish = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", finish, { once: true });
+}
+
+/** A compact work surface that can grow to hold table-adjacent tools and charts. */
+export function TableSurface({ table, companion, companionWidth = 292, className = "", action, theme = "light", objects = [], frame = true }: TableSurfaceProps) {
+  if (!frame) return <>{table}</>;
+  const resolvedObjects = objects.length > 0 ? objects : companion ? [{ id: "companion", placement: "right" as const, size: companionWidth, content: companion }] : [];
+  const rightObject = resolvedObjects.find((object) => object.placement === "right");
+  const bottomObject = resolvedObjects.find((object) => object.placement === "bottom");
   return <section
     className={`table-surface${rightObject ? " with-companion with-right-object" : ""}${bottomObject ? " with-bottom-object" : ""}${className ? ` ${className}` : ""}`}
     style={{ "--table-companion-width": `${rightObject?.size ?? companionWidth}px`, "--table-bottom-height": `${bottomObject?.size ?? 240}px` } as CSSProperties}
@@ -87,6 +90,17 @@ export type TableFormattingToolbarProps = Readonly<{
 const builtInLightColours = ["#242424", "#7652ef", "#167a59", "#3e67af", "#a23131", "#8a5a00", "#ffffff", "#f2efff", "#e8f6ef", "#fff1f1"];
 const builtInDarkColours = ["#e7e5ec", "#a997ff", "#68d5ae", "#82aaff", "#ff8f8f", "#f0bd63", "#17161a", "#302a43", "#18382e", "#442526"];
 
+function onSwatchKeys(event: React.KeyboardEvent) {
+  const swatches = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button"));
+  const columns = 5;
+  const current = swatches.indexOf(document.activeElement as HTMLElement);
+  if (current < 0 || !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  event.preventDefault();
+  const offsets: Record<string, number> = { ArrowDown: columns, ArrowUp: -columns, ArrowLeft: -1, ArrowRight: 1 };
+  const next = Math.max(0, Math.min(swatches.length - 1, current + (offsets[event.key] ?? 0)));
+  swatches[next]!.focus();
+}
+
 function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ label: string; value?: string; colours: readonly string[]; theme: "light" | "dark"; onChange(value: string): void }>) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -106,16 +120,6 @@ function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ la
     const bounds = buttonRef.current?.getBoundingClientRect();
     if (bounds) setPosition({ top: bounds.bottom + 5, left: bounds.left });
     setOpen((current) => !current);
-  };
-  const onSwatchKeys = (event: React.KeyboardEvent) => {
-    const swatches = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button"));
-    const columns = 5;
-    const current = swatches.indexOf(document.activeElement as HTMLElement);
-    if (current < 0 || !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    event.preventDefault();
-    const offsets: Record<string, number> = { ArrowDown: columns, ArrowUp: -columns, ArrowLeft: -1, ArrowRight: 1 };
-    const next = Math.max(0, Math.min(swatches.length - 1, current + (offsets[event.key] ?? 0)));
-    swatches[next]!.focus();
   };
   const palette = <div
     ref={paletteRef}
@@ -209,7 +213,11 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
     onRulesChange(next);
     renderHistory((value) => value + 1);
   };
-  const fieldRules = rules.map((rule, index) => ({ rule, index })).filter(({ rule }) => rule.fieldId === fieldId);
+  const fieldRules = useMemo(() => {
+    const visible: { rule: ConditionalFormatRule; index: number }[] = [];
+    rules.forEach((rule, index) => { if (rule.fieldId === fieldId) visible.push({ rule, index }); });
+    return visible;
+  }, [fieldId, rules]);
   const [activeIndex, setActiveIndex] = useState<number | undefined>(() => fieldRules.at(-1)?.index);
   useEffect(() => setActiveIndex(fieldRules.at(-1)?.index), [fieldId]);
   useEffect(() => {
@@ -230,7 +238,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
     if (active.index >= rules.length) return;
     const updated = rules.filter((_, index) => index !== active.index);
     commitRules(updated);
-    setActiveIndex(updated.map((rule, index) => ({ rule, index })).filter(({ rule }) => rule.fieldId === fieldId).at(-1)?.index);
+    setActiveIndex(updated.flatMap((rule, index) => rule.fieldId === fieldId ? [index] : []).at(-1));
   };
   const scale = active.rule.colorScale ?? { min: 0, midpoint: 50, max: 100, minColor: "#f2efff", midpointColor: "#ffffff", maxColor: "#7652ef" };
   const setMode = (mode: "highlight" | "scale") => updateActive(mode === "scale"
@@ -273,7 +281,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
       {active.rule.colorScale ? <section>
         <h3>Scale</h3>
         <div className="scale-stops">
-          {(["min", "midpoint", "max"] as const).map((stop) => <label key={stop}><span>{stop === "midpoint" ? "Mid" : stop[0].toUpperCase() + stop.slice(1)}</span><input type="number" value={scale[stop]} onChange={(event) => updateScale({ [stop]: Number(event.target.value) })} /><input aria-label={`${stop} colour`} type="color" value={scale[`${stop}Color`]} onChange={(event) => updateScale({ [`${stop}Color`]: event.target.value })} /></label>)}
+          {(["min", "midpoint", "max"] as const).map((stop) => <span key={stop} className="scale-stop"><span>{stop === "midpoint" ? "Mid" : stop[0].toUpperCase() + stop.slice(1)}</span><input aria-label={`${stop} value`} type="number" value={scale[stop]} onChange={(event) => updateScale({ [stop]: Number(event.target.value) })} /><input aria-label={`${stop} colour`} type="color" value={scale[`${stop}Color`]} onChange={(event) => updateScale({ [`${stop}Color`]: event.target.value })} /></span>)}
         </div>
         <div className="scale-preview" style={{ background: `linear-gradient(90deg, ${scale.minColor}, ${scale.midpointColor}, ${scale.maxColor})` }} />
       </section> : <section>

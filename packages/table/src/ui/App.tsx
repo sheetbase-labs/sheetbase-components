@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { columnLabel, type Dataset } from "../engine";
+import { columnLabel } from "../engine/coordinates";
+import type { Dataset } from "../engine/types";
 import type { DatasetQuery } from "../data";
 import { Spreadsheet, type SpreadsheetHandle, type SpreadsheetSelection, type SpreadsheetState } from "./Spreadsheet";
 import { FormulaBar, SheetBar, TableLayout, minimalTableSections } from "./TableSections";
@@ -236,7 +237,7 @@ function DefaultTable({ readOnly = false }: { readOnly?: boolean }) {
     const data = new Map<string, string>();
     rows.forEach((row, rowIndex) => row.forEach((value, column) => data.set(`${String.fromCharCode(65 + column)}${rowIndex + 1}`, value)));
     return data;
-  }, [allColumns]);
+  }, []);
   const workbookRef = useRef<TableWorkbook<DemoSheetState> | null>(null);
   if (!workbookRef.current) {
     const sampleData = new Map<string, string>([

@@ -1,4 +1,5 @@
-import { addressKey, type CellBinding, type Scalar } from "../engine";
+import { addressKey } from "../engine/coordinates";
+import type { CellBinding, Scalar } from "../engine/types";
 import type { DatasetPage } from "./adapter";
 
 export type DatasetColumnProjection = Readonly<{ column: number; fieldId: string }>;
