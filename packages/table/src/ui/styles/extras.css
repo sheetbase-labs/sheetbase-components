@@ -2,7 +2,7 @@
 .functions-demo { display: grid; gap: 14px; width: min(1600px, calc(100vw - 88px)); }
 .functions-demo-head { display: flex; align-items: end; gap: 12px; }
 .functions-demo-head h2 { margin: 0; font-size: 18px; }
-.functions-demo-head p { margin: 4px 0 0; color: #6e6e6e; font-size: 12px; }
+.stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) { background: #1c1b20; }
 .functions-demo-head input { margin-left: auto; height: 28px; padding: 0 10px; border: 1px solid #e0dfe3; border-radius: 6px; font-size: 12px; }
 .functions-demo h3 { margin: 4px 0 0; font-size: 13px; color: #4f38c6; }
 .functions-demo table { border-collapse: collapse; font-size: 12px; }
@@ -27,4 +27,5 @@
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-section > p { color: #a8a4af; }
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-section-head a { color: #9b7fff; }
 .table-surface-table > .table-layout { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
-.table-layout[data-theme="dark"], .spreadsheet[data-theme="dark"] { color-scheme: dark; color: #e7e5ec; border-color: #34323b; background: #1c1b20; box-shadow: 0 12px 35px rgb(0 0 0 / 28%); }
+.table-layout[data-theme="dark"] { color-scheme: dark; color: var(--text); border-color: var(--border-strong); background: var(--app); box-shadow: var(--shadow); }
+.spreadsheet[data-theme="dark"] { color-scheme: dark; color: var(--text); border-color: var(--border-strong); background: var(--canvas); box-shadow: var(--shadow); }

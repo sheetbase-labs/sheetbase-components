@@ -7,27 +7,7 @@
   color: var(--text);
   background: transparent;
   font-synthesis: none;
-  --app: #ececef;
-  --panel: #ffffff;
-  --panel-2: #fafafa;
-  --canvas: #ffffff;
-  --border: #e2e2e2;
-  --border-strong: #d3d3d3;
-  --text: #242424;
-  --muted: #737373;
-  --faint: #9a9a9a;
-  --accent: #7652ef;
-  --accent-dark: #4f38c6;
-  --accent-ink: #35277f;
-  --accent-soft: #eee9ff;
-  --accent-soft-2: #f7f5ff;
-  --green: #07956a;
-  --green-soft: #e7f7f0;
-  --orange: #c95814;
-  --blue: #286dcc;
-  --purple: #9541b7;
-  --danger: #c43d3d;
-  --shadow: 0 12px 35px rgb(0 0 0 / 7%);
+  /* Surface tokens come from sheetbase-shared/theme.css (imported first); explorer keeps only chart vars below. */
   --ts-chart-1: #7652ef;
   --ts-chart-2: #07956a;
   --ts-chart-3: #c95814;
@@ -37,27 +17,7 @@
 }
 .sheetbase-explorer[data-theme="dark"] {
   color-scheme: dark;
-  --app: #111014;
-  --panel: #1d1d1d;
-  --panel-2: #232323;
-  --canvas: #1a1a1a;
-  --border: #303030;
-  --border-strong: #414141;
-  --text: #eeeeec;
-  --muted: #a3a3a0;
-  --faint: #737370;
-  --accent: #9c86ff;
-  --accent-dark: #b0a0ff;
-  --accent-ink: #d3caff;
-  --accent-soft: #2c2643;
-  --accent-soft-2: #242030;
-  --green: #4fd0a2;
-  --green-soft: #193329;
-  --orange: #e98b53;
-  --blue: #6da0ef;
-  --purple: #ca84e2;
-  --danger: #ef7777;
-  --shadow: 0 14px 36px rgb(0 0 0 / 28%);
+  /* Dark surface tokens come from sheetbase-shared/theme.css. */
 }
 :where(.sheetbase-explorer), :where(.sheetbase-explorer) * { box-sizing: border-box; }
 .sheetbase-explorer { width: 100%; height: 100%; }

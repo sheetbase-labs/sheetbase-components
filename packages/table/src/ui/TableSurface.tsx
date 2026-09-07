@@ -57,7 +57,7 @@ export function TableSurface({ table, companion, companionWidth = 292, className
   const rightObject = resolvedObjects.find((object) => object.placement === "right");
   const bottomObject = resolvedObjects.find((object) => object.placement === "bottom");
   return <section
-    className={`table-surface${rightObject ? " with-companion with-right-object" : ""}${bottomObject ? " with-bottom-object" : ""}${className ? ` ${className}` : ""}`}
+    className={`sheetbase-scope table-surface${rightObject ? " with-companion with-right-object" : ""}${bottomObject ? " with-bottom-object" : ""}${className ? ` ${className}` : ""}`}
     style={{ "--table-companion-width": `${rightObject?.size ?? companionWidth}px`, "--table-bottom-height": `${bottomObject?.size ?? 240}px` } as CSSProperties}
     data-theme={theme}
   >
@@ -123,7 +123,7 @@ function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ la
   };
   const palette = <div
     ref={paletteRef}
-    className="format-swatches"
+    className="sheetbase-scope format-swatches"
     role="dialog"
     aria-label={`${label} palette`}
     data-theme={theme}

@@ -31,13 +31,13 @@
 }
 :where(.sheetbase-scope)[data-theme="dark"], :where(.sheetbase-explorer)[data-theme="dark"] {
   color-scheme: dark;
-  --app: #111014;
-  --panel: #1d1d1d;
+  --app: #1c1b20;
+  --panel: #17161a;
   --panel-2: #232323;
-  --canvas: #1a1a1a;
+  --canvas: #19181c;
   --border: #303030;
-  --border-strong: #414141;
-  --text: #eeeeec;
+  --border-strong: #34323b;
+  --text: #e7e5ec;
   --muted: #a3a3a0;
   --faint: #737370;
   --accent: #9c86ff;

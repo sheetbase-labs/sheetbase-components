@@ -112,7 +112,7 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
     id,
     role: "dialog" as const,
     "aria-label": label,
-    className: `toolbar-popover ${panel === "filters" ? "filter-builder" : "column-picker column-manager"}`,
+    className: `sheetbase-scope toolbar-popover ${panel === "filters" ? "filter-builder" : "column-picker column-manager"}`,
     "data-theme": theme,
     style: position,
     onKeyDown: popover.onKeyDown,

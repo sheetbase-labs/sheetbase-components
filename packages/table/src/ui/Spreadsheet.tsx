@@ -1277,7 +1277,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   };
 
   return <div
-    className={`spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
+    className={`sheetbase-scope spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
     data-theme={theme}
     ref={viewportRef}
     tabIndex={0}

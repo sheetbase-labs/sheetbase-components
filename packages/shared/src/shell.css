@@ -83,4 +83,4 @@
 :where(.sheetbase-scope)[data-theme="dark"] .sb-topbar .sb-btn.primary:hover { color: #171717; }
 .sb-toolbar-group { display: flex; align-items: center; gap: 4px; }
 .sb-demo-stage { min-height: 100vh; display: grid; place-items: center; padding: 44px; background: #ececef; align-content: center; }
-.sb-demo-stage:has(.sb-schema[data-theme="dark"], .sb-rules[data-theme="dark"], .sb-search[data-theme="dark"], .sheetbase-explorer[data-theme="dark"]) { background: #111014; }
+.sb-demo-stage:has(.sb-schema[data-theme="dark"], .sb-rules[data-theme="dark"], .sb-search[data-theme="dark"], .sheetbase-explorer[data-theme="dark"]) { background: #1c1b20; }

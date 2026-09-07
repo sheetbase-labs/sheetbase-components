@@ -6,7 +6,7 @@
 .typed-options button:hover, .typed-options button.active { background: #f0edff; color: #4f37b8; }
 .typed-options.boolean { grid-template-columns: 1fr 1fr; }
 .typed-options.boolean button { text-align: center; }
-.table-surface { position: relative; width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 4px; overflow: hidden; border: 1px solid #d9d9dc; border-radius: 13px; background: #ececef; box-shadow: 0 12px 35px rgb(0 0 0 / 7%); font-size: var(--text-size); transition: grid-template-columns 160ms ease; }
+.table-surface { position: relative; width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 4px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 13px; background: var(--app); box-shadow: var(--shadow); font-size: var(--text-size); transition: grid-template-columns 160ms ease; }
 .table-surface.with-companion { grid-template-columns: minmax(0, 1fr) var(--table-companion-width, 292px); }
 .table-surface.with-right-object { grid-template-areas: "table right"; }
 .table-surface.with-bottom-object { grid-template-rows: minmax(0, 1fr) var(--table-bottom-height, 240px); grid-template-areas: "table" "bottom"; }
@@ -14,7 +14,7 @@
 .table-surface.with-right-object > .table-surface-table { grid-area: table; }
 .table-surface.with-right-object > .table-surface-companion { grid-area: right; }
 .table-surface.with-bottom-object > .table-surface-bottom { grid-area: bottom; }
-.table-surface-table, .table-surface-companion { min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #dedee2; border-radius: 9px; background: #fff; }
+.table-surface-table, .table-surface-companion { min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); }
 .table-surface-table { display: grid; }
 .table-surface-table > * { width: 100%; height: 100%; }
 .formatted-table { min-width: 0; min-height: 0; display: grid; grid-template-rows: 33px minmax(0, 1fr); overflow: hidden; }
@@ -130,8 +130,9 @@
 @media (max-width: 1250px) { .body { grid-template-columns: 270px 1fr; } .sidebar { font-size: 13px; } }/* TableSurface owns its theme so the package can coexist with any host application. */
 .table-surface[data-theme="dark"]{
   color-scheme: dark;
-  color: #e7e5ec;
-  border-color: #34323b;
-  background: #1c1b20;
-  box-shadow: 0 12px 35px rgb(0 0 0 / 28%);
-}.table-surface[data-theme="dark"] .table-surface-table, .table-layout[data-theme="dark"] .table-surface-table, .spreadsheet[data-theme="dark"] .table-surface-table, .table-surface[data-theme="dark"] .table-surface-companion, .table-layout[data-theme="dark"] .table-surface-companion, .spreadsheet[data-theme="dark"] .table-surface-companion, .table-surface[data-theme="dark"] .table-surface-bottom, .table-layout[data-theme="dark"] .table-surface-bottom, .spreadsheet[data-theme="dark"] .table-surface-bottom, .table-surface[data-theme="dark"] .spreadsheet, .table-layout[data-theme="dark"] .spreadsheet, .spreadsheet[data-theme="dark"] .spreadsheet, .table-surface[data-theme="dark"] .grid-canvas, .table-layout[data-theme="dark"] .grid-canvas, .spreadsheet[data-theme="dark"] .grid-canvas, .table-surface[data-theme="dark"] .conditional-inspector, .table-layout[data-theme="dark"] .conditional-inspector, .spreadsheet[data-theme="dark"] .conditional-inspector{ background-color: #17161a; border-color: #36343d; color: #e7e5ec; }
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--app);
+  box-shadow: var(--shadow);
+}.table-surface[data-theme="dark"] :where(.table-surface-table, .table-surface-companion, .table-surface-bottom, .conditional-inspector), .table-layout[data-theme="dark"] :where(.table-surface-table, .table-surface-companion, .table-surface-bottom, .conditional-inspector), .spreadsheet[data-theme="dark"] :where(.table-surface-table, .table-surface-companion, .table-surface-bottom, .conditional-inspector) { background-color: var(--panel); border-color: var(--border); color: var(--text); }
+.table-surface[data-theme="dark"] :where(.spreadsheet, .grid-canvas), .table-layout[data-theme="dark"] :where(.spreadsheet, .grid-canvas), .spreadsheet[data-theme="dark"] :where(.spreadsheet, .grid-canvas), .spreadsheet[data-theme="dark"] { background-color: var(--canvas); border-color: var(--border); color: var(--text); }

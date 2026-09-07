@@ -8,7 +8,7 @@
   padding: 44px 44px 64px;
   background: #ececef;
 }
-.sb-demo-all:has([data-theme="dark"]) { background: #111014; }
+.sb-demo-all:has([data-theme="dark"]) { background: #1c1b20; }
 .sb-demo-all-head {
   width: min(1600px, calc(100vw - 88px));
   color: #6f6c74;

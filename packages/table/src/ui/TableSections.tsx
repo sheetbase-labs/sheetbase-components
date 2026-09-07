@@ -115,7 +115,7 @@ type TableLayoutProps = Readonly<{
 /** Configurable composition boundary; the spreadsheet engine remains unchanged. */
 export function TableLayout({ sections, menuBar, toolbar, formulaBar, sidebar, statusBar, table, sheetBar, theme = "light" }: TableLayoutProps) {
   const enabled = { ...minimalTableSections, ...sections };
-  return <section className="table-layout" data-theme={theme} aria-label="Sheetbase table">
+  return <section className="sheetbase-scope table-layout" data-theme={theme} aria-label="Sheetbase table">
     <div className="table-layout-top">
       {enabled.menuBar && menuBar}
       {enabled.toolbar && toolbar}

@@ -4,12 +4,12 @@ body { margin: 0; min-width: 1080px; }
 button, input { font: inherit; color: inherit; }
 button { border: 0; background: transparent; cursor: pointer; }
 .stage { min-height: 100vh; padding: 44px; display: grid; place-items: center; }
-.table-layout { width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #fff; border: 1px solid #dedede; border-radius: 13px; box-shadow: 0 12px 35px rgb(0 0 0 / 7%); font-size: var(--text-size); }
+.table-layout { width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--app); border: 1px solid var(--border-strong); border-radius: 13px; box-shadow: var(--shadow); font-size: var(--text-size); }
 .table-layout-top:empty { display: none; }
 .table-layout-content { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 .table-layout-content.with-sidebar { grid-template-columns: 320px minmax(0, 1fr); }
 .table-layout-grid { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
-.workbook { width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; background: #fff; border: 1px solid #dedede; border-radius: 13px; box-shadow: 0 12px 35px rgb(0 0 0 / 7%); overflow: hidden; display: grid; grid-template-rows: 58px 50px 43px 1fr 51px; }
+.workbook { width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; background: var(--app); border: 1px solid var(--border-strong); border-radius: 13px; box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-rows: 58px 50px 43px 1fr 51px; }
 .menubar, .toolbar, .formula-bar, .tabs { display: flex; align-items: center; border-bottom: 1px solid #e5e5e5; }
 .menubar { padding: 0 17px; gap: 19px; }
 .brand { width: 30px; height: 30px; color: white; background: #171717; display: grid; place-items: center; font-weight: 600; border-radius: 4px; }
@@ -62,11 +62,11 @@ button { border: 0; background: transparent; cursor: pointer; }
 .sheet-wrap { min-width: 0; min-height: 0; overflow: hidden; background: #fff; display: grid; grid-template-rows: 52px 1fr; }
 .query-status { height: 52px; display: flex; align-items: center; gap: 10px; padding-left: 14px; border-bottom: 1px solid #e5e5e5; color: #666; }
 .query-status span { background: #252525; color: white; border-radius: 16px; padding: 6px 11px; }
-.spreadsheet { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; background: #fff; cursor: cell; user-select: none; overscroll-behavior: contain; }
+.spreadsheet { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; background: var(--canvas); cursor: cell; user-select: none; overscroll-behavior: contain; }
 .spreadsheet:focus-visible { box-shadow: inset 0 0 0 1px rgb(118 82 239 / 12%); }
-.grid-canvas { position: relative; background-color: #fff; background-image: linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px); background-size: 140px 31px; }
+.grid-canvas { position: relative; background-color: var(--canvas); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 140px 31px; }
 .grid-cell, .row-header, .column-header, .grid-corner, .selection-outline, .cell-editor { position: absolute; }
-.grid-cell { z-index: 1; display: flex; align-items: center; gap: 7px; padding: 0 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid #e4e4e4; border-bottom: 1px solid #e4e4e4; background: #fff; font-size: var(--text-size); }
+.grid-cell { z-index: 1; display: flex; align-items: center; gap: 7px; padding: 0 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--canvas); font-size: var(--text-size); }
 .grid-cell > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .grid-cell.in-selection { background: #faf9ff; }
 .grid-cell.field-cell { color: #626262; font-weight: 500; background: #fdfdfd; }
