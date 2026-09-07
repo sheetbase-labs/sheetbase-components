@@ -2,7 +2,7 @@
 
 .explorer-frame-v3 { grid-template-rows: 48px minmax(0, 1fr) 250px; }
 .explorer-workspace-v3 { display: block; min-height: 0; background: var(--canvas); }
-.explorer-canvas-v3 { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: 42px minmax(0, 1fr); background: var(--canvas); }
+.explorer-canvas-v3 { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: 33px auto minmax(0, 1fr); background: var(--canvas); }
 .explorer-commandbar { position: relative; z-index: 20; display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .tool-anchor { position: relative; flex: 0 0 auto; }
 .explorer-tool { height: 24px; display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
@@ -22,14 +22,12 @@
 .chart-stage-v3 .chart-wrap,.chart-stage-v3 .chart-wrap > * { width: 100% !important; height: 100% !important; min-height: 0 !important; max-height: none !important; }
 .bottom-panel-v3 { position: relative; margin: 0; border-radius: 0; box-shadow: none; }
 .explorer-frame-v4 { grid-template-rows: minmax(0, 1fr) 250px; }
-.explorer-commandbar-v4 { height: 42px; padding: 0 9px; border-bottom-color: #d8d1f5; background: #eee9ff; color: #35277f; }
-.sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 { border-bottom-color: #42375f; background: #2c2643; color: #ddd5ff; }
-.explorer-commandbar-v4 .explorer-tool { color: #35277f; }
-.explorer-commandbar-v4 .explorer-tool small, .explorer-commandbar-v4 .explorer-tool b { color: #7258dc; }
-.explorer-commandbar-v4 .explorer-tool:hover, .explorer-commandbar-v4 .explorer-tool.active { background: #e3dcff; color: #3f2aab; }
-.sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool { color: #ddd5ff; }
-.sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool small, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool b { color: #ac9cff; }
-.sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool:hover, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool.active { background: #3a3158; color: #f1edff; }
+/* Neutral strip like table/sb bars; hover keeps the indigo accent language. */
+.explorer-commandbar-v4 { height: 33px; padding: 0 8px; border-bottom-color: var(--border); background: var(--panel-2); color: var(--text); }
+.explorer-commandbar-v4 .explorer-tool:hover, .explorer-commandbar-v4 .explorer-tool.active { background: var(--accent-soft); color: var(--accent-dark); }
+.explorer-subbar .explorer-tool { color: var(--accent-ink); }
+.explorer-subbar .explorer-tool small, .explorer-subbar .explorer-tool b { color: inherit; opacity: 0.75; }
+.explorer-subbar .explorer-tool:hover, .explorer-subbar .explorer-tool.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-dark); }
 .command-spacer { flex: 1 1 auto; }
 /* Command-bar actions ride the shared shell (.sb-btn/.sb-icon-btn). */
 .style-popover { width: 340px; }

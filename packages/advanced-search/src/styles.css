@@ -16,7 +16,7 @@
 .sb-filter-rule input { font-family: var(--font-mono); font-size: 11px; }
 .sb-filter-rule select:hover, .sb-filter-rule input:hover { border-color: var(--border-strong); }
 .sb-filter-rule select:focus, .sb-filter-rule input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
-.sb-search-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; border-top: 1px solid var(--border); padding-top: 6px; }
+.sb-search-controls { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 6px; }
 .sb-search-side { min-height: 0; }
 .sb-search-side > .sb-muted { margin: 0; }
 .sb-rownum { min-width: 34px !important; max-width: 34px !important; color: var(--faint); font-family: var(--font-mono); font-size: 10px; }

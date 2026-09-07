@@ -1,5 +1,5 @@
 .sb-rules-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 560px; }
-.sb-rules-main { min-width: 0; }
+
 .sb-nl { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .sb-nl-row {
   display: flex; align-items: stretch; box-sizing: border-box;

@@ -299,7 +299,6 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             </div>
           </section>
           <aside className="sb-search-side sb-plate">
-            <div className="sb-panel-heading"><span>Data</span>{matches && <span>{matches.length} / {rows.length} rows</span>}</div>
             {!matches ? (
               <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
             ) : spec.groupBy ? (

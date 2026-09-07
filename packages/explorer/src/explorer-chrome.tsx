@@ -33,13 +33,15 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   onMenuClose(): void
   onToggleDark(): void
 }) {
-  return (
+  return (<>
     <div className="explorer-commandbar explorer-commandbar-v4">
       <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
-      <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
       <span className="command-spacer"/><ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
-  )
+    <div className="sb-subbar explorer-subbar">
+      <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
+    </div>
+  </>)
 }
 
 export function ChartStage({ stageRef, seriesValues, palette, hiddenSeries, onToggleSeries, definition, chartHeight, chartLabel, onSelectRowId }: {
