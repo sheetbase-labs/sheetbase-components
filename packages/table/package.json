@@ -30,12 +30,12 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.10",
-    "@vitejs/plugin-react": "latest",
+    "@vitejs/plugin-react": "^4.3.4",
     "rbush": "^4.0.1",
-    "react": "latest",
-    "react-dom": "latest",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "sheetbase-shared": "workspace:*",
-    "vite": "latest"
+    "vite": "^6.0.5"
   },
   "peerDependencies": {
     "@tanstack/react-virtual": "^3.14.10",

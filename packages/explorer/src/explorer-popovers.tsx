@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
 import { Chart } from '@tanstack/charts/react/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { FileUploadIcon, Moon02Icon, PlayIcon, ReloadIcon, Sun03Icon } from '@hugeicons/core-free-icons'
+import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
 import { DataTable } from './components/DataTable'
 import { FieldSelect } from './components/FieldSelect'
 import { filterOperators } from './lib/filter-operators'

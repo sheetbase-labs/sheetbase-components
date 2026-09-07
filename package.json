@@ -7,11 +7,13 @@
   "scripts": {
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
+    "dev": "bun run dev:table & bun run dev:explorer & bun run dev:schema & bun run dev:rules & bun run dev:search & bun run dev:demo & wait",
     "dev:table": "bun run --filter sheetbase-table dev",
     "dev:explorer": "bun run --filter sheetbase-explorer dev",
     "dev:schema": "bun run --filter sheetbase-schemaeditor dev",
     "dev:rules": "bun run --filter sheetbase-rulesengine dev",
-    "dev:search": "bun run --filter sheetbase-advanced-search dev"
+    "dev:search": "bun run --filter sheetbase-advanced-search dev",
+    "dev:demo": "bun run --filter sheetbase-demo dev"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

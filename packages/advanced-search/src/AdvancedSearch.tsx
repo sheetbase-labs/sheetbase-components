@@ -10,6 +10,7 @@ import {
   normaliseOperator,
   operatorShortLabel,
   operatorsForField,
+  usePersistedTheme,
   type Combinator,
   type ConditionNode,
   type DatasetQuery,
@@ -231,13 +232,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
-  const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
-  const activeTheme = theme ?? innerTheme;
-  function toggleTheme() {
-    const next = activeTheme === "dark" ? "light" : "dark";
-    if (theme === undefined) setInnerTheme(next);
-    onThemeChange?.(next);
-  }
+  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
 
   function commit(next: SearchSpec) {
     if (value === undefined) setDraft(next);

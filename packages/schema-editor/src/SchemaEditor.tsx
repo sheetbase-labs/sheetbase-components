@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ThemeToggleButton, loadInitialState, toFieldDataType, useIdleSave, type FieldDataType, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
+import { ThemeToggleButton, loadInitialState, toFieldDataType, useIdleSave, usePersistedTheme, type FieldDataType, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 import {
   NODE_WIDTH,
@@ -37,13 +37,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
   useIdleSave(persistKey, graph, adapter);
-  const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
-  const activeTheme = theme ?? innerTheme;
-  function toggleTheme() {
-    const next = activeTheme === "dark" ? "light" : "dark";
-    if (theme === undefined) setInnerTheme(next);
-    onThemeChange?.(next);
-  }
+  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
   const [selected, setSelected] = useState<string | null>(graph.models[0]?.name ?? null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });

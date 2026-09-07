@@ -1,4 +1,43 @@
+import { useState } from "react";
 export type ThemeMode = "light" | "dark";
+
+/** Shared localStorage key so schema/rules/search agree on next mount. Table + explorer keep their own persisted states. */
+export const SHARED_THEME_STORAGE_KEY = "sheetbase:theme";
+
+/** Uncontrolled theme state with localStorage persistence. Controlled (`theme` defined) disables internal writes; the host owns persistence via `onThemeChange`. */
+export function usePersistedTheme({ theme, defaultTheme = "light", onThemeChange, storageKey = SHARED_THEME_STORAGE_KEY }: {
+  theme?: ThemeMode;
+  defaultTheme?: ThemeMode;
+  onThemeChange?: (next: ThemeMode) => void;
+  /** Pass `undefined` to keep the theme ephemeral (no localStorage). */
+  storageKey?: string;
+}): { activeTheme: ThemeMode; toggleTheme(): void } {
+  const [innerTheme, setInnerTheme] = useState<ThemeMode>(() => {
+    if (theme !== undefined || !storageKey || typeof localStorage === "undefined") return defaultTheme;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored === "dark" || stored === "light" ? stored : defaultTheme;
+    } catch {
+      return defaultTheme;
+    }
+  });
+  const activeTheme = theme ?? innerTheme;
+  function toggleTheme() {
+    const next = activeTheme === "dark" ? "light" : "dark";
+    if (theme === undefined) {
+      setInnerTheme(next);
+      if (storageKey) {
+        try {
+          localStorage.setItem(storageKey, next);
+        } catch {
+          // Persistence is optional; a full quota must never break the toggle.
+        }
+      }
+    }
+    onThemeChange?.(next);
+  }
+  return { activeTheme, toggleTheme };
+}
 
 export function MoonIcon() {
   return (

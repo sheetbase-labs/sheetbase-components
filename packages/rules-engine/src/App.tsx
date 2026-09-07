@@ -10,11 +10,11 @@ const starter: PipelineRule[] = [
 
 const fields = ["status", "amount", "region", "email"];
 
-/** Dev demo (excluded from the published library). */
+/** Dev demo (excluded from the published library). Page backdrop follows the card theme, table-style. */
 export function App() {
   const [rules, setRules] = useState<PipelineRule[]>(starter);
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 44, background: "#ececef" }}>
+    <div className="sb-demo-stage">
       <RulesEngine value={rules} onChange={setRules} fields={fields} />
     </div>
   );

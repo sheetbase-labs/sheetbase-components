@@ -4,8 +4,8 @@
   --font-sans: "Instrument Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-family: var(--font-sans);
-  color: #242424;
-  background: #ececef;
+  color: var(--text);
+  background: transparent;
   font-synthesis: none;
   --app: #ececef;
   --panel: #ffffff;
@@ -63,29 +63,15 @@
 .sheetbase-explorer { width: 100%; height: 100%; }
 :where(.sheetbase-explorer) button, :where(.sheetbase-explorer) select, :where(.sheetbase-explorer) textarea { font: inherit; }
 :where(.sheetbase-explorer) button { color: inherit; }
-.sheetbase-explorer.framed { min-height: 100vh; display: grid; place-items: center; padding: 44px; background: var(--app); }
+/* Demo-only: seat the framed explorer on a shared stage like the other cards. Library hosts are unaffected (no .sb-demo-* ancestor). */
+:where(.sb-demo-stage, .sb-demo-all) > .sheetbase-explorer.framed { min-height: 0; width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); padding: 0; background: transparent; }
+:where(.sb-demo-stage, .sb-demo-all) > .sheetbase-explorer.framed > .app-shell { width: 100%; height: 100%; min-height: 0; }
 .app-shell { width: 100%; height: 100vh; padding: 14px 32px; background: var(--app); color: var(--text); }
 .framed .app-shell { width: min(1600px, calc(100vw - 88px)); height: min(930px, calc(100vh - 88px)); min-height: 680px; display: grid; padding: 4px; gap: 4px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 13px; background: var(--app); box-shadow: var(--shadow); }
 .explorer-frame { width: 100%; height: 100%; min-height: 620px; overflow: hidden; display: grid; grid-template-rows: 48px minmax(280px, 1fr) 250px; border: 1px solid var(--border-strong); border-radius: 13px; background: var(--panel); box-shadow: var(--shadow); }
 .framed .explorer-frame { min-height: 0; gap: 4px; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .framed .workspace, .framed .bottom-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
-.topbar { display: flex; align-items: center; gap: 16px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
-.brand { display: flex; align-items: center; gap: 9px; min-width: 185px; font-size: 13px; }
-.brand-mark { width: 28px; height: 28px; border-radius: 4px; display: grid; place-items: center; background: #171717; color: white; font-weight: 650; font-size: 12px; }
-.dataset-title { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; }
-.dataset-title strong { font-weight: 600; }
-.dataset-title span { color: var(--muted); font-size: 11px; }
-.topbar-actions { margin-left: auto; display: flex; gap: 4px; align-items: center; }
-.toolbar-button, .button, .icon-button { height: 24px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; border-radius: 5px; padding: 0 9px; cursor: pointer; font-size: 11.5px; }
-.toolbar-button:hover, .button:hover, .icon-button:hover { background: var(--panel-2); }
-.toolbar-button.active { color: var(--accent-dark); background: var(--accent-soft); }
-.icon-button { width: 24px; padding: 0; }
-.toolbar-divider { height: 24px; border-left: 1px solid var(--border); margin: 0 4px; }
-.button.primary { background: var(--accent); color: #fff; }
-.button.primary:hover { background: var(--accent-dark); color: #fff; }
-.sheetbase-explorer[data-theme="dark"] .button.primary { background: var(--accent); color: #171717; }
-.sheetbase-explorer[data-theme="dark"] .button.primary:hover { background: var(--accent-dark); color: #171717; }
-.button.subtle { color: var(--muted); }
+/* Buttons ride the shared shell (.sb-btn); explorer keeps only menu/popover chrome. */
 .workspace { min-height: 0; display: grid; grid-template-columns: 248px minmax(320px, 1fr) 278px; background: var(--panel); }
 .sidebar, .canvas-region { min-height: 0; background: var(--panel); overflow: hidden; }
 .left-panel { border-right: 1px solid var(--border); }

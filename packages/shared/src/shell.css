@@ -30,7 +30,7 @@
   padding: 0 8px; font-size: var(--text-size); font-weight: 500; line-height: 22px;
 }
 .sb-btn:hover, .sb-icon-btn:hover { background: var(--panel-2); }
-.sb-btn.active { color: var(--accent-dark); background: var(--accent-soft); }
+.sb-btn.subtle { color: var(--muted); }
 .sb-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .sb-btn.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 .sb-btn:disabled, .sb-btn.primary:disabled { opacity: 0.4; cursor: default; }
@@ -82,3 +82,5 @@
 .sb-topbar .sb-btn.primary:hover { background: var(--accent-dark); color: #fff; }
 :where(.sheetbase-scope)[data-theme="dark"] .sb-topbar .sb-btn.primary:hover { color: #171717; }
 .sb-toolbar-group { display: flex; align-items: center; gap: 4px; }
+.sb-demo-stage { min-height: 100vh; display: grid; place-items: center; padding: 44px; background: #ececef; align-content: center; }
+.sb-demo-stage:has(.sb-schema[data-theme="dark"], .sb-rules[data-theme="dark"], .sb-search[data-theme="dark"], .sheetbase-explorer[data-theme="dark"]) { background: #111014; }

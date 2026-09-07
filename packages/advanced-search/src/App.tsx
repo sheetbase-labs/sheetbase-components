@@ -12,10 +12,10 @@ const rows: SearchRow[] = [
   { status: "pending", amount: 430, region: "apac" },
 ];
 
-/** Dev demo (excluded from the published library). */
+/** Dev demo (excluded from the published library). Page backdrop follows the card theme, table-style. */
 export function App() {
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 44, background: "#ececef" }}>
+    <div className="sb-demo-stage">
       <AdvancedSearch fields={fields} rows={rows} />
     </div>
   );

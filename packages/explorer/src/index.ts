@@ -1,4 +1,5 @@
 import 'sheetbase-shared/theme.css'
+import 'sheetbase-shared/shell.css'
 import './styles.css'
 import './ux-overrides.css'
 import './explorer-v2.css'

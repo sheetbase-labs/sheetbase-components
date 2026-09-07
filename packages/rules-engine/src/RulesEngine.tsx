@@ -6,6 +6,7 @@ import {
   operatorShortLabel,
   operatorsForField,
   useIdleSave,
+  usePersistedTheme,
   type FilterOperator,
   type PersistenceAdapter,
   type ThemeMode,
@@ -75,13 +76,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
-  const [innerTheme, setInnerTheme] = useState<ThemeMode>(defaultTheme);
-  const activeTheme = theme ?? innerTheme;
-  function toggleTheme() {
-    const next = activeTheme === "dark" ? "light" : "dark";
-    if (theme === undefined) setInnerTheme(next);
-    onThemeChange?.(next);
-  }
+  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
   const [draftText, setDraftText] = useState("");
   const canGenerate = Boolean(draftText.trim());
   const [parseError, setParseError] = useState<string | null>(null);

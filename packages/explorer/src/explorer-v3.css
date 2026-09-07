@@ -31,11 +31,7 @@
 .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool small, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool b { color: #ac9cff; }
 .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool:hover, .sheetbase-explorer[data-theme="dark"] .explorer-commandbar-v4 .explorer-tool.active { background: #3a3158; color: #f1edff; }
 .command-spacer { flex: 1 1 auto; }
-.command-action,.command-icon { flex: 0 0 auto; height: 24px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: #4f38c6; cursor: pointer; font-size: 12px; }
-.command-icon { width: 24px; padding: 0; }
-.command-action:hover,.command-icon:hover { background: #e3dcff; }
-.sheetbase-explorer[data-theme="dark"] .command-action, .sheetbase-explorer[data-theme="dark"] .command-icon { color: #c8bcff; }
-.sheetbase-explorer[data-theme="dark"] .command-action:hover, .sheetbase-explorer[data-theme="dark"] .command-icon:hover { background: #3a3158; }
+/* Command-bar actions ride the shared shell (.sb-btn/.sb-icon-btn). */
 .style-popover { width: 340px; }
 .style-popover .range-control { grid-template-columns: 82px minmax(120px, 1fr) 36px; }
 .colour-control { min-height: 24px; display: grid; grid-template-columns: 72px 28px minmax(0,1fr); gap: 6px; align-items: center; color: var(--muted); font-size: 11px; }

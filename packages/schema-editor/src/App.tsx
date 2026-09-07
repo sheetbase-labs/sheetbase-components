@@ -42,11 +42,11 @@ const starter: SchemaGraph = {
   ],
 };
 
-/** Dev demo (excluded from the published library). */
+/** Dev demo (excluded from the published library). Page backdrop follows the card theme, table-style. */
 export function App() {
   const [graph, setGraph] = useState<SchemaGraph>(starter);
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 44, background: "#ececef" }}>
+    <div className="sb-demo-stage">
       <SchemaEditor value={graph} onChange={setGraph} />
     </div>
   );

@@ -1,7 +1,6 @@
 import { useState, type ComponentProps, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { Chart } from '@tanstack/charts/react/tooltip'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons'
+import { ThemeToggleButton } from 'sheetbase-shared'
 import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popovers'
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
@@ -38,7 +37,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
     <div className="explorer-commandbar explorer-commandbar-v4">
       <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
       <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
-      <span className="command-spacer"/><button className="command-icon" aria-label="Toggle theme" title={dark ? 'Dark' : 'Light'} onClick={onToggleDark}>{dark ? <HugeiconsIcon icon={Sun03Icon} size={14}/> : <HugeiconsIcon icon={Moon02Icon} size={14}/>}</button>{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
+      <span className="command-spacer"/><ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
   )
 }
