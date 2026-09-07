@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { RulesEngine, parseNaturalLanguageRule } from "./index";
+import { RulesEngine, parseNaturalLanguageRule, sampleRuleActions } from "./index";
 import type { PipelineRule } from "./index";
-
 const starter: PipelineRule[] = [
   parseNaturalLanguageRule("when status is failed then route to review-queue"),
   parseNaturalLanguageRule("reject rows where amount is greater than 5000"),
@@ -15,7 +14,7 @@ export function App() {
   const [rules, setRules] = useState<PipelineRule[]>(starter);
   return (
     <div className="sb-demo-stage">
-      <RulesEngine value={rules} onChange={setRules} fields={fields} />
+      <RulesEngine value={rules} onChange={setRules} fields={fields} actions={sampleRuleActions} />
     </div>
   );
 }

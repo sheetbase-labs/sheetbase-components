@@ -11,7 +11,7 @@ import {
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
-import type { PipelineRule, Row, RuleActionKind, RuleCondition, RuleOperator } from "./types";
+import type { PipelineRule, Row, RuleActionDef, RuleActionKind, RuleCondition, RuleOperator } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun } from "./engine";
 
@@ -21,6 +21,8 @@ export interface RulesEngineProps {
   onChange?: (next: PipelineRule[]) => void;
   /** Known pipeline fields for condition editors. */
   fields?: string[];
+  /** Host-declared action vocabulary. Empty (default) keeps kinds as free text; the component wires no predefined actions. */
+  actions?: readonly RuleActionDef[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
@@ -35,14 +37,6 @@ const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
   ...operatorsForField({ dataType: "date" }),
   ...operatorsForField({ dataType: "boolean" }),
 ])];
-
-const ACTION_LABELS: Array<{ value: RuleActionKind; label: string }> = [
-  { value: "flag", label: "flag" },
-  { value: "route", label: "route to" },
-  { value: "transform", label: "set" },
-  { value: "reject", label: "reject" },
-  { value: "notify", label: "notify" },
-];
 
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
@@ -72,7 +66,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -134,7 +128,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
           <div className="sb-topbar-actions">
             <span className="sb-stat">{active} of {rules.length} active</span>
             <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: "flag" }], enabled: true, priority: 100 }])}>+ Rule</button>
+            <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
           </div>
         </div>
         <div className="sb-rules-body sb-plates">
@@ -148,7 +142,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
                 />
                 <button
                   type="button"
-                  className={canGenerate ? "sb-nl-action" : "sb-nl-action is-muted"}
+                  className={canGenerate ? "sb-btn primary sb-nl-action" : "sb-btn primary sb-nl-action is-muted"}
                   aria-disabled={!canGenerate}
                   onClick={() => { if (canGenerate) addFromText(); }}
                 >Generate</button>
@@ -211,19 +205,26 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], theme,
                   </div>
                   <div className="sb-sentence">
                     <span className="sb-kw">Then</span>
-                    {rule.actions.map((a, i) => (
+                    {rule.actions.map((a, i) => {
+                      const def = actions.find((d) => d.kind === a.kind);
+                      return (
                       <span className="sb-clause" key={i}>
                         {i > 0 && <span className="sb-join">and</span>}
-                        <select aria-label="Action" value={a.kind} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, kind: e.target.value as RuleActionKind } : x)) })}>
-                          {ACTION_LABELS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                        {def ? (
+                        <select aria-label="Action" value={a.kind} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)) })}>
+                          {actions.map((d) => <option key={d.kind} value={d.kind}>{d.label}</option>)}
                         </select>
-                        {a.kind !== "reject" && (
-                          <input aria-label="Action target" placeholder={a.kind === "route" ? "queue…" : a.kind === "transform" ? "column = value…" : "detail…"} value={a.target ?? a.detail ?? ""} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, target: e.target.value || undefined } : x)) })} />
+                        ) : (
+                        <input aria-label="Action" placeholder="action…" value={a.kind} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)) })} />
+                        )}
+                        {def?.needsTarget !== false && (
+                          <input aria-label="Action target" placeholder={def?.placeholder ?? "detail…"} value={a.target ?? a.detail ?? ""} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, target: e.target.value || undefined } : x)) })} />
                         )}
                         <button className="sb-remove" title="Remove action" onClick={() => patchRule(rule.id, { actions: rule.actions.filter((_, j) => j !== i) })}>×</button>
                       </span>
-                    ))}
-                    <button className="sb-link-btn" onClick={() => patchRule(rule.id, { actions: [...rule.actions, { kind: "flag" }] })}>+ action</button>
+                      );
+                    })}
+                    <button className="sb-link-btn" onClick={() => patchRule(rule.id, { actions: [...rule.actions, { kind: actions[0]?.kind ?? "" }] })}>+ action</button>
                     <label className="sb-muted sb-priority">p<input type="number" aria-label="Priority" value={rule.priority} onChange={(e) => patchRule(rule.id, { priority: Number(e.target.value) || 0 })} /></label>
                   </div>
                 </li>

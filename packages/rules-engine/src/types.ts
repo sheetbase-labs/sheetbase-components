@@ -9,7 +9,25 @@ export interface RuleCondition {
   value?: string | number | boolean | Array<string | number> | { low: number; high: number };
 }
 
-export type RuleActionKind = "flag" | "route" | "transform" | "reject" | "notify";
+/** Open action vocabulary: hosts declare the kinds their pipeline understands. */
+export type RuleActionKind = string;
+
+export interface RuleActionDef {
+  kind: string;
+  label: string;
+  placeholder?: string;
+  /** False hides the target input (e.g. reject needs no target). Default true. */
+  needsTarget?: boolean;
+}
+
+/** Demo vocabulary (mirrors the engine's built-in semantics); the component itself wires none. */
+export const sampleRuleActions: RuleActionDef[] = [
+  { kind: "flag", label: "flag", placeholder: "detail…" },
+  { kind: "route", label: "route to", placeholder: "queue…" },
+  { kind: "transform", label: "transform", placeholder: "column = value…" },
+  { kind: "reject", label: "reject", needsTarget: false },
+  { kind: "notify", label: "notify", placeholder: "detail…" },
+];
 
 export interface RuleAction {
   kind: RuleActionKind;

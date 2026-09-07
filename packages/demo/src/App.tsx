@@ -11,8 +11,8 @@ import {
   type TablePresentationState,
 } from "sheetbase-table";
 import { App as Explorer } from "sheetbase-explorer";
+import { RulesEngine, parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
 import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
-import { RulesEngine, parseNaturalLanguageRule, type PipelineRule } from "sheetbase-rulesengine";
 import { AdvancedSearch, type SearchRow } from "sheetbase-advanced-search";
 
 const tableFields = [
@@ -132,8 +132,7 @@ export function App() {
         <SchemaEditor value={graph} onChange={setGraph} />
       </section>
       <section aria-label="Rules engine">
-        <h2>Rules engine</h2>
-        <RulesEngine value={rules} onChange={setRules} fields={["status", "amount", "region", "email"]} />
+        <RulesEngine value={rules} onChange={setRules} fields={["status", "amount", "region", "email"]} actions={sampleRuleActions} />
       </section>
       <section aria-label="Advanced search">
         <h2>Advanced search</h2>

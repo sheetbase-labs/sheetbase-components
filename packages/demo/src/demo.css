@@ -18,14 +18,14 @@
 .sb-demo-all-head h1 { margin: 0 0 4px; font-size: 18px; color: #242424; }
 .sb-demo-all:has([data-theme="dark"]) .sb-demo-all-head h1 { color: #f2f0f6; }
 .sb-demo-all-head p { margin: 0; }
-.sb-demo-all section { width: min(1600px, calc(100vw - 88px)); }
-.sb-demo-all section > h2 {
+.sb-demo-all > section { width: min(1600px, calc(100vw - 88px)); }
+.sb-demo-all > section > h2 {
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 650;
   color: #6f6c74;
   font-family: var(--font-sans, "Instrument Sans", Inter, system-ui, sans-serif);
 }
-.sb-demo-all:has([data-theme="dark"]) section > h2 { color: #a8a4af; }
+.sb-demo-all:has([data-theme="dark"]) > section > h2 { color: #a8a4af; }
 /* Schema/rules/search cards size to the page column. */
-.sb-demo-all .sb-frame { width: 100%; }
+.sb-demo-all > section > .sb-frame { width: 100%; }
