@@ -125,8 +125,10 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     <div className="sheetbase-scope sb-rules" data-theme={activeTheme}>
       <div className="sb-frame">
         <div className="sb-topbar">
-          <div className="sb-topbar-actions">
+          <div className="sb-toolbar-group">
             <span className="sb-stat">{active} of {rules.length} active</span>
+          </div>
+          <div className="sb-topbar-actions">
             <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
             <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
           </div>

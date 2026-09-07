@@ -258,9 +258,11 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
       <div className="sb-frame">
         <div className="sb-topbar">
-          <div className="sb-topbar-actions">
+          <div className="sb-toolbar-group">
             {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
             <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+          </div>
+          <div className="sb-topbar-actions">
             <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
             <button className="sb-btn" onClick={() => commit({ filter: emptyRoot() })}>Clear</button>
           </div>

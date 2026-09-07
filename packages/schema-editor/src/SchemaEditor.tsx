@@ -147,9 +147,10 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
             <span className="sb-divider" />
             <button className="sb-btn" onClick={fitView}>Fit</button>
             <button className="sb-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
+            <span className="sb-divider" />
+            <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
           </div>
           <div className="sb-topbar-actions">
-            <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
             <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
             <button className="sb-btn primary" onClick={addModel}>+ Model</button>
           </div>
