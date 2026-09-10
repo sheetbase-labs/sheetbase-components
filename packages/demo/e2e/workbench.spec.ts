@@ -248,7 +248,11 @@ test("dragging a tab within its own group pops it out", async ({ page }) => {
 
   await expect.poll(() => topStacks(page)).toBe(4);
   await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules"]);
+  const search = page.locator(".sb-pane-stack").filter({ has: page.locator(".sb-search") });
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
+  // The detached pane has a title-bar header (drag handle), not a tab.
+  await expect(search.locator(".sb-pane-head.is-titled")).toHaveCount(1);
+  await expect(search.getByRole("tab")).toHaveCount(0);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {

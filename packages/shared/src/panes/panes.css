@@ -104,6 +104,16 @@
   margin-bottom: 4px;
   color: var(--muted);
 }
+/* Lone pane with actions: a real title bar, and the drag handle for the pane. */
+.sb-pane-head.is-titled {
+  height: 28px;
+  padding: 0 4px 0 8px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--accent-ink);
+}
+.sb-pane-head.is-titled .sb-pane-title { padding: 0; cursor: grab; }
 .sb-pane-tabs {
   display: flex;
   align-items: center;
@@ -184,12 +194,20 @@
   text-align: left;
 }
 .sb-pane-menu > button:hover { background: var(--accent-soft-2); }
-/* Hover-only action button for lone panes without a header. */
+/* Hover-only action surface for lone panes (no header bar). */
 .sb-pane-fab {
   position: absolute;
   top: 4px;
   right: 4px;
   z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;

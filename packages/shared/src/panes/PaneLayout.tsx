@@ -647,7 +647,10 @@ export function PaneLayout({
     const tabbed = node.panes.length > 1;
     const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
     // A lone pane only gets a header when it declares actions to host.
+    // A lone pane gets a title-bar header (its drag handle) when it has actions;
+    // otherwise it's chrome-less like the table/explorer. Tabbed stacks get tabs.
     const showHead = tabbed || Boolean(activePane?.actions);
+    const titled = !tabbed;
     const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
     const otherStacks = listStacks(layout)
       .filter((stack) => stack.id !== node.id)
@@ -677,7 +680,7 @@ export function PaneLayout({
         onKeyDown={(event) => onStackKeyDown(event, node)}
       >
         {showHead && (
-          <div className="sb-pane-head">
+          <div className={cx("sb-pane-head", titled && "is-titled")}>
             {tabbed ? (
               <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
                 {node.panes.map((paneId, index) => {
