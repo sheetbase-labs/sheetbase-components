@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { ThemeToggleButton, PaneLayout, loadInitialState, toFieldDataType, useIdleSave, usePersistedTheme, type FieldDataType, type Layout, type PaneSpec, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 import {
@@ -11,6 +11,15 @@ import {
   validateGraph,
   withAutoLayout,
 } from "./graph";
+
+export interface SchemaEditorHandle {
+  /** Add a model, as the topbar button does. */
+  addModel(): void;
+  /** Fit the graph in the viewport. */
+  fitView(): void;
+  /** Reset zoom and pan. */
+  resetView(): void;
+}
 
 export interface SchemaEditorProps {
   /** Controlled graph. Omit for uncontrolled (uses initialGraph once). */
@@ -27,6 +36,8 @@ export interface SchemaEditorProps {
   adapter?: PersistenceAdapter<SchemaGraph>;
   /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
   chrome?: "full" | "none";
+  /** Imperative actions for hosts that render pane chrome. */
+  ref?: Ref<SchemaEditorHandle>;
 }
 
 const FIELD_TYPES: FieldDataType[] = ["text", "number", "boolean", "date", "datetime", "relationship"];
@@ -48,7 +59,7 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter, chrome = "full" }: SchemaEditorProps) {
+export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter, chrome = "full", ref }: SchemaEditorProps) {
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
   useIdleSave(persistKey, graph, adapter);
@@ -152,6 +163,13 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
     setZoom(view.zoom);
     setPan({ x: view.x, y: view.y });
   }
+
+  function resetView() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  useImperativeHandle(ref, () => ({ addModel, fitView, resetView }));
 
   const posByModel: Record<string, { x: number; y: number }> = {};
   for (const m of graph.models) posByModel[m.name] = m.position ?? { x: 24, y: 24 };

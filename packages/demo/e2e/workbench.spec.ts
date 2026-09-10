@@ -85,12 +85,25 @@ test("navigates and reorders tabs with the keyboard", async ({ page }) => {
 test("schema body is three resizable panes and drives the table header", async ({ page }) => {
   await reset(page);
   const schema = stackWith(page, ".sb-schema");
-  await expect(schema.locator(".sb-pane-stack")).toHaveCount(3);
-  await expect(schema.locator(".sb-resizer")).toHaveCount(2);
+  await expect(page.locator(".sb-schema .sb-pane-stack")).toHaveCount(3);
+  await expect(page.locator(".sb-schema .sb-resizer")).toHaveCount(2);
 
   // Selecting a model pipes its fields into the table pane.
   await schema.getByRole("button", { name: /Order/ }).click();
   await expect(page.locator(".table-surface").getByText("customer_id", { exact: true })).toBeVisible();
+});
+
+test("frameless panes own a single bar with re-homed actions", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+
+  // Schema renders without its topbar; its actions live in the pane head.
+  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(0);
+  await expect(analysis.getByRole("button", { name: "+ Model" })).toBeVisible();
+
+  // Rules and search also host their internal bodies as panes.
+  await expect(page.locator(".sb-rules .sb-pane-stack")).toHaveCount(2);
+  await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(2);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {

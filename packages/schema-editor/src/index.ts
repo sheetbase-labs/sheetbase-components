@@ -5,5 +5,5 @@ import "./styles.css";
 export * from "./types";
 export * from "./graph";
 export { SchemaEditor } from "./SchemaEditor";
-export type { SchemaEditorProps } from "./SchemaEditor";
+export type { SchemaEditorProps, SchemaEditorHandle } from "./SchemaEditor";
 export { MoonIcon, SunIcon, ThemeToggleButton, type ThemeMode } from "sheetbase-shared";

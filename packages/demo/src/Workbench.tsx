@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   PaneLayout,
   ThemeToggleButton,
@@ -13,9 +13,9 @@ import {
   type SearchSpec,
   type SheetbaseField,
 } from "sheetbase-shared";
-import { RulesEngine, type PipelineRule } from "sheetbase-rulesengine";
-import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
-import { AdvancedSearch } from "sheetbase-advanced-search";
+import { RulesEngine, type PipelineRule, type RulesEngineHandle } from "sheetbase-rulesengine";
+import { SchemaEditor, type SchemaEditorHandle, type SchemaGraph } from "sheetbase-schemaeditor";
+import { AdvancedSearch, type AdvancedSearchHandle } from "sheetbase-advanced-search";
 import {
   DemoTable,
   Explorer,
@@ -83,6 +83,9 @@ export function Workbench() {
     loadPaneLayoutState(adapter, WORKBENCH_LAYOUT_KEY, visibleIds, workbenchLayout),
   );
   const onThemeChange = () => toggleTheme();
+  const schemaRef = useRef<SchemaEditorHandle>(null);
+  const rulesRef = useRef<RulesEngineHandle>(null);
+  const searchRef = useRef<AdvancedSearchHandle>(null);
   const onHeaderFieldsChange = useCallback((fields: ReadonlyArray<SheetbaseField & { column: number }>) => {
     // The table has no datetime column type; land it on date.
     setHeaderFields(fields.length > 0
@@ -97,8 +100,17 @@ export function Workbench() {
       id: "schema",
       title: "Schema",
       closable: true,
+      actions: (
+        <>
+          <button className="sb-btn" onClick={() => schemaRef.current?.fitView()}>Fit</button>
+          <button className="sb-btn" onClick={() => schemaRef.current?.resetView()}>Reset</button>
+          <button className="sb-btn primary" onClick={() => schemaRef.current?.addModel()}>+ Model</button>
+        </>
+      ),
       content: (
         <SchemaEditor
+          ref={schemaRef}
+          chrome="none"
           value={graph}
           onChange={setGraph}
           onHeaderFieldsChange={onHeaderFieldsChange}
@@ -113,14 +125,18 @@ export function Workbench() {
       id: "rules",
       title: "Rules",
       closable: true,
-      content: <RulesEngine value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
+      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
       title: "Search",
       closable: true,
+      actions: <button className="sb-btn" onClick={() => searchRef.current?.clear()}>Clear</button>,
       content: (
         <AdvancedSearch
+          ref={searchRef}
+          chrome="none"
           fields={searchFields}
           rows={searchRows}
           persistKey={WORKBENCH_SEARCH_KEY}

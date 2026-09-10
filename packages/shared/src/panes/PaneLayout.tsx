@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import "./panes.css";
 import { useIdleSave, type PersistenceAdapter } from "../persistence";
 import type { ThemeMode } from "../ThemeToggle";
 import {
@@ -334,7 +335,8 @@ export function PaneLayout({
       if (!paneId) return;
       const handle = view?.dataset.dragHandle;
       if (handle === "false") return;
-      if (handle === "heading" ? !target.closest(".sb-panel-heading") : event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
+      const inHead = Boolean(target.closest(".sb-pane-head"));
+      if (!inHead && (handle === "heading" ? !target.closest(".sb-panel-heading") : event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX)) return;
       if (target.closest(INTERACTIVE_SELECTOR)) return;
       beginDragRef.current(event as unknown as ReactPointerEvent, stackId, paneId);
     };
@@ -499,6 +501,8 @@ export function PaneLayout({
   function renderStack(node: StackNode): ReactNode {
     const tabbed = node.panes.length > 1;
     const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
+    // A lone pane only gets a header when it declares actions to host.
+    const showHead = tabbed || Boolean(activePane?.actions);
     const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
     return (
       <div
@@ -511,34 +515,38 @@ export function PaneLayout({
         ref={(element) => registerStack(node.id, element)}
         onKeyDown={(event) => onStackKeyDown(event, node)}
       >
-        {tabbed && (
+        {showHead && (
           <div className="sb-pane-head">
-            <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
-              {node.panes.map((paneId, index) => {
-                const pane = paneMap.get(paneId);
-                return (
-                  <button
-                    key={paneId}
-                    type="button"
-                    role="tab"
-                    id={`sb-pane-tab-${node.id}-${paneId}`}
-                    aria-controls={`sb-pane-panel-${node.id}-${paneId}`}
-                    aria-selected={paneId === node.active}
-                    tabIndex={paneId === node.active ? 0 : -1}
-                    className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
-                    onPointerDown={(event) => beginDrag(event, node.id, paneId)}
-                    onKeyDown={(event) => onTabKeyDown(event, node, paneId, index)}
-                    onClick={(event) => {
-                      // Keyboard activation only; pointer clicks are resolved on pointerup.
-                      if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
-                    }}
-                  >
-                    {pane?.icon}
-                    {paneLabel(pane, paneId)}
-                  </button>
-                );
-              })}
-            </div>
+            {tabbed ? (
+              <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
+                {node.panes.map((paneId, index) => {
+                  const pane = paneMap.get(paneId);
+                  return (
+                    <button
+                      key={paneId}
+                      type="button"
+                      role="tab"
+                      id={`sb-pane-tab-${node.id}-${paneId}`}
+                      aria-controls={`sb-pane-panel-${node.id}-${paneId}`}
+                      aria-selected={paneId === node.active}
+                      tabIndex={paneId === node.active ? 0 : -1}
+                      className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
+                      onPointerDown={(event) => beginDrag(event, node.id, paneId)}
+                      onKeyDown={(event) => onTabKeyDown(event, node, paneId, index)}
+                      onClick={(event) => {
+                        // Keyboard activation only; pointer clicks are resolved on pointerup.
+                        if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
+                      }}
+                    >
+                      {pane?.icon}
+                      {paneLabel(pane, paneId)}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="sb-pane-title">{paneLabel(activePane, node.active)}</span>
+            )}
             <div className="sb-pane-actions">
               {activePane?.actions}
               {activePane?.closable && onClosePane && (

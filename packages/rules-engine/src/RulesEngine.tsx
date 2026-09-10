@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useImperativeHandle, useMemo, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
+  PaneLayout,
   loadInitialState,
   normaliseOperator,
   operatorShortLabel,
@@ -8,12 +9,19 @@ import {
   useIdleSave,
   usePersistedTheme,
   type FilterOperator,
+  type Layout,
+  type PaneSpec,
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
 import type { PipelineRule, Row, RuleActionDef, RuleActionKind, RuleCondition, RuleOperator } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun } from "./engine";
+
+export interface RulesEngineHandle {
+  /** Append a default rule, as the topbar button does. */
+  addRule(): void;
+}
 
 export interface RulesEngineProps {
   value?: PipelineRule[];
@@ -31,6 +39,8 @@ export interface RulesEngineProps {
   adapter?: PersistenceAdapter<PipelineRule[]>;
   /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
   chrome?: "full" | "none";
+  /** Imperative actions for hosts that render pane chrome. */
+  ref?: Ref<RulesEngineHandle>;
 }
 
 const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
@@ -43,6 +53,18 @@ const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Rules editor | dry run, each a pane. */
+const RULES_PANE_LAYOUT: Layout = {
+  kind: "split",
+  id: "rules-root",
+  direction: "row",
+  sizes: [0.68, 0.32],
+  children: [
+    { kind: "stack", id: "rules-main", panes: ["rules"], active: "rules" },
+    { kind: "stack", id: "rules-dry-run", panes: ["dry-run"], active: "dry-run" },
+  ],
+};
 
 function valueText(value: RuleCondition["value"]): string {
   if (value === undefined) return "";
@@ -68,7 +90,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full" }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -93,6 +115,10 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     } catch (error) {
       setParseError(error instanceof RuleParseError ? error.message : "Could not parse that rule.");
     }
+  }
+
+  function addRule() {
+    commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }]);
   }
 
   function patchRule(id: string, patch: Partial<PipelineRule>) {
@@ -123,6 +149,8 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   const active = rules.filter((r) => r.enabled).length;
 
+  useImperativeHandle(ref, () => ({ addRule }));
+
   return (
     <div className="sheetbase-scope sb-rules" data-theme={activeTheme}>
       <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
@@ -133,12 +161,20 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
             </div>
             <div className="sb-topbar-actions">
               <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-              <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
+              <button className="sb-btn primary" onClick={addRule}>+ Rule</button>
             </div>
           </div>
         )}
-        <div className="sb-rules-body sb-plates">
-          <section className="sb-rules-main sb-plate">
+        <PaneLayout
+          className="sb-panes--fit"
+          defaultLayout={RULES_PANE_LAYOUT}
+          panes={[
+            {
+              id: "rules",
+              title: "Pipeline rules",
+              dragHandle: "heading",
+              content: (
+                <section className="sb-rules-main sb-plate">
             <div className="sb-nl">
               <div className="sb-nl-row">
                 <input
@@ -237,8 +273,15 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
               ))}
               {rules.length === 0 && <li className="sb-muted" style={{ padding: 14 }}>No rules yet — describe one above.</li>}
             </ul>
-          </section>
-          <aside className="sb-rules-side sb-plate">
+                </section>
+              ),
+            },
+            {
+              id: "dry-run",
+              title: "Dry run",
+              dragHandle: "heading",
+              content: (
+                <aside className="sb-rules-side sb-plate">
             <div className="sb-panel-heading"><span>Dry run</span></div>
             <div className="sb-rules-editor">
               <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>
@@ -255,8 +298,11 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                   </div>
               )}
             </div>
-          </aside>
-        </div>
+                </aside>
+              ),
+            },
+          ] satisfies PaneSpec[]}
+        />
       </div>
     </div>
   );

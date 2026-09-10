@@ -1,4 +1,3 @@
-.sb-search-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); min-height: 560px; }
 .sb-search-main { min-width: 0; }
 .sb-search-scroll { padding: 8px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .sb-group { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }

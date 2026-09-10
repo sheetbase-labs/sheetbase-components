@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
+  PaneLayout,
   compileToDatasetQuery,
   countNodes,
   describeFilter,
@@ -17,6 +18,8 @@ import {
   type FilterNode,
   type FilterOperator,
   type GroupNode,
+  type Layout,
+  type PaneSpec,
   type SearchSpec,
   type SheetbaseField,
   type ThemeMode,
@@ -28,6 +31,11 @@ import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
 
 export type SearchFieldInput = string | SheetbaseField;
+
+export interface AdvancedSearchHandle {
+  /** Reset the filter tree, as the topbar Clear button does. */
+  clear(): void;
+}
 
 export interface AdvancedSearchProps {
   value?: SearchSpec;
@@ -47,6 +55,8 @@ export interface AdvancedSearchProps {
   adapter?: PersistenceAdapter<SearchSpec>;
   /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
   chrome?: "full" | "none";
+  /** Imperative actions for hosts that render pane chrome. */
+  ref?: Ref<AdvancedSearchHandle>;
 }
 
 function fieldIdOf(field: SearchFieldInput): string {
@@ -69,6 +79,18 @@ function fieldIds(fields: readonly SearchFieldInput[]): string[] {
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Filter tree | preview, each a pane. */
+const SEARCH_PANE_LAYOUT: Layout = {
+  kind: "split",
+  id: "search-root",
+  direction: "row",
+  sizes: [0.48, 0.52],
+  children: [
+    { kind: "stack", id: "search-filter", panes: ["filter"], active: "filter" },
+    { kind: "stack", id: "search-preview", panes: ["preview"], active: "preview" },
+  ],
+};
 
 function updateNode(root: GroupNode, id: string, fn: (node: FilterNode) => FilterNode | null): GroupNode {
   function walk(node: FilterNode): FilterNode | null {
@@ -230,7 +252,7 @@ function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: s
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full" }: AdvancedSearchProps) {
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full", ref }: AdvancedSearchProps) {
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
@@ -243,6 +265,10 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   function patchFilter(id: string, fn: (node: FilterNode) => FilterNode | null) {
     commit({ ...spec, filter: updateNode(spec.filter, id, fn) });
   }
+  function clear() {
+    commit({ filter: emptyRoot() });
+  }
+  useImperativeHandle(ref, () => ({ clear }));
 
   const matches = useMemo(() => (rows.length > 0 ? applySearch(rows, spec) : null), [rows, spec]);
   const nodes = countNodes(spec.filter);
@@ -267,12 +293,20 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             </div>
             <div className="sb-topbar-actions">
               <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-              <button className="sb-btn" onClick={() => commit({ filter: emptyRoot() })}>Clear</button>
+              <button className="sb-btn" onClick={clear}>Clear</button>
             </div>
           </div>
         )}
-        <div className="sb-search-body sb-plates">
-          <section className="sb-search-main sb-plate">
+        <PaneLayout
+          className="sb-panes--fit"
+          defaultLayout={SEARCH_PANE_LAYOUT}
+          panes={[
+            {
+              id: "filter",
+              title: "Filter tree",
+              dragHandle: "heading",
+              content: (
+                <section className="sb-search-main sb-plate">
             <div className="sb-panel-heading"><span>Filter tree</span></div>
             <div className="sb-search-scroll">
               <GroupEditor node={spec.filter} depth={0} fields={fields} onPatch={patchFilter} />
@@ -301,17 +335,27 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                 </label>
               </div>
             </div>
-          </section>
-          <aside className="sb-search-side sb-plate">
-            {!matches ? (
-              <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
-            ) : spec.groupBy ? (
-              <GroupedPreview matches={matches} fields={ids} groupBy={spec.groupBy} />
-            ) : (
-              <PreviewTable rows={matches} fields={ids} />
-            )}
-          </aside>
-        </div>
+                </section>
+              ),
+            },
+            {
+              id: "preview",
+              title: "Preview",
+              dragHandle: false,
+              content: (
+                <aside className="sb-search-side sb-plate">
+                  {!matches ? (
+                    <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
+                  ) : spec.groupBy ? (
+                    <GroupedPreview matches={matches} fields={ids} groupBy={spec.groupBy} />
+                  ) : (
+                    <PreviewTable rows={matches} fields={ids} />
+                  )}
+                </aside>
+              ),
+            },
+          ] satisfies PaneSpec[]}
+        />
       </div>
     </div>
   );
