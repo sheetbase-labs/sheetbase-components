@@ -49,7 +49,11 @@ export interface PaneSpec {
   icon?: ReactNode;
   /** Right-aligned header controls (buttons, menus). */
   actions?: ReactNode;
-  content: ReactNode;
+  /**
+   * Pane body. A function receives `{ tabbed }` so a component can hide its own
+   * top bar while grouped (the tab strip then carries the actions).
+   */
+  content: ReactNode | ((context: { tabbed: boolean }) => ReactNode);
   /** Show a close button in the header and allow keyboard close; requires `onClosePane`. */
   closable?: boolean;
   /**
@@ -271,6 +275,14 @@ export function PaneLayout({
   // Always drop panes the host no longer offers — controlled or not. Additions
   // are handled at load time (reconcile), so a closed pane stays closed.
   const layout = useMemo(() => pruneLayout(rawLayout, paneIds), [rawLayout, paneIdsKey]);
+  // Which panes are currently grouped, so content can hide its own top bar.
+  const tabbedByPane = useMemo(() => {
+    const map = new Map<PaneId, boolean>();
+    for (const stack of listStacks(layout)) {
+      for (const id of stack.panes) map.set(id, stack.panes.length > 1);
+    }
+    return map;
+  }, [layout]);
   // Persist whatever is current. Controlled hosts load their own initial state.
   const state = useMemo(() => paneLayoutState(layout), [layout]);
   useIdleSave(persistKey, state, adapter);
@@ -643,14 +655,19 @@ export function PaneLayout({
     tabs[nextIndex]?.focus();
   }
 
+  function renderContent(paneId: PaneId, tabbed: boolean): ReactNode {
+    const pane = paneMap.get(paneId);
+    if (!pane) return <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>;
+    return typeof pane.content === "function" ? pane.content({ tabbed }) : pane.content;
+  }
+
   function renderStack(node: StackNode): ReactNode {
     const tabbed = node.panes.length > 1;
     const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
     // A lone pane only gets a header when it declares actions to host.
-    // A lone pane gets a title-bar header (its drag handle) when it has actions;
-    // otherwise it's chrome-less like the table/explorer. Tabbed stacks get tabs.
-    const showHead = tabbed || Boolean(activePane?.actions);
-    const titled = !tabbed;
+    // Grouped panes show only the tab strip; lone panes show their component's
+    // own top bar. So the header is the tab strip, and content renders untabbed.
+    const showHead = tabbed;
     const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
     const otherStacks = listStacks(layout)
       .filter((stack) => stack.id !== node.id)
@@ -680,7 +697,7 @@ export function PaneLayout({
         onKeyDown={(event) => onStackKeyDown(event, node)}
       >
         {showHead && (
-          <div className={cx("sb-pane-head", titled && "is-titled")}>
+          <div className="sb-pane-head">
             {tabbed ? (
               <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
                 {node.panes.map((paneId, index) => {
@@ -742,7 +759,7 @@ export function PaneLayout({
               data-drag-handle={paneMap.get(paneId)?.dragHandle === undefined ? undefined : String(paneMap.get(paneId)?.dragHandle)}
               ref={(element) => attachHost(element, paneId)}
             >
-              {CAN_PORTAL ? null : paneMap.get(paneId)?.content ?? <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>}
+              {CAN_PORTAL ? null : renderContent(paneId, tabbed)}
             </div>
           ))}
         </div>
@@ -809,7 +826,7 @@ export function PaneLayout({
       {CAN_PORTAL &&
         panes.map((pane) => {
           const host = hostFor(pane.id);
-          return host ? createPortal(pane.content, host, pane.id) : null;
+          return host ? createPortal(renderContent(pane.id, tabbedByPane.get(pane.id) ?? false), host, pane.id) : null;
         })}
       {drag && (
         <div className="sb-pane-drag-ghost" style={{ left: drag.x, top: drag.y }}>

@@ -115,13 +115,14 @@ test("one app surface wraps the workbench", async ({ page }) => {
   await expect(page.locator(".sb-workbench-panes")).toHaveClass(/sb-panes--shared/);
 });
 
-test("components keep their own top bars", async ({ page }) => {
+test("grouped panes carry actions in the tab strip, not a second bar", async ({ page }) => {
   await reset(page);
-  // Each self-framed component owns its header (like the explorer command bar);
-  // it isn't replaced by a generic pane header.
-  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(1);
-  await expect(page.locator(".sb-rules .sb-topbar")).toHaveCount(1);
-  await expect(page.locator(".sb-search .sb-topbar")).toHaveCount(1);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+
+  // Grouped: actions are in the tab strip; the component's own bar is absent.
+  await expect(analysis.getByRole("button", { name: "+ Model" })).toBeVisible();
+  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(0);
+
   // Their internal bodies still host panes.
   await expect(page.locator(".sb-rules .sb-pane-stack")).toHaveCount(2);
   await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(2);

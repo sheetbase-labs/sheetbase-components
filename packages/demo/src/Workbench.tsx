@@ -108,9 +108,17 @@ export function Workbench() {
       id: "schema",
       title: "Schema",
       closable: true,
-      content: (
+      actions: (
+        <>
+          <button className="sb-btn" onClick={() => schemaRef.current?.fitView()}>Fit</button>
+          <button className="sb-btn" onClick={() => schemaRef.current?.resetView()}>Reset</button>
+          <button className="sb-btn primary" onClick={() => schemaRef.current?.addModel()}>+ Model</button>
+        </>
+      ),
+      content: ({ tabbed }: { tabbed: boolean }) => (
         <SchemaEditor
           ref={schemaRef}
+          chrome={tabbed ? "none" : "full"}
           value={graph}
           onChange={setGraph}
           onHeaderFieldsChange={onHeaderFieldsChange}
@@ -125,15 +133,18 @@ export function Workbench() {
       id: "rules",
       title: "Rules",
       closable: true,
-      content: <RulesEngine ref={rulesRef} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
+      content: ({ tabbed }: { tabbed: boolean }) => <RulesEngine ref={rulesRef} chrome={tabbed ? "none" : "full"} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
       title: "Search",
       closable: true,
-      content: (
+      actions: <button className="sb-btn" onClick={() => searchRef.current?.clear()}>Clear</button>,
+      content: ({ tabbed }: { tabbed: boolean }) => (
         <AdvancedSearch
           ref={searchRef}
+          chrome={tabbed ? "none" : "full"}
           value={searchSpec}
           onChange={setSearchSpec}
           fields={activeSearchFields}
