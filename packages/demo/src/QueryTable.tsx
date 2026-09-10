@@ -4,7 +4,6 @@ import {
   TableFormattingToolbar,
   TableSurface,
   createMemoryPagedAdapter,
-  queryKey,
   type Scalar,
   type SpreadsheetHandle,
   type SpreadsheetSelection,
@@ -48,7 +47,6 @@ export function QueryTable({ theme }: { theme: "light" | "dark" }) {
             theme={theme}
           />
           <PagedSpreadsheet
-            key={queryKey(query)}
             ref={tableRef}
             adapter={adapter}
             datasetId="sample"
