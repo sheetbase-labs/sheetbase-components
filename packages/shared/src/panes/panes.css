@@ -38,7 +38,9 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  /* The host surface (`.sb-frame` / `.table-surface`) owns the 4px inset and
+     the splitter gutters are the 4px gaps, matching `.sb-plates`. */
+  padding: 0;
 }
 .sb-panes[data-dragging] { cursor: grabbing; }
 
@@ -68,12 +70,12 @@
   background: transparent;
   padding: 0;
 }
-.sb-split.is-row > .sb-resizer { width: 6px; cursor: col-resize; }
-.sb-split.is-column > .sb-resizer { height: 6px; cursor: row-resize; }
+.sb-split.is-row > .sb-resizer { width: 4px; cursor: col-resize; }
+.sb-split.is-column > .sb-resizer { height: 4px; cursor: row-resize; }
 .sb-resizer::after {
   content: "";
   position: absolute;
-  inset: 2px;
+  inset: 1px;
   border-radius: 3px;
   background: transparent;
   transition: background 120ms ease;
@@ -147,7 +149,53 @@
 .sb-pane-tab.dragging { opacity: 0.4; }
 .sb-pane-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
-.sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+.sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; position: relative; }
+.sb-pane-menu-wrap { position: relative; display: inline-flex; }
+.sb-pane-menu-backdrop { position: fixed; inset: 0; z-index: 40; padding: 0; border: 0; background: transparent; cursor: default; }
+.sb-pane-menu {
+  position: fixed;
+  z-index: 41;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.sb-pane-menu-label {
+  margin: 2px 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.sb-pane-menu > button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+}
+.sb-pane-menu > button:hover { background: var(--accent-soft-2); }
+/* Hover-only action button for lone panes without a header. */
+.sb-pane-fab {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.sb-pane-stack:hover > .sb-pane-fab,
+.sb-pane-fab:focus-within { opacity: 1; pointer-events: auto; }
 .sb-pane-stack:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; border-radius: 13px; }
 /* Announcer for keyboard moves; invisible but read by assistive tech. */
 .sb-pane-live {

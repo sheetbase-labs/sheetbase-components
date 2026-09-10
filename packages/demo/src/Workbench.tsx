@@ -11,6 +11,7 @@ import {
   useIdleSave,
   usePersistedTheme,
   type Layout,
+  type PaneLayoutHandle,
   type PaneLayoutState,
   type PaneSpec,
   type SearchSpec,
@@ -92,6 +93,7 @@ export function Workbench() {
   const schemaRef = useRef<SchemaEditorHandle>(null);
   const rulesRef = useRef<RulesEngineHandle>(null);
   const searchRef = useRef<AdvancedSearchHandle>(null);
+  const panesRef = useRef<PaneLayoutHandle>(null);
   const onHeaderFieldsChange = useCallback((fields: ReadonlyArray<SheetbaseField & { column: number }>) => {
     // The table has no datetime column type; land it on date.
     setHeaderFields(fields.length > 0
@@ -165,16 +167,31 @@ export function Workbench() {
     setHeaderFields(tableFields);
   }
 
+  // "New pane…" in a pane menu re-opens the first closed pane into that stack.
+  function requestNewPane(stackId: string) {
+    const next = WORKBENCH_PANE_IDS.find((id) => closed.has(id));
+    if (!next) return;
+    setClosed((current) => {
+      const copy = new Set(current);
+      copy.delete(next);
+      return copy;
+    });
+    panesRef.current?.addPane(next, stackId);
+  }
+
   return (
     <div className="sb-demo-stage">
       <SheetbaseShell theme={activeTheme} header={false} className="sb-demo-workbench">
         <PaneLayout
+          ref={panesRef}
           panes={panes}
           layout={layout}
           onLayoutChange={setLayout}
           persistKey={WORKBENCH_LAYOUT_KEY}
           adapter={adapter}
           onClosePane={(id) => setClosed((current) => new Set(current).add(id))}
+          onRequestNewPane={requestNewPane}
+          paneMenu="hover"
           surface="shared"
           theme={activeTheme}
           className="sb-panes--fit sb-workbench-panes"

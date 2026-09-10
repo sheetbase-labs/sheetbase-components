@@ -2,6 +2,7 @@ import {
   Fragment,
   useEffect,
   useId,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -9,13 +10,16 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 import { createPortal } from "react-dom";
 import "./panes.css";
 import { useIdleSave, type PersistenceAdapter } from "../persistence";
 import type { ThemeMode } from "../ThemeToggle";
 import {
+  addPaneToStack,
   findStack,
+  listStacks,
   loadPaneLayoutState,
   movePane,
   paneLayoutState,
@@ -26,6 +30,7 @@ import {
   setSplitSizes,
   singleStack,
   splitPaneOut,
+  stackOf,
   type DropZone,
   type Layout,
   type LayoutNode,
@@ -53,6 +58,22 @@ export interface PaneSpec {
    * an inner `.sb-panel-heading`, or nowhere (`false`).
    */
   dragHandle?: "topbar" | "heading" | false;
+}
+
+/** Imperative actions for hosts driving the layout outside its UI. */
+export interface PaneLayoutHandle {
+  getLayout(): Layout;
+  setLayout(next: Layout): void;
+  /** Tab an existing pane into a stack. */
+  tabInto(paneId: PaneId, targetStackId: string): void;
+  /** Move a pane onto a stack location (centre tabs, edges split). */
+  movePane(paneId: PaneId, targetStackId: string, zone?: DropZone): void;
+  /** Place a pane the host just added to `panes` into a stack. */
+  addPane(paneId: PaneId, stackId: string): void;
+  /** Show a pane's tab. */
+  activate(paneId: PaneId): void;
+  /** Remove a pane from the layout and notify `onClosePane`. */
+  close(paneId: PaneId): void;
 }
 
 export interface PaneLayoutProps {
@@ -87,6 +108,15 @@ export interface PaneLayoutProps {
   surface?: "component" | "shared";
   theme?: ThemeMode;
   className?: string;
+  /** Exposes imperative layout actions. */
+  ref?: Ref<PaneLayoutHandle>;
+  /**
+   * Pane actions menu: `"head"` where a pane header exists (default), `"hover"`
+   * adds a hover control for lone panes, `"off"` disables it.
+   */
+  paneMenu?: "head" | "hover" | "off";
+  /** Host hook for the menu's "New pane…" item; receives the target stack id. */
+  onRequestNewPane?: (targetStackId: string) => void;
 }
 
 type Direction = "left" | "right" | "up" | "down";
@@ -127,6 +157,67 @@ function splitFor(direction: Direction): { direction: SplitDirection; before: bo
   return { direction: "column", before: false };
 }
 
+/** Per-pane actions: tab this pane into another stack, add a new pane, close. */
+function PaneMenu({ stackId, otherStacks, closable, onTabInto, onRequestNewPane, onClose }: {
+  stackId: string;
+  otherStacks: ReadonlyArray<{ id: string; label: ReactNode }>;
+  closable: boolean;
+  onTabInto(stackId: string): void;
+  onRequestNewPane?(stackId: string): void;
+  onClose(): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  function toggle() {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({ top: rect.bottom + 4, left: Math.max(8, rect.right - 180) });
+    }
+    setOpen((value) => !value);
+  }
+
+  return (
+    <div className="sb-pane-menu-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="sb-icon-btn sb-pane-menu-btn"
+        aria-label="Pane actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={toggle}
+        onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+        </svg>
+      </button>
+      {open && CAN_PORTAL && createPortal(
+        <>
+          <button type="button" className="sb-pane-menu-backdrop" aria-label="Close pane menu" onClick={() => setOpen(false)} />
+          <div className="sb-pane-menu" role="menu" style={{ top: position.top, left: position.left }}>
+            {otherStacks.length > 0 && <p className="sb-pane-menu-label">Tab with</p>}
+            {otherStacks.map((stack) => (
+              <button key={stack.id} type="button" role="menuitem" onClick={() => { onTabInto(stack.id); setOpen(false); }}>
+                {stack.label}
+              </button>
+            ))}
+            {onRequestNewPane && (
+              <button type="button" role="menuitem" onClick={() => { onRequestNewPane(stackId); setOpen(false); }}>New pane…</button>
+            )}
+            {closable && (
+              <button type="button" role="menuitem" onClick={() => { onClose(); setOpen(false); }}>Close pane</button>
+            )}
+          </div>
+        </>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 /**
  * A nestable multiplexer: panes tile into resizable splits and tabbed stacks.
  * Drag a pane onto another pane's edge to split, or onto its centre to tab them
@@ -152,6 +243,9 @@ export function PaneLayout({
   surface = "component",
   theme,
   className,
+  ref,
+  paneMenu = "head",
+  onRequestNewPane,
 }: PaneLayoutProps) {
   const paneMap = useMemo(() => new Map(panes.map((pane) => [pane.id, pane])), [panes]);
   const paneIds = useMemo(() => panes.map((pane) => pane.id), [panes]);
@@ -511,6 +605,19 @@ export function PaneLayout({
     // A lone pane only gets a header when it declares actions to host.
     const showHead = tabbed || Boolean(activePane?.actions);
     const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
+    const otherStacks = listStacks(layout)
+      .filter((stack) => stack.id !== node.id)
+      .map((stack) => ({ id: stack.id, label: paneLabel(paneMap.get(stack.active), stack.active) }));
+    const menu = paneMenu === "off" ? null : (
+      <PaneMenu
+        stackId={node.id}
+        otherStacks={otherStacks}
+        closable={Boolean(activePane?.closable && onClosePane)}
+        onTabInto={(target) => commit(movePane(layout, node.active, target, "center"))}
+        onRequestNewPane={onRequestNewPane}
+        onClose={() => { if (activePane) requestClose(activePane.id, node.id); }}
+      />
+    );
     return (
       <div
         className={cx("sb-pane-stack", tabbed && "is-tabbed")}
@@ -556,6 +663,7 @@ export function PaneLayout({
             )}
             <div className="sb-pane-actions">
               {activePane?.actions}
+              {menu}
               {activePane?.closable && onClosePane && (
                 <button
                   type="button"
@@ -570,6 +678,7 @@ export function PaneLayout({
             </div>
           </div>
         )}
+        {!showHead && paneMenu === "hover" && menu && <div className="sb-pane-fab">{menu}</div>}
         <div className="sb-pane-body">
           {node.panes.map((paneId) => (
             <div
@@ -619,6 +728,24 @@ export function PaneLayout({
   }
 
   const ghostPane = drag ? paneMap.get(drag.paneId) : undefined;
+
+  useImperativeHandle(ref, () => ({
+    getLayout: () => layout,
+    setLayout: (next: Layout) => commit(next),
+    tabInto: (paneId: PaneId, targetStackId: string) => commit(movePane(layout, paneId, targetStackId, "center")),
+    movePane: (paneId: PaneId, targetStackId: string, zone: DropZone = "center") => commit(movePane(layout, paneId, targetStackId, zone)),
+    addPane: (paneId: PaneId, stackId: string) => commit(addPaneToStack(layout, stackId, paneId)),
+    activate: (paneId: PaneId) => {
+      const stack = stackOf(layout, paneId);
+      if (stack) commit(setActivePane(layout, stack.id, paneId));
+    },
+    close: (paneId: PaneId) => {
+      const stack = stackOf(layout, paneId);
+      if (!stack) return;
+      commit(removePane(layout, paneId, stack.id));
+      onClosePane?.(paneId);
+    },
+  }));
 
   return (
     <div

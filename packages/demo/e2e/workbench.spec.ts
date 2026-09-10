@@ -138,6 +138,27 @@ test("search filters the rows the rules evaluate", async ({ page }) => {
   await expect(page.locator(".sb-rules")).toContainText("1 rows");
 });
 
+test("tabs a pane through its actions menu", async ({ page }) => {
+  await reset(page);
+  const table = stackWith(page, ".table-surface");
+  await table.hover();
+  await table.getByRole("button", { name: "Pane actions" }).click();
+  await page.getByRole("menuitem", { name: "Explorer" }).click();
+  await expect(stackWith(page, ".sheetbase-explorer").getByRole("tab")).toHaveText(["Explorer", "Table"]);
+});
+
+test("re-opens a closed pane through the 'New pane…' action", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await analysis.getByRole("button", { name: "Close pane" }).click();
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(0);
+
+  await analysis.getByRole("button", { name: "Pane actions" }).click();
+  await page.getByRole("menuitem", { name: "New pane…" }).click();
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

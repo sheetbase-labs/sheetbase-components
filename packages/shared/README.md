@@ -48,6 +48,29 @@ tabs keeps its component state. Panes nest: a component can host its own
 pane to start drags from the component top bar (default), an inner
 `.sb-panel-heading`, or nowhere.
 
+### Tabs
+
+A `StackNode` holds one or more pane ids; more ids = more tabs. Add them:
+
+- **Declarative:** `{ kind: "stack", panes: ["schema", "rules", "search"], active: "schema" }`.
+- **Pure helpers:** `addPaneToStack`, `movePane(..., "center")`, `setActivePane`, `reorderStack`.
+- **Imperative handle:** `ref` gives `getLayout`, `setLayout`, `tabInto`, `movePane`, `addPane`, `activate`, `close`.
+
+```tsx
+const panes = useRef<PaneLayoutHandle>(null);
+<PaneLayout ref={panes} panes={panes} ... />
+panes.current?.tabInto("search", "analysis");   // tab Search into the analysis stack
+panes.current?.addPane("search", "analysis");   // place a pane the host just added to `panes`
+```
+
+A pane the host adds to `panes` at runtime must also be placed (`addPane`), because
+PaneLayout only auto-adds missing panes at load.
+
+The pane actions menu (`paneMenu`: `"head"` default, `"hover"` for lone panes,
+`"off"`) lists the other stacks under **Tab with** and a host **New pane…**
+action (`onRequestNewPane`). Dragging a tab onto another pane's centre also tabs
+them together.
+
 ### Keyboard
 
 - Tab strip: `Left`/`Right`/`Home`/`End` move and activate, `Alt`+`Shift`+`Left`/`Right` reorder, `Delete` closes.
