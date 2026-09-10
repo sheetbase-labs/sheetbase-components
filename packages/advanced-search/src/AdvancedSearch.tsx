@@ -292,7 +292,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
               <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
             </div>
             <div className="sb-topbar-actions">
-              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
               <button className="sb-btn" onClick={clear}>Clear</button>
             </div>
           </div>

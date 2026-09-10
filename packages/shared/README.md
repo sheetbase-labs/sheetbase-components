@@ -42,6 +42,10 @@ chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
 `SheetbaseShell` remains available for hosts that want the shared topbar/subbar
 frame around a layout.
 
+Theme ownership: passing a controlled `theme` to schema/rules/search/explorer
+hides their built-in toggle, so a host can own a single theme control instead of
+several synchronised ones.
+
 Pane content renders through stable portals, so moving a pane between stacks or
 tabs keeps its component state. Panes nest: a component can host its own
 `PaneLayout`, and each layout only handles its own drags. Set `dragHandle` on a

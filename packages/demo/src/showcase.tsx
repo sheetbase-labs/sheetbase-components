@@ -80,10 +80,10 @@ export function DemoTable({ theme: controlledTheme, onThemeChange, fields = tabl
             onFormat={(format) => tableRef.current?.applyFormat(format)}
             theme={theme}
             themeMode={controlledTheme ?? presentation.theme}
-            onThemeChange={(mode) => {
-              if (controlledTheme === undefined) setPresentation((current) => ({ ...current, theme: mode }));
+            onThemeChange={controlledTheme === undefined ? (mode) => {
+              setPresentation((current) => ({ ...current, theme: mode }));
               onThemeChange?.(mode);
-            }}
+            } : undefined}
           />
           <Spreadsheet
             ref={tableRef}

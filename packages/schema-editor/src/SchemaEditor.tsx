@@ -191,7 +191,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
               <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
             </div>
             <div className="sb-topbar-actions">
-              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
               <button className="sb-btn primary" onClick={addModel}>+ Model</button>
             </div>
           </div>

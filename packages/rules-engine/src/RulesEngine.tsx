@@ -179,7 +179,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
               <span className="sb-stat">{active} of {rules.length} active</span>
             </div>
             <div className="sb-topbar-actions">
-              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
               <button className="sb-btn primary" onClick={addRule}>+ Rule</button>
             </div>
           </div>

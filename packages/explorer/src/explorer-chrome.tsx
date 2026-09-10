@@ -5,7 +5,7 @@ import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popove
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 
-export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, setSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
   menu: Menu
   spec: ChartSpec
   dataset: Dataset
@@ -15,6 +15,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   exportStatus: string | null
   importStatus: string | null
   dark: boolean
+  showThemeToggle: boolean
   setSpec(action: SetStateAction<ChartSpec>): void
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
@@ -36,7 +37,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   return (<>
     <div className="explorer-commandbar explorer-commandbar-v4">
       <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
-      <span className="command-spacer"/><ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
+      <span className="command-spacer"/>{showThemeToggle && <ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />}{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
     <div className="sb-subbar explorer-subbar">
       <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
