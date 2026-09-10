@@ -12,6 +12,7 @@ export type {
   DataAdapter, DataRow, Dataset, ErrorMode, FilterLogic, FilterOperator,
   FilterRule, PaletteKind, SavedExploration,
 } from './lib/types'
+export type { AnalysisView, SummaryKind } from 'sheetbase-shared'
 export { sampleAdapter } from './lib/adapters/sample'
 export { datasetFromFile } from './lib/adapters/file'
 export { inferColumns } from './lib/schema'

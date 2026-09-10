@@ -5,18 +5,20 @@ import {
   ThemeToggleButton,
   WorkspaceProvider,
   applySearch,
+  applyView,
   createLocalStorageAdapter,
-  emptyRoot,
+  emptyView,
+  searchSpecFromView,
   loadInitialState,
   loadPaneLayoutState,
   useIdleSave,
   usePersistedTheme,
+  type AnalysisView,
   type DatasetQuery,
   type Layout,
   type PaneLayoutHandle,
   type PaneLayoutState,
   type PaneSpec,
-  type SearchSpec,
   type SheetbaseField,
 } from "sheetbase-shared";
 import { RulesEngine, type PipelineRule, type RulesEngineHandle } from "sheetbase-rulesengine";
@@ -73,10 +75,15 @@ export function Workbench() {
   const adapter = useMemo(() => createLocalStorageAdapter<PaneLayoutState>(), []);
   const graphAdapter = useMemo(() => createLocalStorageAdapter<SchemaGraph>(), []);
   const rulesAdapter = useMemo(() => createLocalStorageAdapter<PipelineRule[]>(), []);
-  const searchAdapter = useMemo(() => createLocalStorageAdapter<SearchSpec>(), []);
+  const searchAdapter = useMemo(() => createLocalStorageAdapter<AnalysisView>(), []);
   const [graph, setGraph] = useState<SchemaGraph>(() => loadInitialState(WORKBENCH_SCHEMA_KEY, graphAdapter, schemaStarter));
   const [rules, setRules] = useState<PipelineRule[]>(() => loadInitialState(WORKBENCH_RULES_KEY, rulesAdapter, rulesStarter));
-  const [searchSpec, setSearchSpec] = useState<SearchSpec>(() => loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, { filter: emptyRoot() }));
+  // One shared analysis view: search edits it and the explorer charts through it.
+  const [view, setView] = useState<AnalysisView>(() => {
+    const fallback = emptyView("mean");
+    const loaded = loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, fallback);
+    return { ...fallback, ...loaded, summary: loaded.summary ?? "mean" };
+  });
   const [query, setQuery] = useState<DatasetQuery>({});
   const [searchPreview, setSearchPreview] = useState(false);
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
@@ -91,10 +98,16 @@ export function Workbench() {
     () => headerFields.map((field) => ({ id: field.id, label: field.label, dataType: field.dataType })),
     [headerFields],
   );
-  const filteredRows = useMemo(() => applySearch(sampleRows, searchSpec), [searchSpec]);
+  // The full view (filter + sort + limit) drives the explorer and rules; the
+  // table's query has no limit, so the row counter tracks filter + sort only.
+  const viewRows = useMemo(() => applyView(sampleRows, view), [view]);
+  const filteredRows = useMemo(
+    () => applySearch(sampleRows, searchSpecFromView({ ...view, limit: undefined })),
+    [view],
+  );
   const explorerDataset = useMemo(
-    () => createExplorerDataset(filteredRows as readonly Record<string, unknown>[]),
-    [filteredRows],
+    () => createExplorerDataset(viewRows as readonly Record<string, unknown>[]),
+    [viewRows],
   );
   const closedAdapter = useMemo(() => createLocalStorageAdapter<string[]>(), []);
   const [closed, setClosed] = useState<ReadonlySet<string>>(
@@ -120,7 +133,7 @@ export function Workbench() {
 
   const panes: PaneSpec[] = [
     { id: "table", title: "Table", closable: true, content: <QueryTable theme={activeTheme} /> },
-    { id: "explorer", title: "Explorer", closable: true, content: <Explorer dataset={explorerDataset} theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
+    { id: "explorer", title: "Explorer", closable: true, content: <Explorer dataset={explorerDataset} view={view} onViewChange={setView} theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
     {
       id: "schema",
       title: "Schema",
@@ -151,7 +164,7 @@ export function Workbench() {
       title: "Rules",
       closable: true,
       actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
-      content: ({ tabbed }: { tabbed: boolean }) => <RulesEngine ref={rulesRef} chrome={tabbed ? "none" : "full"} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: ({ tabbed }: { tabbed: boolean }) => <RulesEngine ref={rulesRef} chrome={tabbed ? "none" : "full"} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={viewRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
@@ -167,8 +180,8 @@ export function Workbench() {
         <AdvancedSearch
           ref={searchRef}
           chrome={tabbed ? "none" : "full"}
-          value={searchSpec}
-          onChange={setSearchSpec}
+          value={view}
+          onChange={(next) => setView((current) => ({ ...current, ...next }))}
           preview={searchPreview}
           onPreviewChange={setSearchPreview}
           onDatasetQueryChange={(next) => setQuery(next ?? {})}
@@ -188,7 +201,7 @@ export function Workbench() {
     setLayout(workbenchLayout);
     setGraph(schemaStarter);
     setRules(rulesStarter);
-    setSearchSpec({ filter: emptyRoot() });
+    setView(emptyView("mean"));
     setHeaderFields(tableFields);
   }
 

@@ -298,6 +298,27 @@ test("search offers numeric comparators for number fields", async ({ page }) => 
   await expect(page.locator(".sb-workbench-tools")).toContainText("filtered 1498 / 1500 rows");
 });
 
+test("search and explorer share one analysis view", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Search" }) });
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await page.getByRole("button", { name: "+ Condition" }).first().click();
+  const condition = page.locator(".sb-filter-rule").first();
+  await condition.getByLabel("Field").selectOption("status");
+  await condition.getByLabel("Operator").selectOption("eq");
+  await condition.getByLabel("Value").fill("failed");
+
+  // The chart follows the search filter: only the failed group remains.
+  const chart = page.locator(".sheetbase-explorer");
+  await expect(chart.getByText("failed", { exact: true })).toBeVisible();
+  await expect(chart.getByText("pending", { exact: true })).toHaveCount(0);
+
+  // Grouping chosen in the explorer flows back into the search's Group by.
+  await chart.getByRole("button", { name: "Group" }).click();
+  await page.locator(".explorer-commandbar .tool-popover select").first().selectOption("material");
+  await expect(page.locator(".sb-search-controls select").first()).toHaveValue("material");
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

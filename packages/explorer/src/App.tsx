@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
+import { applyView, type AnalysisView } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { sampleAdapter } from './lib/adapters/sample'
 import { buildChart } from './lib/chart'
 import { filteredRows, ROW_ID } from './lib/explore'
+import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 import { runSqlAsync } from './lib/sql'
-import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
+import type { ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, SavedExploration } from './lib/types'
 import {
   ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
 } from './explorer-chrome'
@@ -35,6 +37,13 @@ export interface AppProps {
   spec?: ChartSpec
   /** Receives every spec edit; the host persists it into block data. */
   onSpecChange?(spec: ChartSpec): void
+  /**
+   * Shared analysis view (filter tree, grouping, summary, sort, limit). When
+   * provided the explorer charts through it and reports Group/Filter edits
+   * through onViewChange, so a host can keep search and charts in sync.
+   */
+  view?: AnalysisView
+  onViewChange?(view: AnalysisView): void
   /**
    * Draw the stage frame (padded surround, bordered card). Default true;
    * false renders just the explorer, e.g. inside a host surface.
@@ -74,13 +83,17 @@ export function App(props: AppProps = {}) {
   const onSpecChangeRef = useRef(props.onSpecChange)
   const controlledSpecRef = useRef(props.spec)
   const specRef = useRef(internalSpec)
+  const viewRef = useRef(props.view)
+  const onViewChangeRef = useRef(props.onViewChange)
   useEffect(() => {
     // Latest-ref sync for the stable setSpec below; effects run post-commit,
     // so handlers always observe committed values and render stays pure.
     onSpecChangeRef.current = props.onSpecChange
     controlledSpecRef.current = props.spec
     specRef.current = spec
-  }, [props.onSpecChange, props.spec, spec])
+    viewRef.current = props.view
+    onViewChangeRef.current = props.onViewChange
+  }, [props.onSpecChange, props.spec, props.view, props.onViewChange, spec])
   const setSpec = useCallback((action: SetStateAction<ChartSpec>) => {
     // Resolved outside the updater: React may replay updaters, so the parent
     // notification must not live inside one.
@@ -199,12 +212,40 @@ export function App(props: AppProps = {}) {
     resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
   }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
 
-  const definition = useMemo(() => dataset ? buildChart(dataset, spec, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window }))) : null, [dataset, spec, selectedRow, setSpec])
-  const visibleRows = useMemo(() => dataset ? filteredRows(dataset, spec) : [], [dataset, spec])
-  const seriesField = spec.color ?? spec.group
-  const hiddenSeries = useMemo(() => new Set(spec.hiddenSeries ?? []), [spec.hiddenSeries])
+  // The shared analysis view, when the host provides one, overrides the
+  // spec's filters/group/summary and adds sort/limit to the row pipeline.
+  const view = props.view
+  const viewFilters = useMemo(() => (view ? filtersFromTree(view.filter) : null), [view])
+  const chartSpec = useMemo<ChartSpec>(() => (view && viewFilters
+    ? { ...spec, filters: viewFilters.rules, filterLogic: viewFilters.logic, group: view.groupBy, aggregate: view.summary }
+    : spec), [spec, view, viewFilters])
+  const chartSpecRef = useRef(chartSpec)
+  useEffect(() => { chartSpecRef.current = chartSpec }, [chartSpec])
+  /** Route Group/Filter edits through the view when the host controls one. */
+  const setAnalysisSpec = useCallback((action: SetStateAction<ChartSpec>) => {
+    const current = chartSpecRef.current
+    const next = typeof action === 'function' ? action(current) : action
+    if (!viewRef.current) { setSpec(next); return }
+    const stylePatch: Partial<ChartSpec> = {}
+    if (next.showRawPoints !== current.showRawPoints) stylePatch.showRawPoints = next.showRawPoints
+    if (next.hiddenSeries !== current.hiddenSeries) stylePatch.hiddenSeries = next.hiddenSeries
+    if (Object.keys(stylePatch).length) setSpec((prev) => ({ ...prev, ...stylePatch }))
+    onViewChangeRef.current?.({
+      ...viewRef.current,
+      filter: treeFromFilters(next.filters ?? [], next.filterLogic ?? 'and'),
+      groupBy: next.group,
+      summary: next.aggregate,
+    })
+  }, [setSpec])
+  const viewRows = useMemo<DataRow[] | null>(() => (view && dataset ? applyView(dataset.rows, view) : null), [view, dataset])
+  const chartDataset = useMemo<Dataset | null>(() => (dataset && viewRows ? { ...dataset, rows: viewRows } : dataset), [dataset, viewRows])
+
+  const definition = useMemo(() => chartDataset ? buildChart(chartDataset, chartSpec, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window }))) : null, [chartDataset, chartSpec, selectedRow, setSpec])
+  const visibleRows = useMemo(() => chartDataset ? filteredRows(chartDataset, chartSpec) : [], [chartDataset, chartSpec])
+  const seriesField = chartSpec.color ?? chartSpec.group
+  const hiddenSeries = useMemo(() => new Set(chartSpec.hiddenSeries ?? []), [chartSpec.hiddenSeries])
   const seriesValues = useMemo(() => {
-    if (!dataset || !seriesField) return []
+    if (!chartDataset || !seriesField) return []
     const seen = new Set<string>()
     const values: string[] = []
     for (const row of visibleRows) {
@@ -336,8 +377,8 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={spec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
-    <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={spec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${spec.kind} chart of ${spec.y} by ${spec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
+    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${chartSpec.kind} chart of ${chartSpec.y} by ${chartSpec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
   </section></main>
   {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)

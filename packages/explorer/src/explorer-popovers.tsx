@@ -196,12 +196,13 @@ function MenuButton({ id, label, detail, active, onToggle }: {
   return <button className={`explorer-tool ${active ? 'active' : ''}`} onClick={() => onToggle(id)}><span>{label}</span>{detail && <small>{detail}</small>}<b>⌄</b></button>
 }
 
-export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onField, onAutoKind, onChoosePlot }: {
+export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalysisSpec, onField, onAutoKind, onChoosePlot }: {
   menu: Menu
   onMenuToggle(id: Exclude<Menu, null>): void
   spec: ChartSpec
   dataset: Dataset
   setSpec(action: SetStateAction<ChartSpec>): void
+  onAnalysisSpec(action: SetStateAction<ChartSpec>): void
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
   onChoosePlot(kind: ChartKind): void
@@ -210,8 +211,8 @@ export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onField,
     <>
       <div className="tool-anchor"><MenuButton id="plot" label="Plot" detail={plotKinds.find((item) => item.kind === spec.kind)?.label} active={menu === 'plot'} onToggle={onMenuToggle} />{menu === 'plot' && <div className="tool-popover plot-popover"><PlotPopover activeKind={spec.kind} onChoose={onChoosePlot} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="fields" label="Fields" detail={[spec.x && `X ${spec.x}`, spec.y && `Y ${spec.y}`].filter(Boolean).join(' · ')} active={menu === 'fields'} onToggle={onMenuToggle} />{menu === 'fields' && <div className="tool-popover inspector-popover"><FieldsPopover spec={spec} columns={dataset.columns} onField={onField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} /></div>}</div>
-      <div className="tool-anchor"><MenuButton id="group" label="Group" detail={spec.group ?? (spec.aggregate === 'none' ? undefined : spec.aggregate)} active={menu === 'group'} onToggle={onMenuToggle} />{menu === 'group' && <div className="tool-popover inspector-popover"><GroupPopover spec={spec} columns={dataset.columns} setSpec={setSpec} /></div>}</div>
-      <div className="tool-anchor"><MenuButton id="filter" label="Filter" detail={spec.filters?.length ? String(spec.filters.length) : undefined} active={menu === 'filter'} onToggle={onMenuToggle} />{menu === 'filter' && <div className="tool-popover inspector-popover filter-popover"><FilterPopover spec={spec} dataset={dataset} setSpec={setSpec} /></div>}</div>
+      <div className="tool-anchor"><MenuButton id="group" label="Group" detail={spec.group ?? (spec.aggregate === 'none' ? undefined : spec.aggregate)} active={menu === 'group'} onToggle={onMenuToggle} />{menu === 'group' && <div className="tool-popover inspector-popover"><GroupPopover spec={spec} columns={dataset.columns} setSpec={onAnalysisSpec} /></div>}</div>
+      <div className="tool-anchor"><MenuButton id="filter" label="Filter" detail={spec.filters?.length ? String(spec.filters.length) : undefined} active={menu === 'filter'} onToggle={onMenuToggle} />{menu === 'filter' && <div className="tool-popover inspector-popover filter-popover"><FilterPopover spec={spec} dataset={dataset} setSpec={onAnalysisSpec} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="error" label="Error" detail={(spec.errorMode ?? 'none') === 'none' ? undefined : String(spec.errorMode).toUpperCase()} active={menu === 'error'} onToggle={onMenuToggle} />{menu === 'error' && <div className="tool-popover inspector-popover"><ErrorPopover spec={spec} dataset={dataset} setSpec={setSpec} /></div>}</div>
     </>
   )

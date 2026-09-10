@@ -5,7 +5,7 @@ import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popove
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 
-export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
   menu: Menu
   spec: ChartSpec
   dataset: Dataset
@@ -17,6 +17,8 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   dark: boolean
   showThemeToggle: boolean
   setSpec(action: SetStateAction<ChartSpec>): void
+  /** Group/Filter edits (view-aware when the host controls an analysis view). */
+  onAnalysisSpec(action: SetStateAction<ChartSpec>): void
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
   onChoosePlot(kind: ChartKind): void
@@ -36,7 +38,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
 }) {
   return (<>
     <div className="explorer-commandbar explorer-commandbar-v4">
-      <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
+      <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onAnalysisSpec={onAnalysisSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
       <span className="command-spacer"/>{showThemeToggle && <ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />}{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
     <div className="sb-subbar explorer-subbar">
