@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   PaneLayout,
   ThemeToggleButton,
+  createLocalStorageAdapter,
+  loadInitialState,
   usePersistedTheme,
   type Layout,
   type PaneSpec,
@@ -20,7 +22,9 @@ import {
   searchRows,
 } from "./showcase";
 
-/** Starts with the table large on the left, explorer top-right, analysis tabs bottom-right. */
+const WORKBENCH_LAYOUT_KEY = "sheetbase-demo:workbench";
+
+/** Start with the table large on the left, explorer top-right, analysis tabs bottom-right. */
 const workbenchLayout: Layout = {
   kind: "split",
   id: "wb-root",
@@ -43,11 +47,12 @@ const workbenchLayout: Layout = {
 
 /**
  * Demonstrates the shared pane multiplexer: all five components docked as panes,
- * with drag-to-dock tabs and resizable splits, inside the shared shell.
+ * with drag-to-dock tabs and resizable splits.
  */
 export function Workbench() {
   const { activeTheme, toggleTheme } = usePersistedTheme({});
-  const [layout, setLayout] = useState<Layout>(workbenchLayout);
+  const adapter = useMemo(() => createLocalStorageAdapter<Layout>(), []);
+  const [layout, setLayout] = useState<Layout>(() => loadInitialState(WORKBENCH_LAYOUT_KEY, adapter, workbenchLayout));
   const [graph, setGraph] = useState<SchemaGraph>(schemaStarter);
   const [rules, setRules] = useState<PipelineRule[]>(rulesStarter);
   const onThemeChange = () => toggleTheme();
@@ -75,6 +80,8 @@ export function Workbench() {
           panes={panes}
           layout={layout}
           onLayoutChange={setLayout}
+          persistKey={WORKBENCH_LAYOUT_KEY}
+          adapter={adapter}
           theme={activeTheme}
           className="sb-panes--fit"
         />

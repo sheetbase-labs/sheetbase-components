@@ -44,7 +44,11 @@ export interface PaneLayoutProps {
   /** Initial layout when uncontrolled. Defaults to one stack of every pane. */
   defaultLayout?: Layout;
   onLayoutChange?: (next: Layout) => void;
-  /** Persist the layout under this key via `adapter` (uncontrolled only). */
+  /**
+   * Persist the layout under this key via `adapter`. Saves run for controlled
+   * and uncontrolled layouts; loads only apply when uncontrolled (a controlled
+   * host owns its initial state).
+   */
   persistKey?: string;
   adapter?: PersistenceAdapter<Layout>;
   /** Called when a `closable` pane's close button is pressed. */
@@ -107,10 +111,14 @@ export function PaneLayout({
   const paneIds = useMemo(() => panes.map((pane) => pane.id), [panes]);
 
   const [innerLayout, setInnerLayout] = useState<Layout>(() =>
-    loadInitialState(persistKey, adapter, controlledLayout ?? defaultLayout ?? singleStack(paneIds)),
+    controlledLayout !== undefined
+      ? controlledLayout
+      : loadInitialState(persistKey, adapter, defaultLayout ?? singleStack(paneIds)),
   );
   const layout = controlledLayout !== undefined ? controlledLayout : innerLayout;
-  useIdleSave(controlledLayout === undefined ? persistKey : undefined, innerLayout, adapter);
+  // Persist whatever is current. Controlled hosts load their own initial state
+  // (see the README) because the `layout` prop wins over the stored value.
+  useIdleSave(persistKey, layout, adapter);
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const stackRefs = useRef(new Map<string, HTMLElement>());
