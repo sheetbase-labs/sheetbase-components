@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   PaneLayout,
+  SheetbaseShell,
   ThemeToggleButton,
   applySearch,
   createLocalStorageAdapter,
@@ -166,7 +167,7 @@ export function Workbench() {
 
   return (
     <div className="sb-demo-stage">
-      <div className="sb-workbench">
+      <SheetbaseShell theme={activeTheme} header={false} className="sb-demo-workbench">
         <PaneLayout
           panes={panes}
           layout={layout}
@@ -174,10 +175,11 @@ export function Workbench() {
           persistKey={WORKBENCH_LAYOUT_KEY}
           adapter={adapter}
           onClosePane={(id) => setClosed((current) => new Set(current).add(id))}
+          surface="shared"
           theme={activeTheme}
           className="sb-panes--fit sb-workbench-panes"
         />
-      </div>
+      </SheetbaseShell>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
         {filteredRows.length !== sampleRows.length && <span className="sb-muted">filtered {filteredRows.length} / {sampleRows.length} rows</span>}
         <button className="sb-btn" onClick={reset}>Reset layout</button>

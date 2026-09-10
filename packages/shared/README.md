@@ -32,6 +32,11 @@ stack renders a lightweight tab row; set `chrome="none"` on schema/rules/search
 and re-home their actions through `PaneSpec.actions` (backed by the components'
 imperative handles) so the pane bar is the only chrome.
 
+For one app surface around the whole layout instead of one per component, pass
+`surface="shared"` and wrap the layout in a host frame such as
+`<SheetbaseShell header={false}>`. PaneLayout then neutralises each nested
+component's outer app frame, so only their inner panels show.
+
 Pass `theme` when PaneLayout is not already inside a `.sheetbase-scope` so pane
 chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
 `SheetbaseShell` remains available for hosts that want the shared topbar/subbar

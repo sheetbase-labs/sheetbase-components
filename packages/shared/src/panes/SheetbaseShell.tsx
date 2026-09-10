@@ -12,6 +12,11 @@ export interface SheetbaseShellProps {
   subbar?: ReactNode;
   /** Renders the shared theme toggle when provided. */
   onToggleTheme?: () => void;
+  /**
+   * Draw the topbar/subbar chrome. Set false for a bare app surface — the host
+   * wants the `.sb-frame` shell without a header. Default true.
+   */
+  header?: boolean;
   /** Draw the framed card (`.sb-frame`). Set false to nest inside an existing shell. Default true. */
   frame?: boolean;
   className?: string;
@@ -35,6 +40,7 @@ export function SheetbaseShell({
   actions,
   subbar,
   onToggleTheme,
+  header = true,
   frame = true,
   className,
   bodyClassName,
@@ -42,21 +48,23 @@ export function SheetbaseShell({
 }: SheetbaseShellProps) {
   const chrome = (
     <>
-      <div className="sb-topbar">
-        {toolbar}
-        <div className="sb-topbar-actions">
-          {actions}
-          {onToggleTheme && <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />}
+      {header && (
+        <div className="sb-topbar">
+          {toolbar}
+          <div className="sb-topbar-actions">
+            {actions}
+            {onToggleTheme && <ThemeToggleButton theme={theme} onToggle={onToggleTheme} />}
+          </div>
         </div>
-      </div>
-      {subbar && <div className="sb-subbar sb-shell-subbar">{subbar}</div>}
+      )}
+      {header && subbar && <div className="sb-subbar sb-shell-subbar">{subbar}</div>}
       <div className={cx("sb-shell-body", bodyClassName)}>{children}</div>
     </>
   );
   return (
     <div className={cx("sheetbase-scope", "sb-shell", className)} data-theme={theme}>
       {frame ? (
-        <div className={cx("sb-frame", "sb-shell-frame", subbar ? "has-subbar" : false)}>{chrome}</div>
+        <div className={cx("sb-frame", "sb-shell-frame", !header && "no-topbar", header && subbar ? "has-subbar" : false)}>{chrome}</div>
       ) : (
         <div className="sb-shell-flat">{chrome}</div>
       )}

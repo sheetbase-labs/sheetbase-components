@@ -93,6 +93,12 @@ test("schema body is three resizable panes and drives the table header", async (
   await expect(page.locator(".table-surface").getByText("name", { exact: true })).toBeVisible();
 });
 
+test("one app surface wraps the workbench", async ({ page }) => {
+  await reset(page);
+  await expect(page.locator(".sb-demo-workbench > .sb-frame")).toHaveCount(1);
+  await expect(page.locator(".sb-workbench-panes")).toHaveClass(/sb-panes--shared/);
+});
+
 test("frameless panes own a single bar with re-homed actions", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

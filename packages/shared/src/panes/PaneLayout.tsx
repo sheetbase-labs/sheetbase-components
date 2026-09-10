@@ -79,6 +79,12 @@ export interface PaneLayoutProps {
    * preview, drop zones). Pass the host theme when PaneLayout is not already
    * inside a `.sheetbase-scope` (e.g. a bare page or a `SheetbaseShell`).
    */
+  /**
+   * `"component"` (default): each pane's component frame is its own app surface.
+   * `"shared"`: neutralise nested app frames so one host surface wraps every
+   * pane — components contribute only their inner panels.
+   */
+  surface?: "component" | "shared";
   theme?: ThemeMode;
   className?: string;
 }
@@ -143,6 +149,7 @@ export function PaneLayout({
   adapter,
   onClosePane,
   minPaneSize = 140,
+  surface = "component",
   theme,
   className,
 }: PaneLayoutProps) {
@@ -615,7 +622,7 @@ export function PaneLayout({
 
   return (
     <div
-      className={cx("sb-panes", theme && "sheetbase-scope", className)}
+      className={cx("sb-panes", surface === "shared" && "sb-panes--shared", theme && "sheetbase-scope", className)}
       data-theme={theme}
       data-dragging={drag ? "true" : undefined}
       ref={rootRef}
