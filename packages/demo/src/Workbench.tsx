@@ -199,6 +199,7 @@ export function Workbench() {
       </SheetbaseShell>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
         {filteredRows.length !== sampleRows.length && <span className="sb-muted">filtered {filteredRows.length} / {sampleRows.length} rows</span>}
+        <span className="sb-muted" title="demo build">{__BUILD__}</span>
         <button className="sb-btn" onClick={reset}>Reset layout</button>
         <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
       </div>

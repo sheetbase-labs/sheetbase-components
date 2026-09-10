@@ -18,7 +18,6 @@ import { useIdleSave, type PersistenceAdapter } from "../persistence";
 import type { ThemeMode } from "../ThemeToggle";
 import {
   addPaneToStack,
-  findStack,
   listStacks,
   loadPaneLayoutState,
   movePane,
@@ -355,6 +354,23 @@ export function PaneLayout({
       }
       return { stackId, zone, tabIndex: null };
     }
+    // Not over a pane (e.g. a splitter gutter): fall back to the nearest stack
+    // so a drop never silently does nothing.
+    const root = rootRef.current?.getBoundingClientRect();
+    if (root && x >= root.left && x <= root.right && y >= root.top && y <= root.bottom) {
+      let nearestId: string | null = null;
+      let nearestDistance = Infinity;
+      for (const [stackId, rect] of rects) {
+        const dx = x - (rect.left + rect.width / 2);
+        const dy = y - (rect.top + rect.height / 2);
+        const distance = dx * dx + dy * dy;
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestId = stackId;
+        }
+      }
+      if (nearestId) return { stackId: nearestId, zone: "center", tabIndex: null };
+    }
     return null;
   }
 
@@ -370,18 +386,15 @@ export function PaneLayout({
     // within it); a drop on a pane body splits (centre docks right); a drop on
     // its own pane body pops it out.
     type DropAction =
-      | { kind: "reorder"; stackId: string; index: number }
       | { kind: "tab"; stackId: string }
       | { kind: "split"; stackId: string; zone: DropZone }
       | { kind: "pop" };
     const resolveDrop = (hit: { stackId: string; zone: DropZone; tabIndex: number | null } | null): DropAction | null => {
       if (!hit) return null;
-      if (hit.tabIndex !== null) {
-        return hit.stackId === stackId
-          ? { kind: "reorder", stackId, index: hit.tabIndex }
-          : { kind: "tab", stackId: hit.stackId };
-      }
-      if (hit.stackId === stackId && hit.zone === "center") return { kind: "pop" };
+      // Within its own group, a drop always pops the pane out — never a no-op
+      // reorder that leaves it looking stuck as a tab.
+      if (hit.stackId === stackId) return { kind: "pop" };
+      if (hit.tabIndex !== null) return { kind: "tab", stackId: hit.stackId };
       return { kind: "split", stackId: hit.stackId, zone: hit.zone === "center" ? "right" : hit.zone };
     };
     const preview = (drop: DropAction | null): { overStackId: string | null; zone: DropZone | null } => {
@@ -420,14 +433,6 @@ export function PaneLayout({
       const drop = resolveDrop(hitTest(native.clientX, native.clientY));
       setDrag(null);
       if (!drop) return;
-      if (drop.kind === "reorder") {
-        const stack = findStack(layout, drop.stackId);
-        const hovered = stack?.panes[drop.index];
-        const without = stack?.panes.filter((id) => id !== paneId) ?? [];
-        const index = hovered ? without.indexOf(hovered) : -1;
-        if (index >= 0) commit(reorderStack(layout, drop.stackId, paneId, index));
-        return;
-      }
       if (drop.kind === "tab") {
         commit(movePane(layout, paneId, drop.stackId, "center"));
         return;

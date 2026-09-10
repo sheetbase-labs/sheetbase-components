@@ -1,0 +1,26 @@
+const path = require("path");
+const { webkit } = require("@playwright/test");
+const exe = path.join(process.env.HOME, "Library/Caches/ms-playwright/webkit-2336/pw_run.sh");
+(async () => {
+  const b = await webkit.launch({ executablePath: exe });
+  const p = await b.newPage({ viewport: { width: 1600, height: 1000 } });
+  p.on("pageerror", (e) => console.log("PAGEERROR", e.message));
+  await p.goto("http://localhost:4205/", { waitUntil: "networkidle" });
+  await p.evaluate(() => localStorage.clear());
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(1800);
+  const dump = () => p.evaluate(() => [...document.querySelectorAll(".sb-pane-stack")].filter((s) => s.closest(".sb-panes")?.classList.contains("sb-workbench-panes")).map((s) => ({ tabs: [...s.querySelectorAll('[role="tab"]')].map((t) => t.textContent) })));
+  console.log("build:", await p.locator(".sb-workbench-tools .sb-muted").first().textContent().catch(() => "?"));
+  const table = p.locator(".sb-pane-stack").filter({ has: p.locator(".table-surface") });
+  const tb = await table.boundingBox();
+  const tab = await p.getByRole("tab", { name: "Search" }).boundingBox();
+  await p.mouse.move(tab.x + tab.width / 2, tab.y + tab.height / 2);
+  await p.mouse.down();
+  await p.mouse.move(tb.x + tb.width / 2, tb.y + tb.height * 0.6, { steps: 16 });
+  await p.waitForTimeout(250);
+  console.log("webkit overlay:", await p.evaluate(() => document.querySelector(".sb-drop-zone")?.className ?? "none"));
+  await p.mouse.up();
+  await p.waitForTimeout(500);
+  console.log("webkit after:", JSON.stringify(await dump()));
+  await b.close();
+})();

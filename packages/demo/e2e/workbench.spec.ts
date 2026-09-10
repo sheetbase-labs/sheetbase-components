@@ -241,13 +241,14 @@ test("dropping a pane on a tab group adds a tab", async ({ page }) => {
   await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules", "Search", "Table"]);
 });
 
-test("dragging a tab within its own tab strip reorders it", async ({ page }) => {
+test("dragging a tab within its own group pops it out", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
   await dragTabOnto(page, "Search", page.getByRole("tab", { name: "Schema" }));
 
-  await expect(analysis.getByRole("tab")).toHaveText(["Search", "Schema", "Rules"]);
-  await expect.poll(() => topStacks(page)).toBe(3);
+  await expect.poll(() => topStacks(page)).toBe(4);
+  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules"]);
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
