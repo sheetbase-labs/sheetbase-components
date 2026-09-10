@@ -124,9 +124,9 @@ test("grouped panes carry actions in the tab strip, not a second bar", async ({ 
   await expect(analysis.getByRole("button", { name: "+ Model" })).toBeVisible();
   await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(0);
 
-  // Their internal bodies still host panes.
+  // Their internal bodies still host panes (search shows filters only by default).
   await expect(page.locator(".sb-rules .sb-pane-stack")).toHaveCount(2);
-  await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(2);
+  await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(1);
 });
 
 test("rules dry-run evaluates the table rows", async ({ page }) => {
@@ -274,9 +274,11 @@ test("a search filter drives the query-driven table", async ({ page }) => {
   await expect(table).toContainText("SMP-2084");
   await expect(table).not.toContainText("SMP-2087");
 
-  // Turning the search preview off hides the search's own preview pane.
-  await analysis.getByRole("button", { name: "Preview" }).click();
+  // The search preview is off by default in the workbench (only the Table
+  // pane shows a table); the Preview action brings it back.
   await expect(page.locator(".sb-search .sb-table")).toHaveCount(0);
+  await analysis.getByRole("button", { name: "Preview" }).click();
+  await expect(page.locator(".sb-search .sb-table")).toHaveCount(1);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {

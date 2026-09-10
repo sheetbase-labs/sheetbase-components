@@ -77,7 +77,7 @@ export function Workbench() {
   const [rules, setRules] = useState<PipelineRule[]>(() => loadInitialState(WORKBENCH_RULES_KEY, rulesAdapter, rulesStarter));
   const [searchSpec, setSearchSpec] = useState<SearchSpec>(() => loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, { filter: emptyRoot() }));
   const [query, setQuery] = useState<DatasetQuery>({});
-  const [searchPreview, setSearchPreview] = useState(true);
+  const [searchPreview, setSearchPreview] = useState(false);
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
   const workspace = useMemo(
     () => ({ fields: headerFields as readonly SheetbaseField[], rows: sampleRows, query }),
@@ -111,7 +111,7 @@ export function Workbench() {
 
   const panes: PaneSpec[] = [
     { id: "table", title: "Table", closable: true, content: <QueryTable theme={activeTheme} /> },
-    { id: "explorer", title: "Explorer", closable: true, content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} /> },
+    { id: "explorer", title: "Explorer", closable: true, content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
     {
       id: "schema",
       title: "Schema",

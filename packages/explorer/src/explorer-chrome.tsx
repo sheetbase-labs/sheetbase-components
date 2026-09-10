@@ -76,17 +76,20 @@ export function useDatasetSwap(dataset: Dataset | null): boolean {
   return false
 }
 
-export function ExplorerFrame({ framed = true, rootRef, panelCollapsed, panelHeight, children }: {
+export function ExplorerFrame({ framed = true, rootRef, panel = true, panelCollapsed, panelHeight, children }: {
   framed?: boolean
   rootRef: RefObject<HTMLDivElement | null>
+  /** Render the bottom data/SQL panel. Default true. */
+  panel?: boolean
   panelCollapsed: boolean
   panelHeight: number
   children: ReactNode
 }) {
+  const rows = !panel ? 'minmax(0, 1fr)' : panelCollapsed ? 'minmax(0, 1fr) 34px' : `minmax(0, 1fr) ${panelHeight}px`
   return (
     <div ref={rootRef} className={framed ? 'sheetbase-explorer framed' : 'sheetbase-explorer'}>
       {framed
-        ? <div className="app-shell explorer-app-v3"><div className="explorer-frame explorer-frame-v3 explorer-frame-v4" style={{ gridTemplateRows: panelCollapsed ? 'minmax(0, 1fr) 34px' : `minmax(0, 1fr) ${panelHeight}px` }}>{children}</div></div>
+        ? <div className="app-shell explorer-app-v3"><div className="explorer-frame explorer-frame-v3 explorer-frame-v4" style={{ gridTemplateRows: rows }}>{children}</div></div>
         : children}
     </div>
   )
