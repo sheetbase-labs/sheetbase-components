@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { loadInitialState, useIdleSave, type PersistenceAdapter } from "../persistence";
+import type { ThemeMode } from "../ThemeToggle";
 import {
   movePane,
   setActivePane,
@@ -50,6 +51,12 @@ export interface PaneLayoutProps {
   onClosePane?: (id: PaneId) => void;
   /** Resize floor in pixels applied to splitter drags. Default 140. */
   minPaneSize?: number;
+  /**
+   * Establishes the shared theme scope for pane chrome (splitter, tabs, drag
+   * preview, drop zones). Pass the host theme when PaneLayout is not already
+   * inside a `.sheetbase-scope` (e.g. a bare page or a `SheetbaseShell`).
+   */
+  theme?: ThemeMode;
   className?: string;
 }
 
@@ -93,6 +100,7 @@ export function PaneLayout({
   adapter,
   onClosePane,
   minPaneSize = 140,
+  theme,
   className,
 }: PaneLayoutProps) {
   const paneMap = useMemo(() => new Map(panes.map((pane) => [pane.id, pane])), [panes]);
@@ -346,7 +354,11 @@ export function PaneLayout({
   const ghostPane = drag ? paneMap.get(drag.paneId) : undefined;
 
   return (
-    <div className={cx("sb-panes", className)} data-dragging={drag ? "true" : undefined}>
+    <div
+      className={cx("sb-panes", theme && "sheetbase-scope", className)}
+      data-theme={theme}
+      data-dragging={drag ? "true" : undefined}
+    >
       {layout ? renderNode(layout) : <p className="sb-muted" style={{ padding: 14 }}>No panes.</p>}
       {drag && (
         <div className="sb-pane-drag-ghost" style={{ left: drag.x, top: drag.y }}>

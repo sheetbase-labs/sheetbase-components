@@ -75,6 +75,7 @@ export function Workbench() {
           panes={panes}
           layout={layout}
           onLayoutChange={setLayout}
+          theme={activeTheme}
           className="sb-panes--fit"
         />
       </div>

@@ -50,6 +50,12 @@ describe("PaneLayout", () => {
     expect(html).toMatch(/aria-selected="false"[^>]*>Alpha/);
     expect(html).toMatch(/aria-selected="true"[^>]*>Beta/);
   });
+
+  it("establishes a theme scope when given a theme", () => {
+    const html = renderToStaticMarkup(<PaneLayout panes={panes} theme="dark" />);
+    expect(html).toContain("sheetbase-scope");
+    expect(html).toContain('data-theme="dark"');
+  });
 });
 
 describe("SheetbaseShell", () => {
