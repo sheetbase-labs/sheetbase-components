@@ -29,3 +29,45 @@
 .sb-demo-all:has([data-theme="dark"]) > section > h2 { color: #a8a4af; }
 /* Schema/rules/search cards size to the page column. */
 .sb-demo-all > section > .sb-frame { width: 100%; }
+
+/* View switch (fixed, above either view). */
+.sb-demo-switch {
+  position: fixed;
+  z-index: 2000;
+  top: 14px; right: 16px;
+  display: flex; gap: 2px; padding: 3px;
+  border: 1px solid var(--border, #d3d3d3);
+  border-radius: 8px;
+  background: var(--panel, #fff);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 10%);
+  font: 500 11px/1 var(--font-sans, "Instrument Sans", Inter, system-ui, sans-serif);
+}
+.sb-demo-switch button {
+  height: 24px; padding: 0 10px;
+  border: 0; border-radius: 5px; background: transparent;
+  color: var(--muted, #737373); cursor: pointer;
+}
+.sb-demo-switch button:hover { color: var(--text, #242424); }
+.sb-demo-switch button.active { background: var(--accent, #7652ef); color: #fff; }
+
+/* Workbench: seat the shell on the stage and fill it. */
+.sb-demo-workbench {
+  width: min(1600px, calc(100vw - 88px));
+  height: min(930px, calc(100vh - 88px));
+  min-height: 680px;
+}
+.sb-demo-workbench > .sb-frame { width: 100%; height: 100%; min-height: 0; }
+
+/* Panes free each component from its fixed demo floor so it fits the pane. */
+.sb-panes--flush .sb-schema-body,
+.sb-panes--flush .sb-schema-canvas,
+.sb-panes--flush .sb-rules-body,
+.sb-panes--flush .sb-search-body { min-height: 0; }
+
+/* Workbench: framed explorer fills its pane instead of its 100vh stage. */
+.sb-panes--flush .sb-pane-view > .sheetbase-explorer > .app-shell {
+  width: 100%; height: 100%; min-height: 0; padding: 0; background: transparent;
+}
+.sb-panes--flush .sb-pane-view > .sheetbase-explorer .explorer-frame { height: 100%; min-height: 0; }
+/* Give the explorer chart room when the pane is shorter than its 930px stage. */
+.sb-panes--flush .sb-pane-view > .sheetbase-explorer .explorer-frame { grid-template-rows: 48px minmax(140px, 1fr) 200px; }

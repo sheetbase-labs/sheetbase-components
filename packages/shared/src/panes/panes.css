@@ -1,0 +1,199 @@
+/*
+ * Sheetbase panes — nestable split layout plus the shell frame.
+ *
+ * Shares the theme tokens and chrome primitives in theme.css/shell.css:
+ * `.sb-frame`, `.sb-topbar`, `.sb-subbar`, `.sb-panel-heading`. Import after
+ * `sheetbase-shared/theme.css`.
+ */
+
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+.sb-shell-body {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sb-frame.sb-shell-frame { grid-template-rows: 33px minmax(0, 1fr); }
+.sb-frame.sb-shell-frame.has-subbar { grid-template-rows: 33px auto minmax(0, 1fr); }
+.sb-shell-flat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+}
+.sb-shell-flat > .sb-topbar { margin: 0; }
+.sb-shell-flat > .sb-subbar { border-radius: 0; }
+.sb-shell-label { color: var(--muted); font-size: var(--meta-size); font-weight: 500; }
+
+/* ── Layout container ──────────────────────────────────────────────────── */
+.sb-panes {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+.sb-panes[data-dragging] { cursor: grabbing; }
+
+.sb-split {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+.sb-split.is-row { flex-direction: row; }
+.sb-split.is-column { flex-direction: column; }
+.sb-split-cell {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.sb-split-cell > * { flex: 1 1 0; min-height: 0; min-width: 0; }
+
+/* Gutter doubles as the pointer target and the keyboard-resizable separator. */
+.sb-resizer {
+  position: relative;
+  flex: none;
+  z-index: 2;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.sb-split.is-row > .sb-resizer { width: 6px; cursor: col-resize; }
+.sb-split.is-column > .sb-resizer { height: 6px; cursor: row-resize; }
+.sb-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.sb-resizer:hover::after { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.sb-resizer:focus-visible { outline: none; }
+.sb-resizer:focus-visible::after { background: var(--accent); }
+
+/* ── Stack (one or more tabbed panes) ──────────────────────────────────── */
+.sb-pane-stack {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.sb-pane-head {
+  flex: none;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.sb-pane-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sb-pane-tabs::-webkit-scrollbar { display: none; }
+.sb-pane-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.sb-pane-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sb-pane-tab.active { background: var(--canvas); color: var(--accent-dark); box-shadow: 0 1px 2px rgb(0 0 0 / 8%); }
+.sb-pane-tab.dragging { opacity: 0.4; }
+.sb-pane-tab svg { width: 13px; height: 13px; display: block; }
+.sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+.sb-pane-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+.sb-pane-view {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.sb-pane-view[hidden] { display: none; }
+
+/* ── Drag-to-dock ──────────────────────────────────────────────────────── */
+.sb-drop-zone { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.sb-drop-zone::after {
+  content: "";
+  position: absolute;
+  border-radius: 6px;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.sb-drop-zone.is-center::after { inset: 20%; }
+.sb-drop-zone.is-left::after { inset: 2px 50% 2px 2px; }
+.sb-drop-zone.is-right::after { inset: 2px 2px 2px 50%; }
+.sb-drop-zone.is-top::after { inset: 2px 2px 50% 2px; }
+.sb-drop-zone.is-bottom::after { inset: 50% 2px 2px 2px; }
+.sb-pane-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translate(10px, 10px);
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+:where(.sheetbase-scope)[data-theme="dark"] .sb-pane-drag-ghost { color: #171717; }
+
+/*
+ * Flush mode: components that ship their own `.sb-frame` fill the pane and drop
+ * the nested chrome, so one component per pane reads as a single surface.
+ * Opt in with `className="sb-panes--flush"`.
+ */
+.sb-panes--flush .sb-pane-view { overflow: hidden; }
+.sb-panes--flush .sb-pane-view > .sheetbase-scope,
+.sb-panes--flush .sb-pane-view > .sheetbase-explorer { width: 100%; height: 100%; min-height: 0; }
+.sb-panes--flush .sb-pane-view > .sheetbase-scope > .sb-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--panel);
+}
+.sb-panes--flush .sb-pane-view > .table-surface {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}

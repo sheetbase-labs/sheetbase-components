@@ -3,6 +3,7 @@ export * from "./operators";
 export * from "./query";
 export * from "./predicate";
 export * from "./tree";
+export * from "./panes";
 export { MoonIcon, SunIcon, ThemeToggleButton, usePersistedTheme, SHARED_THEME_STORAGE_KEY, type ThemeMode } from "./ThemeToggle";
 export {
   createLocalStorageAdapter,
