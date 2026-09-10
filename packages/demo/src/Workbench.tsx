@@ -86,7 +86,11 @@ export function Workbench() {
   );
   // Pipeline: the schema's fields feed search, search filters the rows, rules
   // evaluate the filtered rows, the table shows the raw rows.
-  const activeSearchFields = useMemo(() => headerFields.map((field) => field.id), [headerFields]);
+  // Field objects (not ids) so numeric/date fields offer >, <, between, etc.
+  const activeSearchFields = useMemo(
+    () => headerFields.map((field) => ({ id: field.id, label: field.label, dataType: field.dataType })),
+    [headerFields],
+  );
   const filteredRows = useMemo(() => applySearch(sampleRows, searchSpec), [searchSpec]);
   const explorerDataset = useMemo(
     () => createExplorerDataset(filteredRows as readonly Record<string, unknown>[]),

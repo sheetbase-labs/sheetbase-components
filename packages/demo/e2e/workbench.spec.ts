@@ -281,6 +281,23 @@ test("a search filter drives the query-driven table", async ({ page }) => {
   await expect(page.locator(".sb-search .sb-table")).toHaveCount(1);
 });
 
+test("search offers numeric comparators for number fields", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Search" }) });
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await page.getByRole("button", { name: "+ Condition" }).first().click();
+  const condition = page.locator(".sb-filter-rule").first();
+  await condition.getByLabel("Field").selectOption("amount");
+  await condition.getByLabel("Operator").selectOption("gt");
+  await condition.getByLabel("Value").fill("100");
+
+  // amount > 100 drops the rows at or under 100 (SMP-2087 is exactly 100).
+  const table = page.locator(".table-surface");
+  await expect(table).toContainText("SMP-2084");
+  await expect(table).not.toContainText("SMP-2087");
+  await expect(page.locator(".sb-workbench-tools")).toContainText("filtered 1498 / 1500 rows");
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

@@ -7,6 +7,7 @@ import {
   describeFilter,
   emptyCondition,
   emptyRoot,
+  ensureOperator,
   groupRows,
   normaliseOperator,
   operatorShortLabel,
@@ -209,7 +210,11 @@ function ConditionRow({ node, fields, onPatch }: {
   return (
     <div className={canon === "between" ? "sb-filter-rule between" : "sb-filter-rule"}>
       {fields.length > 0 ? (
-        <select aria-label="Field" value={node.field} onChange={(e) => patch({ field: e.target.value })}>
+        <select aria-label="Field" value={node.field} onChange={(e) => {
+          // Re-point the operator when the new field doesn't accept it.
+          const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
+          patch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
+        }}>
           {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
           {fields.map((f) => <option key={fieldIdOf(f)} value={fieldIdOf(f)}>{fieldLabelOf(f)}</option>)}
         </select>
