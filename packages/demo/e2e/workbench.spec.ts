@@ -115,15 +115,14 @@ test("one app surface wraps the workbench", async ({ page }) => {
   await expect(page.locator(".sb-workbench-panes")).toHaveClass(/sb-panes--shared/);
 });
 
-test("frameless panes own a single bar with re-homed actions", async ({ page }) => {
+test("components keep their own top bars", async ({ page }) => {
   await reset(page);
-  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
-
-  // Schema renders without its topbar; its actions live in the pane head.
-  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(0);
-  await expect(analysis.getByRole("button", { name: "+ Model" })).toBeVisible();
-
-  // Rules and search also host their internal bodies as panes.
+  // Each self-framed component owns its header (like the explorer command bar);
+  // it isn't replaced by a generic pane header.
+  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(1);
+  await expect(page.locator(".sb-rules .sb-topbar")).toHaveCount(1);
+  await expect(page.locator(".sb-search .sb-topbar")).toHaveCount(1);
+  // Their internal bodies still host panes.
   await expect(page.locator(".sb-rules .sb-pane-stack")).toHaveCount(2);
   await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(2);
 });
@@ -250,8 +249,9 @@ test("dragging a tab within its own group pops it out", async ({ page }) => {
   await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules"]);
   const search = page.locator(".sb-pane-stack").filter({ has: page.locator(".sb-search") });
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
-  // The detached pane has a title-bar header (drag handle), not a tab.
-  await expect(search.locator(".sb-pane-head.is-titled")).toHaveCount(1);
+  // The detached pane keeps its own top bar and has no tab.
+  await expect(search.locator(".sb-pane-head")).toHaveCount(0);
+  await expect(search.locator(".sb-search .sb-topbar")).toHaveCount(1);
   await expect(search.getByRole("tab")).toHaveCount(0);
 });
 

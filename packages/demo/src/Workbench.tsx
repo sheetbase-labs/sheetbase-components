@@ -108,17 +108,9 @@ export function Workbench() {
       id: "schema",
       title: "Schema",
       closable: true,
-      actions: (
-        <>
-          <button className="sb-btn" onClick={() => schemaRef.current?.fitView()}>Fit</button>
-          <button className="sb-btn" onClick={() => schemaRef.current?.resetView()}>Reset</button>
-          <button className="sb-btn primary" onClick={() => schemaRef.current?.addModel()}>+ Model</button>
-        </>
-      ),
       content: (
         <SchemaEditor
           ref={schemaRef}
-          chrome="none"
           value={graph}
           onChange={setGraph}
           onHeaderFieldsChange={onHeaderFieldsChange}
@@ -133,18 +125,15 @@ export function Workbench() {
       id: "rules",
       title: "Rules",
       closable: true,
-      actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
-      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: <RulesEngine ref={rulesRef} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
       title: "Search",
       closable: true,
-      actions: <button className="sb-btn" onClick={() => searchRef.current?.clear()}>Clear</button>,
       content: (
         <AdvancedSearch
           ref={searchRef}
-          chrome="none"
           value={searchSpec}
           onChange={setSearchSpec}
           fields={activeSearchFields}
