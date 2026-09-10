@@ -74,12 +74,12 @@ The pane actions menu (`paneMenu`: `"head"` default, `"hover"` for lone panes,
 `"off"`) lists the other stacks under **Tab with** and a host **New pane…**
 action (`onRequestNewPane`).
 
-Drag semantics: dropping a pane on **another pane** — its body, an edge, or its
-tab strip — always mints a **new pane** (split). Dropping a pane back on its own
-pane pops it out, and dropping a tab onto a sibling tab reorders. Tabbing
-together is deliberate only: use **Tab with** in the pane menu. **Split into
-pane**, `Alt`+`Shift`+`↑`/`↓`, `splitPaneOut` or the handle's `splitOut` all do
-the same as pop-out.
+Drag semantics: dropping a pane on another pane's **body or edge** splits out a
+new pane; dropping it on a **tab or tab strip** adds it as a tab. Within its own
+group, dropping on a tab reorders and dropping on the body pops the pane out.
+The pane menu's **Tab with** does the same as a tab-strip drop; **Split into
+pane**, `Alt`+`Shift`+`↑`/`↓`, `splitPaneOut` and the handle's `splitOut` do the
+same as pop-out.
 
 ### Keyboard
 

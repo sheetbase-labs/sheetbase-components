@@ -366,14 +366,29 @@ export function PaneLayout({
     // Stacks do not move during a drag, so snapshot their rects once instead of
     // measuring every stack on every pointer move.
     stackRectsRef.current = new Map([...stackRefs.current].map(([id, element]) => [id, element.getBoundingClientRect()]));
-    // Dragging a pane onto another pane always splits it into its own pane —
-    // including a drop on that stack's tab strip. The only same-stack drops are
-    // reorder (onto a tab) and pop-out (onto the body). Tabbing together is
-    // deliberate: use the pane menu's "Tab with".
-    const effectiveZone = (hit: { stackId: string; zone: DropZone; tabIndex: number | null } | null) => {
-      if (!hit || hit.stackId === stackId) return hit;
-      if (hit.tabIndex !== null || hit.zone === "center") return { ...hit, tabIndex: null, zone: "right" as DropZone };
-      return hit;
+    // Standard docking: a drop on a tab/tab strip joins that group (or reorders
+    // within it); a drop on a pane body splits (centre docks right); a drop on
+    // its own pane body pops it out.
+    type DropAction =
+      | { kind: "reorder"; stackId: string; index: number }
+      | { kind: "tab"; stackId: string }
+      | { kind: "split"; stackId: string; zone: DropZone }
+      | { kind: "pop" };
+    const resolveDrop = (hit: { stackId: string; zone: DropZone; tabIndex: number | null } | null): DropAction | null => {
+      if (!hit) return null;
+      if (hit.tabIndex !== null) {
+        return hit.stackId === stackId
+          ? { kind: "reorder", stackId, index: hit.tabIndex }
+          : { kind: "tab", stackId: hit.stackId };
+      }
+      if (hit.stackId === stackId && hit.zone === "center") return { kind: "pop" };
+      return { kind: "split", stackId: hit.stackId, zone: hit.zone === "center" ? "right" : hit.zone };
+    };
+    const preview = (drop: DropAction | null): { overStackId: string | null; zone: DropZone | null } => {
+      if (drop?.kind === "tab") return { overStackId: drop.stackId, zone: "center" };
+      if (drop?.kind === "split") return { overStackId: drop.stackId, zone: drop.zone };
+      if (drop?.kind === "pop") return { overStackId: stackId, zone: "right" };
+      return { overStackId: null, zone: null };
     };
     let dragging = false;
 
@@ -383,16 +398,8 @@ export function PaneLayout({
         dragging = true;
         document.body.style.userSelect = "none";
       }
-      const hit = effectiveZone(hitTest(native.clientX, native.clientY));
-      setDrag({
-        paneId,
-        sourceStackId: stackId,
-        x: native.clientX,
-        y: native.clientY,
-        overStackId: hit?.stackId ?? null,
-        zone: hit?.zone ?? null,
-        overTabIndex: hit?.tabIndex ?? null,
-      });
+      const { overStackId, zone } = preview(resolveDrop(hitTest(native.clientX, native.clientY)));
+      setDrag({ paneId, sourceStackId: stackId, x: native.clientX, y: native.clientY, overStackId, zone, overTabIndex: null });
     };
 
     const cleanup = () => {
@@ -410,28 +417,27 @@ export function PaneLayout({
         setDrag(null);
         return;
       }
-      const hit = effectiveZone(hitTest(native.clientX, native.clientY));
+      const drop = resolveDrop(hitTest(native.clientX, native.clientY));
       setDrag(null);
-      if (!hit) return;
-      if (hit.tabIndex !== null) {
-        if (hit.stackId === stackId) {
-          const stack = findStack(layout, stackId);
-          const hovered = stack?.panes[hit.tabIndex];
-          const without = stack?.panes.filter((id) => id !== paneId) ?? [];
-          const index = hovered ? without.indexOf(hovered) : -1;
-          if (index >= 0) commit(reorderStack(layout, stackId, paneId, index));
-        } else {
-          commit(movePane(layout, paneId, hit.stackId, "center"));
-        }
+      if (!drop) return;
+      if (drop.kind === "reorder") {
+        const stack = findStack(layout, drop.stackId);
+        const hovered = stack?.panes[drop.index];
+        const without = stack?.panes.filter((id) => id !== paneId) ?? [];
+        const index = hovered ? without.indexOf(hovered) : -1;
+        if (index >= 0) commit(reorderStack(layout, drop.stackId, paneId, index));
         return;
       }
-      // Dropping a tab back on its own pane pops it out into its own pane.
-      if (hit.stackId === stackId && hit.zone === "center") {
+      if (drop.kind === "tab") {
+        commit(movePane(layout, paneId, drop.stackId, "center"));
+        return;
+      }
+      if (drop.kind === "pop") {
         const next = splitPaneOut(layout, paneId, "row", false);
         if (next !== layout) commit(next);
         return;
       }
-      commit(movePane(layout, paneId, hit.stackId, hit.zone));
+      commit(movePane(layout, paneId, drop.stackId, drop.zone));
     };
 
     window.addEventListener("pointermove", move);

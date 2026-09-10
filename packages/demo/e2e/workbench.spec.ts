@@ -232,14 +232,22 @@ test("dragging a tab onto a pane makes a new pane, not a tab group", async ({ pa
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
-test("dropping a pane on another stack's tab still splits, not groups", async ({ page }) => {
+test("dropping a pane on a tab group adds a tab", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
   await dragTableOnto(page, page.getByRole("tab", { name: "Schema" }));
 
-  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules", "Search"]);
-  await expect(analysis.getByRole("tab", { name: "Table" })).toHaveCount(0);
-  await expect(stackWith(page, ".table-surface")).toHaveCount(1);
+  await expect(analysis.getByRole("tab", { name: "Table" })).toBeVisible();
+  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules", "Search", "Table"]);
+});
+
+test("dragging a tab within its own tab strip reorders it", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  await dragTabOnto(page, "Search", page.getByRole("tab", { name: "Schema" }));
+
+  await expect(analysis.getByRole("tab")).toHaveText(["Search", "Schema", "Rules"]);
+  await expect.poll(() => topStacks(page)).toBe(3);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
