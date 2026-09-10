@@ -238,48 +238,61 @@ export function PaneLayout({
   }
 
   function renderStack(node: StackNode): ReactNode {
-    const activePane = node.panes.length > 1 ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
+    const tabbed = node.panes.length > 1;
+    const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
     const docked = drag && drag.overStackId === node.id ? drag.zone : null;
     return (
-      <div className="sb-pane-stack" key={node.id} ref={(element) => registerStack(node.id, element)}>
-        <div className="sb-pane-head">
-          <div className="sb-pane-tabs" role="tablist">
-            {node.panes.map((paneId) => {
-              const pane = paneMap.get(paneId);
-              return (
+      <div className={cx("sb-pane-stack", tabbed && "is-tabbed")} key={node.id} ref={(element) => registerStack(node.id, element)}>
+        {tabbed ? (
+          <div className="sb-pane-head">
+            <div className="sb-pane-tabs" role="tablist">
+              {node.panes.map((paneId) => {
+                const pane = paneMap.get(paneId);
+                return (
+                  <button
+                    key={paneId}
+                    type="button"
+                    role="tab"
+                    aria-selected={paneId === node.active}
+                    className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
+                    onPointerDown={(event) => beginDrag(event, node.id, paneId)}
+                    onClick={(event) => {
+                      // Keyboard activation only; pointer clicks are resolved on pointerup.
+                      if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
+                    }}
+                  >
+                    {pane?.icon}
+                    {paneLabel(pane, paneId)}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="sb-pane-actions">
+              {activePane?.actions}
+              {activePane?.closable && onClosePane && (
                 <button
-                  key={paneId}
                   type="button"
-                  role="tab"
-                  aria-selected={paneId === node.active}
-                  className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
-                  onPointerDown={(event) => beginDrag(event, node.id, paneId)}
-                  onClick={(event) => {
-                    // Keyboard activation only; pointer clicks are resolved on pointerup.
-                    if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
-                  }}
+                  className="sb-icon-btn"
+                  title="Close pane"
+                  aria-label="Close pane"
+                  onClick={() => onClosePane(activePane.id)}
                 >
-                  {pane?.icon}
-                  {paneLabel(pane, paneId)}
+                  ×
                 </button>
-              );
-            })}
+              )}
+            </div>
           </div>
-          <div className="sb-pane-actions">
-            {activePane?.actions}
-            {activePane?.closable && onClosePane && (
-              <button
-                type="button"
-                className="sb-icon-btn"
-                title="Close pane"
-                aria-label="Close pane"
-                onClick={() => onClosePane(activePane.id)}
-              >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
+        ) : (
+          // A lone pane is chrome-less: the component is the surface. This grip is
+          // the only affordance and only appears on hover/focus.
+          <button
+            type="button"
+            className="sb-pane-grip"
+            title="Drag to rearrange"
+            aria-label="Drag pane"
+            onPointerDown={(event) => beginDrag(event, node.id, node.active)}
+          />
+        )}
         <div className="sb-pane-body">
           {node.panes.map((paneId) => (
             <div className="sb-pane-view" key={paneId} hidden={paneId !== node.active} data-pane-id={paneId}>

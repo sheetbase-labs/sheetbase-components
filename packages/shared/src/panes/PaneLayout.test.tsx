@@ -23,7 +23,7 @@ const twoUp: Layout = {
 describe("PaneLayout", () => {
   it("renders one tabbed stack by default and keeps every pane mounted", () => {
     const html = renderToStaticMarkup(<PaneLayout panes={panes} />);
-    expect(html).toContain('class="sb-pane-stack"');
+    expect(html).toContain("sb-pane-stack");
     expect(html).not.toContain("sb-split");
     expect(html.match(/role="tab"/g)).toHaveLength(2);
     expect(html).toContain('data-pane-id="a"');

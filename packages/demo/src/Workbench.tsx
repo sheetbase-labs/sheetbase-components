@@ -82,7 +82,7 @@ export function Workbench() {
           panes={panes}
           layout={layout}
           onLayoutChange={setLayout}
-          className="sb-panes--flush"
+          className="sb-panes--fit"
         />
       </SheetbaseShell>
     </div>

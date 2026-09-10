@@ -79,6 +79,7 @@
 .sb-resizer:focus-visible::after { background: var(--accent); }
 
 /* ── Stack (one or more tabbed panes) ──────────────────────────────────── */
+/* A pane adds no surface of its own: the component is the surface. */
 .sb-pane-stack {
   position: relative;
   flex: 1 1 0;
@@ -86,26 +87,21 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  overflow: hidden;
 }
+/* Tabbed stacks get a lightweight strip; lone panes stay chrome-less. */
 .sb-pane-head {
   flex: none;
-  height: 28px;
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 4px;
-  border-bottom: 1px solid var(--border);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  padding: 0 2px;
+  margin-bottom: 4px;
+  color: var(--muted);
 }
 .sb-pane-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -115,10 +111,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 22px;
-  padding: 0 8px;
+  height: 24px;
+  padding: 0 9px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font-size: 11px;
@@ -128,11 +124,38 @@
   user-select: none;
   touch-action: none;
 }
-.sb-pane-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.sb-pane-tab.active { background: var(--canvas); color: var(--accent-dark); box-shadow: 0 1px 2px rgb(0 0 0 / 8%); }
+.sb-pane-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.sb-pane-tab.active {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--accent-dark);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
 .sb-pane-tab.dragging { opacity: 0.4; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
 .sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+/* Hover-only drag handle for lone panes, tucked into the frame's top padding. */
+.sb-pane-grip {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  z-index: 3;
+  width: 30px;
+  height: 6px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  opacity: 0;
+  pointer-events: none;
+  cursor: grab;
+  touch-action: none;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.sb-pane-stack:hover > .sb-pane-grip,
+.sb-pane-grip:focus-visible { opacity: 0.85; pointer-events: auto; }
+.sb-pane-grip:hover { background: var(--accent); }
 .sb-pane-body {
   flex: 1 1 0;
   min-height: 0;
@@ -176,24 +199,27 @@
 :where(.sheetbase-scope)[data-theme="dark"] .sb-pane-drag-ghost { color: #171717; }
 
 /*
- * Flush mode: components that ship their own `.sb-frame` fill the pane and drop
- * the nested chrome, so one component per pane reads as a single surface.
- * Opt in with `className="sb-panes--flush"`.
+ * Fit mode: components keep their own frame, border and background — the same
+ * surface as the table — and are simply sized to fill the pane. Opt in with
+ * `className="sb-panes--fit"`.
  */
-.sb-panes--flush .sb-pane-view { overflow: hidden; }
-.sb-panes--flush .sb-pane-view > .sheetbase-scope,
-.sb-panes--flush .sb-pane-view > .sheetbase-explorer { width: 100%; height: 100%; min-height: 0; }
-.sb-panes--flush .sb-pane-view > .sheetbase-scope > .sb-frame {
+.sb-panes--fit .sb-pane-view { overflow: hidden; }
+.sb-panes--fit .sb-pane-view > * { width: 100%; height: 100%; min-height: 0; min-width: 0; }
+.sb-panes--fit .sb-pane-view > .sheetbase-scope > .sb-frame,
+.sb-panes--fit .sb-pane-view > .sheetbase-explorer.framed > .app-shell,
+.sb-panes--fit .sb-pane-view > .table-surface {
   width: 100%;
   height: 100%;
   min-height: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  background: var(--panel);
 }
-.sb-panes--flush .sb-pane-view > .table-surface {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
+.sb-panes--fit .sb-pane-view > .sheetbase-explorer.framed > .app-shell > .explorer-frame {
+  height: 100%;
+  min-height: 0;
+  /* Base is 48px / minmax(280px,1fr) / 250px, tuned for a full-height stage. */
+  grid-template-rows: 48px minmax(120px, 1fr) minmax(150px, 0.42fr);
 }
+/* Components ship fixed demo floors; let them flex to the pane instead. */
+.sb-panes--fit .sb-schema-body,
+.sb-panes--fit .sb-schema-canvas,
+.sb-panes--fit .sb-rules-body,
+.sb-panes--fit .sb-search-body { min-height: 0; }
