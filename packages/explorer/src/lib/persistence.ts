@@ -63,7 +63,7 @@ export function migrateExplorerState(value: unknown): unknown {
   return current
 }
 
-const SPEC_KINDS: Record<string, true> = { scatter: true, line: true, bar: true, 'horizontal-bar': true, area: true, histogram: true, box: true, lollipop: true, violin: true, waterfall: true, heatmap: true }
+const SPEC_KINDS: Record<string, true> = { scatter: true, line: true, bar: true, 'horizontal-bar': true, area: true, histogram: true, box: true, lollipop: true, violin: true, waterfall: true, heatmap: true, pie: true, donut: true }
 
 export function isChartSpec(value: unknown): value is ChartSpec {
   if (!value || typeof value !== 'object' || !('kind' in value)) return false

@@ -19,7 +19,7 @@ export interface Dataset {
   source: string
 }
 
-export type ChartKind = 'scatter' | 'line' | 'bar' | 'horizontal-bar' | 'area' | 'histogram' | 'box' | 'lollipop' | 'violin' | 'waterfall' | 'heatmap'
+export type ChartKind = 'scatter' | 'line' | 'bar' | 'horizontal-bar' | 'area' | 'histogram' | 'box' | 'lollipop' | 'violin' | 'waterfall' | 'heatmap' | 'pie' | 'donut'
 export type AggregateKind = 'none' | 'mean' | 'median' | 'sum' | 'count' | 'min' | 'max'
 export type BarLayout = 'grouped' | 'stacked' | 'normalized'
 export type ErrorMode = 'none' | 'explicit' | 'sd' | 'sem' | 'ci95'
@@ -108,6 +108,8 @@ export interface ChartSpec {
   labelField?: string
   /** Ordering of categorical x values. */
   categoryOrder?: 'auto' | 'value-asc' | 'value-desc' | 'label-asc'
+  /** Second numeric measure, drawn as a line on a right-hand y axis. */
+  y2?: string
 }
 
 export interface SavedExploration {

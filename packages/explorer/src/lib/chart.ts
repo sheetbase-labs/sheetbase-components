@@ -30,6 +30,7 @@ import {
 } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
 import { portal } from '@tanstack/charts/tooltip/portal'
+import { pie, polar, radialArc } from '@tanstack/charts/polar'
 import { zoomX, type ZoomXWindow } from '@tanstack/charts/interaction/zoom'
 import { controlledSignal } from '@tanstack/charts/interaction/signal'
 import { scaleBand } from '@tanstack/charts/scales/band'
@@ -238,6 +239,27 @@ function chartSpec(
     } as any) as any))
   }
 
+  if (spec.y2) {
+    // Second measure on its own right-hand axis, aggregated over the same
+    // dimensions as the primary so the line tracks the marks.
+    const dims = [spec.x, spec.group, spec.color, spec.facet].filter((value): value is string => Boolean(value))
+    const sums = new Map<string, { sum: number; n: number }>()
+    for (const row of rawRows) {
+      const value = Number(row[spec.y2])
+      if (!Number.isFinite(value)) continue
+      const key = JSON.stringify(dims.map((dim) => row[dim]))
+      const bucket = sums.get(key) ?? { sum: 0, n: 0 }
+      bucket.sum += value
+      bucket.n += 1
+      sums.set(key, bucket)
+    }
+    const secondaryRows = rows.map((row) => {
+      const bucket = sums.get(JSON.stringify(dims.map((dim) => row[dim])))
+      return { ...row, __secondary: bucket && bucket.n ? bucket.sum / bucket.n : undefined }
+    })
+    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? '#07956a', strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as any) as any))
+  }
+
   if (spec.refLines?.length) {
     for (const line of spec.refLines) {
       const guide = [{ x: line.value, y: line.value }]
@@ -383,6 +405,7 @@ function chartSpec(
     scales: {
       x: { scale: (configuredX ?? xScale) as any, reverse: spec.xReverse ?? false, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
       y: { scale: (configuredY ?? yScale) as any, reverse: spec.yReverse ?? false, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
+      ...(spec.y2 ? { y2: { channel: 'y' as const, scale: scaleLinear as any, nice: true, grid: false, axis: { label: spec.y2, side: 'right' as const } } } : {}),
     },
     ...(color ? { color } : {}),
     ...(controls ? { controls } : {}),
@@ -398,6 +421,34 @@ export function buildChart(
 ) {
   const prepared = visibleRows(preparedRows(dataset, spec), spec)
   const raw = visibleRows(filteredRows(dataset, spec), spec)
+
+  if (spec.kind === 'pie' || spec.kind === 'donut') {
+    if (!spec.x || !spec.y) return null
+    const totals = new Map<string, number>()
+    for (const row of raw) {
+      const key = String(row[spec.x] ?? '')
+      if (!key) continue
+      const value = Number(row[spec.y] ?? 0)
+      totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(value) ? value : 0))
+    }
+    const slices = pie([...totals].map(([category, value]) => ({ category, value })), { value: 'value' } as any)
+    return defineChart({
+      marks: [polar({
+        inset: 8,
+        radiusRatio: 0.82,
+        marks: [radialArc(slices, ({
+          innerRadius: spec.kind === 'donut' ? ({ radius }: { radius: number }) => radius * 0.58 : 0,
+          cornerRadius: spec.barRadius,
+          color: 'category',
+          key: 'category',
+          fillOpacity: spec.fillOpacity,
+        } as any) as any)],
+        scales: { angle: null, radius: null },
+      } as any) as any],
+      scales: { x: null, y: null },
+      color: { scale: () => scaleOrdinal<string, string>().range(spec.palette), legend: colorLegend({ label: spec.x }) },
+    } as any) as any
+  }
 
   if (spec.facet) {
     const facetMeta = dataset.columns.find((column) => column.key === spec.facet)
