@@ -3,10 +3,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const sheetbaseShared = fileURLToPath(new URL('../shared/src/index.ts', import.meta.url))
+const sheetbaseTable = fileURLToPath(new URL('../table/src/index.ts', import.meta.url))
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: [{ find: /^sheetbase-shared$/, replacement: sheetbaseShared }] },
+  resolve: {
+    alias: [
+      { find: /^sheetbase-shared$/, replacement: sheetbaseShared },
+      { find: /^sheetbase-table$/, replacement: sheetbaseTable },
+    ],
+  },
   server: {
     port: 5199,
     strictPort: false,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export interface DataGridColumn {
   id: string;
@@ -12,11 +12,11 @@ export interface DataGridProps {
   rows: readonly Record<string, unknown>[];
   /** Stable row identity; defaults to the row index. */
   rowKey?(row: Record<string, unknown>, index: number): string | number;
-  /** Leading row-number column. Default true. */
-  rownum?: boolean;
-  /** Selected row index. */
-  selectedRow?: number;
-  onSelectRow?(index: number): void;
+  /** Leading row-number column, or a render function for custom numbering. Default true. */
+  rownum?: boolean | ((row: Record<string, unknown>, index: number) => ReactNode);
+  /** Selected row key (see `rowKey`). */
+  selectedKey?: string | number;
+  onSelectRow?(key: string | number, row: Record<string, unknown>, index: number): void;
   /** Click-to-sort headers. Default false. */
   sortable?: boolean;
   emptyMessage?: string;
@@ -49,7 +49,7 @@ export function DataGrid({
   rows,
   rowKey,
   rownum = true,
-  selectedRow,
+  selectedKey,
   onSelectRow,
   sortable = false,
   emptyMessage = "No rows.",
@@ -141,21 +141,25 @@ export function DataGrid({
               <td colSpan={Math.max(1, columnCount)} style={{ height: start * ROW_HEIGHT, padding: 0, border: 0 }} />
             </tr>
           )}
-          {windowed.map(({ row, index }) => (
-            <tr
-              key={rowKey ? rowKey(row, index) : index}
-              className={selectedRow === index ? "selected" : undefined}
-              aria-selected={selectedRow === index ? true : undefined}
-              tabIndex={onSelectRow ? 0 : undefined}
-              onClick={onSelectRow ? () => onSelectRow(index) : undefined}
-              onKeyDown={onSelectRow
-                ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectRow(index); } }
-                : undefined}
-            >
-              {rownum && <td className="sb-rownum">{index + 1}</td>}
-              {columns.map((column) => <td key={column.id}>{cellText(row[column.id])}</td>)}
-            </tr>
-          ))}
+          {windowed.map(({ row, index }) => {
+            const key = rowKey ? rowKey(row, index) : index;
+            const selected = selectedKey !== undefined && selectedKey === key;
+            return (
+              <tr
+                key={key}
+                className={selected ? "selected" : undefined}
+                aria-selected={selected ? true : undefined}
+                tabIndex={onSelectRow ? 0 : undefined}
+                onClick={onSelectRow ? () => onSelectRow(key, row, index) : undefined}
+                onKeyDown={onSelectRow
+                  ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectRow(key, row, index); } }
+                  : undefined}
+              >
+                {rownum && <td className="sb-rownum">{typeof rownum === "function" ? rownum(row, index) : index + 1}</td>}
+                {columns.map((column) => <td key={column.id}>{cellText(row[column.id])}</td>)}
+              </tr>
+            );
+          })}
           {end < total && (
             <tr aria-hidden="true">
               <td colSpan={Math.max(1, columnCount)} style={{ height: (total - end) * ROW_HEIGHT, padding: 0, border: 0 }} />

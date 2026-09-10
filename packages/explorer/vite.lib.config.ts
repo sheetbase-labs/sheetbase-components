@@ -6,6 +6,6 @@ export default defineConfig({
   build: {
     outDir: 'dist-lib',
     lib: { entry: 'src/index.ts', formats: ['es'], fileName: 'sheetbase-explorer', cssFileName: 'style' },
-    rollupOptions: { external: ['react', 'react-dom', 'react/jsx-runtime'] },
+    rollupOptions: { external: ['react', 'react-dom', 'react/jsx-runtime', 'sheetbase-shared', 'sheetbase-table'] },
   },
 })
