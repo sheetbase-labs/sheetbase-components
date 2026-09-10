@@ -50,11 +50,13 @@
 .sb-demo-switch button:hover { color: var(--text, #242424); }
 .sb-demo-switch button.active { background: var(--accent, #7652ef); color: #fff; }
 
-/* Workbench: one app surface wraps every pane (see PaneLayout surface="shared"). */
+/* Workbench: one app surface wraps every pane (see PaneLayout surface="shared").
+   Fill the viewport with a small margin rather than a fixed 1600x930 cap. */
+.sb-demo-stage { padding: 20px; }
 .sb-demo-workbench {
-  width: min(1600px, calc(100vw - 88px));
-  height: min(930px, calc(100vh - 88px));
-  min-height: 680px;
+  width: 100%;
+  height: calc(100vh - 40px);
+  min-height: 0;
   display: block;
 }
 .sb-demo-workbench > .sb-frame {
