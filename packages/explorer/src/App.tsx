@@ -139,6 +139,57 @@ export function App(props: AppProps = {}) {
     if (spec.zoomX !== undefined && props.spec === undefined) setInternalSpec({ ...spec, zoomX: undefined })
   }
 
+  // A host-supplied dataset may not contain the columns the spec was last
+  // pointed at. When it doesn't, pick a readable default: the most groupable
+  // categorical column for x and the first numeric column for y.
+  const datasetColumnsKey = dataset
+    ? dataset.columns.map((column) => `${column.key}:${column.kind}:${column.uniqueCount}`).join('\u0000')
+    : ''
+  useEffect(() => {
+    if (!dataset) return
+    const columns = dataset.columns
+    const valid = (key: string | undefined) => key === undefined || columns.some((column) => column.key === key)
+    if (valid(spec.x) && valid(spec.y)) {
+      // x/y are fine; still drop any stale channel references from another dataset.
+      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh)
+      if (!stale) return
+      setSpec((current) => ({
+        ...current,
+        ...(valid(current.group) ? {} : { group: undefined }),
+        ...(valid(current.color) ? {} : { color: undefined }),
+        ...(valid(current.facet) ? {} : { facet: undefined }),
+        ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
+        ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+        ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
+      }))
+      return
+    }
+    const numeric = columns.filter((column) => column.kind === 'number')
+    const categorical = columns.filter((column) => column.kind !== 'number')
+    const groupable = categorical
+      .filter((column) => column.uniqueCount > 1 && column.uniqueCount <= 60)
+      .sort((a, b) => a.uniqueCount - b.uniqueCount)
+    const x = valid(spec.x) ? spec.x : (groupable[0]?.key ?? categorical[0]?.key ?? columns[0]?.key)
+    const y = valid(spec.y) ? spec.y : (numeric[0]?.key ?? categorical[0]?.key ?? columns[0]?.key)
+    const categoricalX = columns.some((column) => column.key === x && column.kind !== 'number')
+    const numericY = columns.some((column) => column.key === y && column.kind === 'number')
+    const switchToBar = categoricalX && numericY && (spec.kind === 'scatter' || spec.kind === 'line' || spec.kind === 'area')
+    setSpec((current) => ({
+      ...current,
+      x,
+      y,
+      ...(switchToBar ? { kind: 'bar' as const, aggregate: current.aggregate === 'none' ? 'mean' as const : current.aggregate } : {}),
+      ...(valid(current.group) ? {} : { group: undefined }),
+      ...(valid(current.color) ? {} : { color: undefined }),
+      ...(valid(current.facet) ? {} : { facet: undefined }),
+      ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
+      ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+      ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
+    }))
+    // Reconcile only when the dataset's columns change, not on every spec edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetColumnsKey])
+
   useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark, dataset])
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return

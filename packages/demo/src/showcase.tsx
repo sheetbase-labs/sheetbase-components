@@ -11,7 +11,7 @@ import {
   type TablePresentationState,
   type ThemeMode,
 } from "sheetbase-table";
-import { App as Explorer } from "sheetbase-explorer";
+import { App as Explorer, inferColumns, type Dataset } from "sheetbase-explorer";
 import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
 import type { SchemaGraph } from "sheetbase-schemaeditor";
 import type { SearchRow } from "sheetbase-advanced-search";
@@ -23,15 +23,67 @@ export const tableFields = [
   { id: "donor", label: "donor", column: 1, dataType: "text" as const },
   { id: "material", label: "material", column: 2, dataType: "text" as const },
   { id: "status", label: "status", column: 3, dataType: "text" as const },
-  { id: "amount", label: "amount", column: 4, dataType: "number" as const },
+  { id: "batch", label: "batch", column: 4, dataType: "text" as const },
+  { id: "collected_on", label: "collected_on", column: 5, dataType: "date" as const },
+  { id: "amount", label: "amount", column: 6, dataType: "number" as const },
 ];
 
+export type SampleRow = {
+  sample_id: string;
+  donor: string;
+  material: string;
+  status: string;
+  batch: string;
+  collected_on: string;
+  amount: number;
+};
+
+const MATERIALS = ["Plasma", "Lysate", "Supernatant", "Serum", "Cells"];
+const STATUSES = ["ok", "failed", "blocked", "pending"];
+const BATCHES = Array.from({ length: 12 }, (_, index) => `B-${String(index + 1).padStart(2, "0")}`);
+/** Amount correlates with material and status so the demo chart has a shape. */
+const MATERIAL_BASE: Record<string, number> = { Plasma: 5200, Lysate: 3100, Supernatant: 1800, Serum: 4200, Cells: 900 };
+const STATUS_FACTOR: Record<string, number> = { ok: 1, failed: 1.35, blocked: 0.9, pending: 1.05 };
+
+/** Small deterministic PRNG so the demo data is stable across reloads and tests. */
+function mulberry32(seed: number) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateRows(count: number): SampleRow[] {
+  const rows: SampleRow[] = [
+    { sample_id: "SMP-2084", donor: "Donor 14", material: "Plasma", status: "failed", batch: "B-03", collected_on: "2025-02-11", amount: 6000 },
+    { sample_id: "SMP-2087", donor: "Donor 18", material: "Lysate", status: "ok", batch: "B-05", collected_on: "2025-02-14", amount: 100 },
+    { sample_id: "SMP-2091", donor: "Donor 22", material: "Supernatant", status: "blocked", batch: "B-07", collected_on: "2025-02-19", amount: 50 },
+  ];
+  const random = mulberry32(20240910);
+  const start = new Date("2025-01-06").getTime();
+  const day = 86_400_000;
+  for (let index = 0; rows.length < count; index += 1) {
+    const material = MATERIALS[Math.floor(random() * MATERIALS.length)];
+    const status = STATUSES[Math.floor(random() * STATUSES.length)];
+    rows.push({
+      sample_id: `SMP-${3001 + index}`,
+      donor: `Donor ${1 + Math.floor(random() * 24)}`,
+      material,
+      status,
+      batch: BATCHES[Math.floor(random() * BATCHES.length)],
+      collected_on: new Date(start + Math.floor(random() * 240) * day).toISOString().slice(0, 10),
+      amount: Math.round(MATERIAL_BASE[material] * STATUS_FACTOR[status] * (0.85 + random() * 0.3)) + 25,
+    });
+  }
+  return rows;
+}
+
 /** One dataset shared by every pane: table rows, search rows and rules input. */
-export const sampleRows = [
-  { sample_id: "SMP-2084", donor: "Donor 14", material: "Plasma", status: "failed", amount: 6000 },
-  { sample_id: "SMP-2087", donor: "Donor 18", material: "Lysate", status: "ok", amount: 100 },
-  { sample_id: "SMP-2091", donor: "Donor 22", material: "Supernatant", status: "blocked", amount: 50 },
-];
+export const sampleRows: SampleRow[] = generateRows(1500);
 
 const tableFallback: TablePresentationState = {
   version: 2,
@@ -110,6 +162,8 @@ export const schemaStarter: SchemaGraph = {
         { key: "donor", type: "text" },
         { key: "material", type: "text" },
         { key: "status", type: "text" },
+        { key: "batch", type: "text" },
+        { key: "collected_on", type: "date" },
         { key: "amount", type: "number" },
       ],
     },
@@ -133,5 +187,18 @@ export const ruleFields = tableFields.map((field) => field.id);
 
 export const searchFields = tableFields.map((field) => field.id);
 export const searchRows = sampleRows;
+
+/**
+ * Wrap rows the explorer can chart. Columns come from the full sample so their
+ * kinds/cardinality stay stable even when `rows` is a filtered subset.
+ */
+export function createExplorerDataset(rows: readonly Record<string, unknown>[]): Dataset {
+  return {
+    name: "samples",
+    source: "Workspace",
+    columns: inferColumns(sampleRows as unknown as Record<string, unknown>[]),
+    rows: rows as Record<string, unknown>[],
+  };
+}
 
 export { Explorer };

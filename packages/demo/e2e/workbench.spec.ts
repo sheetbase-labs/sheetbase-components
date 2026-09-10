@@ -135,8 +135,8 @@ test("rules dry-run evaluates the table rows", async ({ page }) => {
   await analysis.getByRole("tab", { name: "Rules" }).click();
 
   const rules = page.locator(".sb-rules");
-  await expect(rules).toContainText("3 rows");
-  await expect(rules).toContainText("of 3 rows");
+  await expect(rules).toContainText("1500 rows");
+  await expect(rules).toContainText("of 1500 rows");
   await expect(rules).toContainText("review-queue");
 });
 
@@ -152,7 +152,7 @@ test("search filters the rows the rules evaluate", async ({ page }) => {
   await condition.getByLabel("Value").fill("failed");
 
   await analysis.getByRole("tab", { name: "Rules" }).click();
-  await expect(page.locator(".sb-rules")).toContainText("1 rows");
+  await expect(page.locator(".sb-rules")).toContainText("408 rows");
 });
 
 test("keeps a single theme control in the workbench", async ({ page }) => {

@@ -24,6 +24,7 @@ import { SchemaEditor, type SchemaEditorHandle, type SchemaGraph } from "sheetba
 import { AdvancedSearch, type AdvancedSearchHandle } from "sheetbase-advanced-search";
 import {
   Explorer,
+  createExplorerDataset,
   ruleActions,
   ruleFields,
   rulesStarter,
@@ -87,6 +88,10 @@ export function Workbench() {
   // evaluate the filtered rows, the table shows the raw rows.
   const activeSearchFields = useMemo(() => headerFields.map((field) => field.id), [headerFields]);
   const filteredRows = useMemo(() => applySearch(sampleRows, searchSpec), [searchSpec]);
+  const explorerDataset = useMemo(
+    () => createExplorerDataset(filteredRows as readonly Record<string, unknown>[]),
+    [filteredRows],
+  );
   const closedAdapter = useMemo(() => createLocalStorageAdapter<string[]>(), []);
   const [closed, setClosed] = useState<ReadonlySet<string>>(
     () => new Set(loadInitialState(WORKBENCH_CLOSED_KEY, closedAdapter, [] as string[])),
@@ -111,7 +116,7 @@ export function Workbench() {
 
   const panes: PaneSpec[] = [
     { id: "table", title: "Table", closable: true, content: <QueryTable theme={activeTheme} /> },
-    { id: "explorer", title: "Explorer", closable: true, content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
+    { id: "explorer", title: "Explorer", closable: true, content: <Explorer dataset={explorerDataset} theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
     {
       id: "schema",
       title: "Schema",
