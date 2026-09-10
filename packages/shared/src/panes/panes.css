@@ -313,6 +313,13 @@
 /* Components' own top bars rely on the frame's 4px padding; shared mode has
    none, so drop the compensating negative margin to match the explorer bar. */
 .sb-panes--shared .sb-topbar { margin: 0; }
+/* The pane panel is the only box; inner plates go flat so schema/rules/search
+   read as one panel with regions (like table/explorer), not nested cards. */
+.sb-panes--shared .sb-plate {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 
 /*
  * Fit mode: components keep their own frame, border and background — the same
