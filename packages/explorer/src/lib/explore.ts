@@ -59,7 +59,7 @@ export function preparedRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
   const rows = filteredRows(dataset, spec)
   const errorMode = spec.errorMode ?? (spec.errorLow && spec.errorHigh ? 'explicit' : 'none')
   const calculatedError = ['sd', 'sem', 'ci95'].includes(errorMode)
-  if (!spec.x || !spec.y || (spec.aggregate === 'none' && !calculatedError) || spec.kind === 'histogram' || spec.kind === 'box') return rows
+  if (!spec.x || !spec.y || (spec.aggregate === 'none' && !calculatedError) || spec.kind === 'histogram' || spec.kind === 'box' || spec.kind === 'violin' || spec.kind === 'heatmap') return rows
 
   const dimensions = statisticalDimensions(spec)
   const groups = new Map<string, DataRow[]>()

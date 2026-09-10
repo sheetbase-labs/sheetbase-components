@@ -4,8 +4,12 @@ import {
   barX,
   barY,
   binX,
+  binY,
   boxY,
+  cell,
+  colorGradientLegend,
   colorLegend,
+  d3AreaXCurve,
   d3Curve,
   defineChart,
   dot,
@@ -14,12 +18,15 @@ import {
   linearRegressionY,
   lineY,
   link,
+  normalize,
   rect,
   ruleX,
   ruleY,
   stack,
   text,
   tickY,
+  violinY,
+  waterfall,
 } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
 import { portal } from '@tanstack/charts/tooltip/portal'
@@ -174,6 +181,41 @@ function chartSpec(
     // Thin stem plus a dot head; preparedRows has already summarised y.
     marks.push(barY(rows, ({ id: 'lollipop-stem', x: spec.x, y: spec.y!, maxThickness: Math.max(2, Math.round(spec.lineWidth + 1)), radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
     marks.push(dot(rows, ({ id: 'lollipop-head', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, ...grouping }) as any))
+  } else if (spec.kind === 'violin') {
+    if (!spec.y || yMeta?.kind !== 'number') return null
+    const bins = binY(rows, { value: spec.y, by: spec.x, thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } } as any) as any[]
+    const profiles = normalize(bins, { value: 'count', by: spec.x, basis: 'max', as: 'width' } as any) as any[]
+    marks.push(violinY(profiles, ({ id: 'violin', x: spec.x, y: 'y', width: 'width', span: 0.8, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity, ...(semanticColour ? { color: semanticColour } : {}), curve: d3AreaXCurve(curveBasis) }) as any))
+  } else if (spec.kind === 'waterfall') {
+    if (!spec.y) return null
+    // Sum contributions per category, then let the transform lay them out as
+    // cumulative intervals.
+    const buckets = new Map<string, number>()
+    for (const row of rows) {
+      const key = String(row[spec.x] ?? '')
+      buckets.set(key, (buckets.get(key) ?? 0) + (Number(row[spec.y]) || 0))
+    }
+    const steps = waterfall([...buckets].map(([x, value]) => ({ x, value })) as any, { value: 'value' } as any) as any[]
+    marks.push(barY(steps, ({ id: 'waterfall', x: 'x', y: 'end', y1: 'start', y2: 'end', fill: semanticColour ? undefined : markColour, stroke: markColour, strokeWidth: 1, fillOpacity: spec.fillOpacity, ...(semanticColour ? { color: semanticColour } : {}) }) as any))
+  } else if (spec.kind === 'heatmap') {
+    if (!spec.x || !spec.y) return null
+    const buckets = new Map<string, { x: string; y: string; sum: number; n: number; min: number; max: number }>()
+    for (const row of rows) {
+      const xv = String(row[spec.x] ?? '')
+      const yv = String(row[spec.y] ?? '')
+      if (!xv || !yv) continue
+      const value = spec.size ? Number(row[spec.size]) : 1
+      if (!Number.isFinite(value)) continue
+      const bucket = buckets.get(`${xv}\u0000${yv}`) ?? { x: xv, y: yv, sum: 0, n: 0, min: Infinity, max: -Infinity }
+      bucket.sum += value
+      bucket.n += 1
+      bucket.min = Math.min(bucket.min, value)
+      bucket.max = Math.max(bucket.max, value)
+      buckets.set(`${xv}\u0000${yv}`, bucket)
+    }
+    const mode = !spec.size ? 'count' : spec.aggregate === 'mean' ? 'mean' : spec.aggregate === 'min' ? 'min' : spec.aggregate === 'max' ? 'max' : spec.aggregate === 'count' ? 'count' : 'sum'
+    const cells = [...buckets.values()].map((bucket) => ({ x: bucket.x, y: bucket.y, value: mode === 'count' ? bucket.n : mode === 'mean' ? bucket.sum / bucket.n : mode === 'min' ? bucket.min : mode === 'max' ? bucket.max : bucket.sum }))
+    marks.push(cell(cells, ({ id: 'heatmap', x: 'x', y: 'y', color: 'value', inset: spec.barGap, radius: spec.barRadius }) as any))
   } else if (spec.kind === 'area') {
     marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
     marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
@@ -215,7 +257,7 @@ function chartSpec(
 
   const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
   const yValueNumeric = !horizontal && yMeta?.kind === 'number'
-  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop'].includes(spec.kind)
+  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop', 'waterfall', 'heatmap'].includes(spec.kind)
   const xDataExtent = xValueNumeric ? numericExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
   const yDataExtent = yValueNumeric && spec.y ? numericExtent(rawRows, spec.y) : undefined
   const xLogExtent = logAllowed && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
@@ -239,23 +281,32 @@ function chartSpec(
     ? (xValueNumeric ? numericScale(xKind) : () => scalePoint<string>().padding(0.5))
     : xMeta.kind === 'number'
       ? numericScale(xKind)
-      : ['bar', 'box', 'lollipop'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
+      : ['bar', 'box', 'lollipop', 'violin', 'waterfall', 'heatmap'].includes(spec.kind)
+        ? () => scaleBand<string>().padding(spec.kind === 'heatmap' ? 0.05 : 0.18)
+        : () => scalePoint<string>().padding(0.5)
   const yScale = horizontal
     ? () => scaleBand<string>().padding(0.18)
-    : spec.kind === 'histogram' ? scaleLinear : yValueNumeric ? numericScale(yKind) : () => scalePoint<string>().padding(0.5)
+    : spec.kind === 'histogram' ? scaleLinear
+      : spec.kind === 'heatmap' ? () => scaleBand<string>().padding(0.05)
+        : yValueNumeric ? numericScale(yKind) : () => scalePoint<string>().padding(0.5)
 
-  // A numeric colour field becomes a gradient on scatter dots; connected
-  // geometry (bars/lines) needs discrete series identity, so it stays ordinal.
+  // A numeric colour field becomes a gradient on scatter dots; a heatmap always
+  // colours by its aggregated value. Connected geometry (bars/lines) needs
+  // discrete series identity, so it stays ordinal.
+  const heatmap = spec.kind === 'heatmap'
   const colourMeta = spec.color ? dataset.columns.find((column) => column.key === spec.color) : undefined
   const continuousColour = spec.kind === 'scatter' && Boolean(spec.color)
     && (spec.colorScale === 'continuous' || (spec.colorScale !== 'categorical' && colourMeta?.kind === 'number'))
+  const gradient = heatmap || continuousColour
   const colourStops = spec.palette.length >= 2
     ? [spec.palette[0]!, spec.palette[Math.floor(spec.palette.length / 2)]!, spec.palette[spec.palette.length - 1]!]
     : spec.palette
-  const color = semanticColour
+  const color = semanticColour || heatmap
     ? {
-        scale: () => (continuousColour ? d3ScaleLinear().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
-        ...(continuousColour ? { legend: colorLegend({ label: spec.color }) } : {}),
+        scale: () => (gradient ? d3ScaleLinear().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
+        ...(gradient
+          ? { legend: heatmap ? colorGradientLegend({ label: spec.size ?? 'count' }) : colorLegend({ label: spec.color }) }
+          : {}),
       }
     : undefined
 

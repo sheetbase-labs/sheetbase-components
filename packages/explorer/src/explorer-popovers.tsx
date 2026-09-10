@@ -39,6 +39,7 @@ const plotKinds: Array<{ kind: ChartKind; label: string }> = [
   { kind: 'scatter', label: 'Scatter' }, { kind: 'line', label: 'Line' }, { kind: 'bar', label: 'Bar' },
   { kind: 'horizontal-bar', label: 'Horizontal bar' }, { kind: 'area', label: 'Area' },
   { kind: 'histogram', label: 'Histogram' }, { kind: 'box', label: 'Box plot' }, { kind: 'lollipop', label: 'Lollipop' },
+  { kind: 'violin', label: 'Violin' }, { kind: 'waterfall', label: 'Waterfall' }, { kind: 'heatmap', label: 'Heatmap' },
 ]
 
 function RangeControl({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange(value: number): void }) {
@@ -71,7 +72,7 @@ function FieldsPopover({ spec, columns, setSpec, onField, onAutoKind }: { spec: 
   const currentFacet = spec.facet ? columns.find((column) => column.key === spec.facet) : undefined
   const facetOptions = currentFacet && !facetColumns.some((column) => column.key === currentFacet.key) ? [currentFacet, ...facetColumns] : facetColumns
   return (
-    <><div className="popover-title-row"><h4>Data fields</h4><button onClick={onAutoKind}>Auto</button></div><FieldSelect label="X" value={spec.x} columns={columns} allowNone={false} onChange={(value) => onField('x', value)}/>{spec.kind !== 'histogram' && <FieldSelect label="Y" value={spec.y} columns={columns} allowNone={false} onChange={(value) => onField('y', value)}/>}<FieldSelect label="Colour by" value={spec.color} columns={columns} onChange={(value) => onField('color', value)}/>{spec.kind === 'scatter' && spec.color && <label className="compact-control"><span>Colour scale</span><select value={spec.colorScale ?? 'auto'} onChange={(event) => setSpec((current) => ({ ...current, colorScale: event.target.value as ChartSpec['colorScale'] }))}><option value="auto">Auto</option><option value="continuous">Value (gradient)</option><option value="categorical">Categories</option></select></label>}{spec.kind === 'scatter' && <FieldSelect label="Size by" value={spec.size} columns={columns.filter((column) => column.kind === 'number')} onChange={(value) => setSpec((current) => ({ ...current, size: value }))}/>}<FieldSelect label="Facet" value={spec.facet} columns={facetOptions} onChange={(value) => onField('facet', value)}/></>
+    <><div className="popover-title-row"><h4>Data fields</h4><button onClick={onAutoKind}>Auto</button></div><FieldSelect label="X" value={spec.x} columns={columns} allowNone={false} onChange={(value) => onField('x', value)}/>{spec.kind !== 'histogram' && <FieldSelect label="Y" value={spec.y} columns={columns} allowNone={false} onChange={(value) => onField('y', value)}/>}<FieldSelect label="Colour by" value={spec.color} columns={columns} onChange={(value) => onField('color', value)}/>{spec.kind === 'scatter' && spec.color && <label className="compact-control"><span>Colour scale</span><select value={spec.colorScale ?? 'auto'} onChange={(event) => setSpec((current) => ({ ...current, colorScale: event.target.value as ChartSpec['colorScale'] }))}><option value="auto">Auto</option><option value="continuous">Value (gradient)</option><option value="categorical">Categories</option></select></label>}{(spec.kind === 'scatter' || spec.kind === 'heatmap') && <FieldSelect label={spec.kind === 'heatmap' ? 'Measure' : 'Size by'} value={spec.size} columns={columns.filter((column) => column.kind === 'number')} onChange={(value) => setSpec((current) => ({ ...current, size: value }))}/>}<FieldSelect label="Facet" value={spec.facet} columns={facetOptions} onChange={(value) => onField('facet', value)}/></>
   )
 }
 
@@ -103,7 +104,7 @@ function ErrorPopover({ spec, dataset, setSpec }: { spec: ChartSpec; dataset: Da
 
 function AxesPopover({ spec, setSpec }: { spec: ChartSpec; setSpec(action: SetStateAction<ChartSpec>): void }) {
   const scaleOptions = (
-    <><option value="auto">Auto</option><option value="linear">Linear</option><option value="log" disabled={['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop'].includes(spec.kind)}>Log</option><option value="sqrt">Square root</option><option value="symlog">Symlog</option></>
+    <><option value="auto">Auto</option><option value="linear">Linear</option><option value="log" disabled={['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop', 'waterfall', 'heatmap'].includes(spec.kind)}>Log</option><option value="sqrt">Square root</option><option value="symlog">Symlog</option></>
   )
   const refLines = spec.refLines ?? []
   const patchRef = (id: string, patch: Partial<ReferenceLine>) => setSpec((current) => ({ ...current, refLines: (current.refLines ?? []).map((line) => line.id === id ? { ...line, ...patch } : line) }))
