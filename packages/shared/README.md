@@ -13,26 +13,30 @@ import {
 } from "sheetbase-shared";
 import "sheetbase-shared/theme.css";
 import "sheetbase-shared/shell.css";
-import "sheetbase-shared/panes.css";
+// PaneLayout owns its styles: panes.css ships with the import above.
 ```
 
 ## Panes
 
-`SheetbaseShell` is the shared application frame (topbar / subbar / body) built
-from the same `.sb-frame` primitives every component uses. `PaneLayout` is a
-nestable multiplexer: panes tile into resizable splits and tabbed stacks. Grab
-a tabbed pane by its tab, or a lone pane by the empty chrome of its own top
-bar, then drop on another pane's edge to split or its centre to tab them
-together.
+`PaneLayout` is a nestable multiplexer: panes tile into resizable splits and
+tabbed stacks. Grab a tabbed pane by its tab, or a lone pane by the empty chrome
+of its own top bar, then drop on another pane's edge to split or its centre to
+tab them together.
 
 ```tsx
-<SheetbaseShell theme={theme} onToggleTheme={toggleTheme}>
-  <PaneLayout panes={panes} defaultLayout={layout} onLayoutChange={setLayout} />
-</SheetbaseShell>
+<PaneLayout panes={panes} defaultLayout={layout} onLayoutChange={setLayout} theme={theme} />
 ```
 
-Outside a `SheetbaseShell` (or any `.sheetbase-scope`), pass `theme` so the pane
+Panes add no surface of their own — the component frame is the surface. A tabbed
+stack does render a lightweight tab row above the component, so a component that
+also draws its own topbar shows both; pass `frame={false}` where a component
+supports it (table surface, explorer) when you want the tab row to be the only
+chrome.
+
+Pass `theme` when PaneLayout is not already inside a `.sheetbase-scope` so pane
 chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
+`SheetbaseShell` remains available for hosts that want the shared topbar/subbar
+frame around a layout.
 
 Pane content renders through stable portals, so moving a pane between stacks or
 tabs keeps its component state.

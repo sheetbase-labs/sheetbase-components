@@ -40,10 +40,15 @@ export type Layout = LayoutNode | null;
 
 let counter = 0;
 
-/** Ids for generated split/stack nodes. Stable within a session; tests can reset. */
+/**
+ * Ids for generated split/stack nodes. Session-unique and collision-resistant:
+ * a counter plus random suffix avoids SSR/client counter drift mattering for
+ * interactive (client-only) nodes. Seed a deterministic id where the server
+ * also renders (e.g. the default stack).
+ */
 export function createLayoutId(prefix = "node"): string {
   counter += 1;
-  return `${prefix}-${counter}`;
+  return `${prefix}-${counter.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /** Reset the generated-id counter. Test helper; production never needs it. */

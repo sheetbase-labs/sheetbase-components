@@ -3,7 +3,9 @@ import {
   PaneLayout,
   ThemeToggleButton,
   createLocalStorageAdapter,
+  loadInitialState,
   loadPaneLayoutState,
+  useIdleSave,
   usePersistedTheme,
   type Layout,
   type PaneLayoutState,
@@ -24,6 +26,7 @@ import {
 } from "./showcase";
 
 const WORKBENCH_LAYOUT_KEY = "sheetbase-demo:workbench";
+const WORKBENCH_CLOSED_KEY = "sheetbase-demo:workbench:closed";
 const WORKBENCH_PANE_IDS = ["table", "explorer", "schema", "rules", "search"];
 
 /** Start with the table large on the left, explorer top-right, analysis tabs bottom-right. */
@@ -54,12 +57,18 @@ const workbenchLayout: Layout = {
 export function Workbench() {
   const { activeTheme, toggleTheme } = usePersistedTheme({});
   const adapter = useMemo(() => createLocalStorageAdapter<PaneLayoutState>(), []);
-  const [layout, setLayout] = useState<Layout>(() =>
-    loadPaneLayoutState(adapter, WORKBENCH_LAYOUT_KEY, WORKBENCH_PANE_IDS, workbenchLayout),
-  );
   const [graph, setGraph] = useState<SchemaGraph>(schemaStarter);
   const [rules, setRules] = useState<PipelineRule[]>(rulesStarter);
-  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
+  const closedAdapter = useMemo(() => createLocalStorageAdapter<string[]>(), []);
+  const [closed, setClosed] = useState<ReadonlySet<string>>(
+    () => new Set(loadInitialState(WORKBENCH_CLOSED_KEY, closedAdapter, [] as string[])),
+  );
+  const closedList = useMemo(() => [...closed], [closed]);
+  useIdleSave(WORKBENCH_CLOSED_KEY, closedList, closedAdapter);
+  const visibleIds = useMemo(() => WORKBENCH_PANE_IDS.filter((id) => !closed.has(id)), [closed]);
+  const [layout, setLayout] = useState<Layout>(() =>
+    loadPaneLayoutState(adapter, WORKBENCH_LAYOUT_KEY, visibleIds, workbenchLayout),
+  );
   const onThemeChange = () => toggleTheme();
 
   const panes: PaneSpec[] = [

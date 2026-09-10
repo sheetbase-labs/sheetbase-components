@@ -74,12 +74,18 @@ test("navigates and reorders tabs with the keyboard", async ({ page }) => {
   await expect(explorer.getByRole("tab")).toHaveText(["Table", "Explorer"]);
 });
 
-test("closes a pane and reset restores it", async ({ page }) => {
+test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
 
   await analysis.getByRole("tab", { name: "Search" }).click();
   await analysis.getByRole("button", { name: "Close pane" }).click();
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("sheetbase-demo:workbench:closed")))
+    .toContain("search");
+
+  await page.reload({ waitUntil: "networkidle" });
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(0);
 
   await page.getByRole("button", { name: "Reset layout" }).click();

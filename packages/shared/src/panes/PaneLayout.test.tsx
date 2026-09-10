@@ -56,6 +56,14 @@ describe("PaneLayout", () => {
     expect(html).toContain("sheetbase-scope");
     expect(html).toContain('data-theme="dark"');
   });
+
+  it("prunes panes the host no longer offers", () => {
+    const html = renderToStaticMarkup(
+      <PaneLayout panes={panes} layout={{ kind: "stack", id: "s", panes: ["a", "gone"], active: "gone" }} />,
+    );
+    expect(html).not.toContain('data-pane-id="gone"');
+    expect(html).not.toContain("Unknown pane");
+  });
 });
 
 describe("SheetbaseShell", () => {

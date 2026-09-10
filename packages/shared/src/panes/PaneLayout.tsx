@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -142,13 +143,19 @@ export function PaneLayout({
   const paneMap = useMemo(() => new Map(panes.map((pane) => [pane.id, pane])), [panes]);
   const paneIds = useMemo(() => panes.map((pane) => pane.id), [panes]);
   const paneIdsKey = paneIds.join("\u0000");
+  // Deterministic per-instance id so the default stack is stable across a
+  // server render and hydration; interactive nodes get generated ids later.
+  const instanceId = useId();
 
   const [innerLayout, setInnerLayout] = useState<Layout>(() =>
     controlledLayout !== undefined
       ? controlledLayout
-      : loadPaneLayoutState(adapter, persistKey, paneIds, defaultLayout ?? singleStack(paneIds)),
+      : loadPaneLayoutState(adapter, persistKey, paneIds, defaultLayout ?? singleStack(paneIds, `sb-${instanceId}`)),
   );
-  const layout = controlledLayout !== undefined ? controlledLayout : innerLayout;
+  const rawLayout = controlledLayout !== undefined ? controlledLayout : innerLayout;
+  // Always drop panes the host no longer offers — controlled or not. Additions
+  // are handled at load time (reconcile), so a closed pane stays closed.
+  const layout = useMemo(() => pruneLayout(rawLayout, paneIds), [rawLayout, paneIdsKey]);
   // Persist whatever is current. Controlled hosts load their own initial state.
   const state = useMemo(() => paneLayoutState(layout), [layout]);
   useIdleSave(persistKey, state, adapter);
@@ -156,18 +163,9 @@ export function PaneLayout({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const stackRefs = useRef(new Map<string, HTMLElement>());
+  const stackRectsRef = useRef(new Map<string, DOMRect>());
   const hostsRef = useRef(new Map<PaneId, HTMLDivElement>());
   const rootRef = useRef<HTMLDivElement>(null);
-
-  // Drop panes the host no longer offers. Additions are handled at load time
-  // (reconcile), never at runtime, so an intentionally closed pane stays closed.
-  const lastPaneIdsRef = useRef(paneIdsKey);
-  useEffect(() => {
-    if (lastPaneIdsRef.current === paneIdsKey) return;
-    lastPaneIdsRef.current = paneIdsKey;
-    if (controlledLayout !== undefined) return;
-    setInnerLayout((current) => pruneLayout(current, paneIds));
-  }, [paneIdsKey, paneIds, controlledLayout]);
 
   // Stable DOM hosts so React keeps pane state when a pane moves between stacks.
   function hostFor(id: PaneId): HTMLDivElement | null {
@@ -217,8 +215,10 @@ export function PaneLayout({
         return { stackId, zone: "center", tabIndex: siblings.indexOf(tab) };
       }
     }
-    for (const [stackId, element] of stackRefs.current) {
-      const rect = element.getBoundingClientRect();
+    const rects = stackRectsRef.current.size > 0
+      ? stackRectsRef.current
+      : new Map([...stackRefs.current].map(([id, element]) => [id, element.getBoundingClientRect()]));
+    for (const [stackId, rect] of rects) {
       if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
       const rx = (x - rect.left) / Math.max(1, rect.width);
       const ry = (y - rect.top) / Math.max(1, rect.height);
@@ -246,6 +246,10 @@ export function PaneLayout({
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const startX = event.clientX;
     const startY = event.clientY;
+    const previousUserSelect = document.body.style.userSelect;
+    // Stacks do not move during a drag, so snapshot their rects once instead of
+    // measuring every stack on every pointer move.
+    stackRectsRef.current = new Map([...stackRefs.current].map(([id, element]) => [id, element.getBoundingClientRect()]));
     let dragging = false;
 
     const move = (native: PointerEvent) => {
@@ -267,7 +271,8 @@ export function PaneLayout({
     };
 
     const cleanup = () => {
-      document.body.style.userSelect = "";
+      document.body.style.userSelect = previousUserSelect;
+      stackRectsRef.current.clear();
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);

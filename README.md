@@ -6,7 +6,7 @@ Private monorepo for Sheetbase UI packages. Shared field types, filter operators
 
 | Package | Role |
 | --- | --- |
-| `sheetbase-shared` | Canonical `SheetbaseField`, `FilterOperator`, `DatasetQuery`, predicate/tree evaluators, theme tokens, framed-shell CSS, theme toggle |
+| `sheetbase-shared` | Canonical `SheetbaseField`, `FilterOperator`, `DatasetQuery`, predicate/tree evaluators, theme tokens, framed-shell CSS, pane multiplexer/shell, theme toggle |
 | `sheetbase-table` | Spreadsheet / paged dataset table |
 | `sheetbase-explorer` | Chart-first exploration workspace |
 | `sheetbase-schemaeditor` | Zoomable schema graph |
@@ -38,4 +38,5 @@ Import from `sheetbase-shared`:
 - `FilterClause`, `DatasetQuery`, `queryKey`, `buildFilterValue`
 - `testCondition`, `toFilterClause`, `filterRows`
 - `buildPredicate`, `applySearch`, `compileToDatasetQuery` (flattens a single-level group onto `DatasetQuery`)
-- `ThemeToggleButton`, `theme.css`, `shell.css`
+- `ThemeToggleButton`, `theme.css`, `shell.css`, `panes.css`
+- `PaneLayout`, `SheetbaseShell`, layout tree helpers and `PaneLayoutState` persistence
