@@ -109,7 +109,8 @@ export function PagedDemo() {
   const setColumnVisibility = useCallback((fieldId: string, visible: boolean) => updateColumns(presentation.columns.map((column) => column.fieldId === fieldId ? { ...column, hidden: !visible } : column)), [presentation.columns, updateColumns]);
   const applyToolbarFormat = useCallback((format: Parameters<SpreadsheetHandle["applyFormat"]>[0]) => tableRef.current?.applyFormat(format), []);
   return <TableSurface theme={theme} className="paged-demo-surface" action={<button className="open-formatting" aria-label="Open conditional formatting" onClick={() => updateObject({ open: true })}><span>◩</span> Rules</button>} table={<div className="formatted-table"><TableFormattingToolbar selection={selection.range} format={selection.format} mixedFormats={selection.mixedFormats} onFormat={applyToolbarFormat} theme={theme} themeMode={presentation.theme} onThemeChange={(mode) => setPresentation((current) => ({ ...current, theme: mode }))} viewControls={<TableControls fields={fields} query={presentation.query} onQueryChange={setQuery} columns={presentation.columns} onColumnsChange={updateColumns} onFrozenColumnsChange={setFrozenColumns} theme={theme} />} /><Profiler id="paged-grid" onRender={countGridCommit}><PagedSpreadsheet
-    key={fieldIds.join("|")}
+        theme={theme}
+        key={fieldIds.join("|")}
     ref={tableRef}
     adapter={adapter}
     datasetId="experiments"

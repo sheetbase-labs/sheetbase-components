@@ -6,6 +6,7 @@ export * from "./PagedSpreadsheet";
 export * from "./ConflictPanel";
 export * from "./FormulaTokens";
 export * from "./TableSurface";
+export * from "./DataGrid";
 export * from "./presentation-state";
 export * from "./TableControls";
 export * from "./filter-conditions";

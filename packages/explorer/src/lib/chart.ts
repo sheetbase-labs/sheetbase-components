@@ -1,9 +1,16 @@
+/// <reference path="../d3-scale.d.ts" />
 import {
   areaY,
   barX,
   barY,
   binX,
+  binY,
   boxY,
+  cell,
+  colorGradientLegend,
+  colorLegend,
+  d3AreaXCurve,
+  d3Curve,
   defineChart,
   dot,
   facetChart,
@@ -11,20 +18,29 @@ import {
   linearRegressionY,
   lineY,
   link,
+  normalize,
   rect,
+  ruleX,
+  ruleY,
   stack,
+  text,
   tickY,
+  violinY,
+  waterfall,
 } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
 import { portal } from '@tanstack/charts/tooltip/portal'
+import { pie, polar, radialArc } from '@tanstack/charts/polar'
 import { zoomX, type ZoomXWindow } from '@tanstack/charts/interaction/zoom'
 import { controlledSignal } from '@tanstack/charts/interaction/signal'
 import { scaleBand } from '@tanstack/charts/scales/band'
 import { scaleLinear } from '@tanstack/charts/scales/linear'
 import { scaleOrdinal } from '@tanstack/charts/scales/ordinal'
 import { scalePoint } from '@tanstack/charts/scales/point'
+import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
+import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
 import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
-import type { ChartSpec, DataRow, Dataset } from './types'
+import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
 
 function visibleRows(rows: DataRow[], spec: ChartSpec) {
   const seriesField = spec.color ?? spec.group
@@ -57,6 +73,20 @@ function numericExtent(rows: DataRow[], field: string) {
   if (!found) return undefined
   if (min === max) return [min - 0.5, max + 0.5] as const
   return [min, max] as const
+}
+
+/** Positive data extent for a log axis; undefined when no usable values exist. */
+function logExtent(rows: DataRow[], field: string): [number, number] | undefined {
+  let min = Infinity
+  let max = -Infinity
+  for (const row of rows) {
+    const value = Number(row[field])
+    if (!Number.isFinite(value) || value <= 0) continue
+    if (value < min) min = value
+    if (value > max) max = value
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return undefined
+  return [min, max]
 }
 
 function interactionOptions(spec: ChartSpec) {
@@ -131,6 +161,12 @@ function chartSpec(
       ? stack({ offset: 'normalize' })
       : undefined
 
+  const curve = spec.lineCurve === 'smooth' ? d3Curve(curveBasis)
+    : spec.lineCurve === 'step' ? d3Curve(curveStep)
+      : spec.lineCurve === 'monotone' ? d3Curve(curveMonotoneX)
+        : undefined
+  const lineCurve = curve ? { curve } : {}
+
   if (spec.kind === 'histogram') {
     if (xMeta.kind !== 'number') return null
     const bins = binX(rows, ({ value: (row: DataRow) => Number(row[spec.x!]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as any)
@@ -142,14 +178,97 @@ function chartSpec(
     marks.push(barX(rows, ({ id: 'horizontal-bars', y: spec.x, x: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
   } else if (spec.kind === 'bar') {
     marks.push(barY(rows, ({ id: 'bars', x: spec.x, y: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+  } else if (spec.kind === 'lollipop') {
+    // Thin stem plus a dot head; preparedRows has already summarised y.
+    marks.push(barY(rows, ({ id: 'lollipop-stem', x: spec.x, y: spec.y!, maxThickness: Math.max(2, Math.round(spec.lineWidth + 1)), radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+    marks.push(dot(rows, ({ id: 'lollipop-head', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, ...grouping }) as any))
+  } else if (spec.kind === 'violin') {
+    if (!spec.y || yMeta?.kind !== 'number') return null
+    const bins = binY(rows, { value: spec.y, by: spec.x, thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } } as any) as any[]
+    const profiles = normalize(bins, { value: 'count', by: spec.x, basis: 'max', as: 'width' } as any) as any[]
+    marks.push(violinY(profiles, ({ id: 'violin', x: spec.x, y: 'y', width: 'width', span: 0.8, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity, ...(semanticColour ? { color: semanticColour } : {}), curve: d3AreaXCurve(curveBasis) }) as any))
+  } else if (spec.kind === 'waterfall') {
+    if (!spec.y) return null
+    // Sum contributions per category, then let the transform lay them out as
+    // cumulative intervals.
+    const buckets = new Map<string, number>()
+    for (const row of rows) {
+      const key = String(row[spec.x] ?? '')
+      buckets.set(key, (buckets.get(key) ?? 0) + (Number(row[spec.y]) || 0))
+    }
+    const steps = waterfall([...buckets].map(([x, value]) => ({ x, value })) as any, { value: 'value' } as any) as any[]
+    marks.push(barY(steps, ({ id: 'waterfall', x: 'x', y: 'end', y1: 'start', y2: 'end', fill: semanticColour ? undefined : markColour, stroke: markColour, strokeWidth: 1, fillOpacity: spec.fillOpacity, ...(semanticColour ? { color: semanticColour } : {}) }) as any))
+  } else if (spec.kind === 'heatmap') {
+    if (!spec.x || !spec.y) return null
+    const buckets = new Map<string, { x: string; y: string; sum: number; n: number; min: number; max: number }>()
+    for (const row of rows) {
+      const xv = String(row[spec.x] ?? '')
+      const yv = String(row[spec.y] ?? '')
+      if (!xv || !yv) continue
+      const value = spec.size ? Number(row[spec.size]) : 1
+      if (!Number.isFinite(value)) continue
+      const bucket = buckets.get(`${xv}\u0000${yv}`) ?? { x: xv, y: yv, sum: 0, n: 0, min: Infinity, max: -Infinity }
+      bucket.sum += value
+      bucket.n += 1
+      bucket.min = Math.min(bucket.min, value)
+      bucket.max = Math.max(bucket.max, value)
+      buckets.set(`${xv}\u0000${yv}`, bucket)
+    }
+    const mode = !spec.size ? 'count' : spec.aggregate === 'mean' ? 'mean' : spec.aggregate === 'min' ? 'min' : spec.aggregate === 'max' ? 'max' : spec.aggregate === 'count' ? 'count' : 'sum'
+    const cells = [...buckets.values()].map((bucket) => ({ x: bucket.x, y: bucket.y, value: mode === 'count' ? bucket.n : mode === 'mean' ? bucket.sum / bucket.n : mode === 'min' ? bucket.min : mode === 'max' ? bucket.max : bucket.sum }))
+    marks.push(cell(cells, ({ id: 'heatmap', x: 'x', y: 'y', color: 'value', inset: spec.barGap, radius: spec.barRadius }) as any))
   } else if (spec.kind === 'area') {
-    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
-    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
+    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
+    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
   } else if (spec.kind === 'line') {
-    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
+    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
   } else {
     const rendered = spec.kind === 'scatter' ? decimatePoints(rows, MAX_SCATTER_POINTS) : rows
-    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
+    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.kind === 'scatter' && spec.size ? spec.size : spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
+  }
+
+  if (spec.labels && spec.x && spec.y && ['scatter', 'line', 'area', 'bar', 'lollipop'].includes(spec.kind)) {
+    const labelField = spec.labelField
+    marks.push(text(rows as any, ({
+      id: 'data-labels', x: spec.x, y: spec.y,
+      text: labelField
+        ? (row: DataRow) => String(row[labelField] ?? '')
+        : (row: DataRow) => { const value = Number(row[spec.y!]); return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '' },
+      dy: spec.kind === 'bar' || spec.kind === 'lollipop' ? -6 : -8,
+      anchor: 'middle', fill: '#52525b', fontSize: 10, fontWeight: 600,
+    } as any) as any))
+  }
+
+  if (spec.y2) {
+    // Second measure on its own right-hand axis, aggregated over the same
+    // dimensions as the primary so the line tracks the marks.
+    const dims = [spec.x, spec.group, spec.color, spec.facet].filter((value): value is string => Boolean(value))
+    const sums = new Map<string, { sum: number; n: number }>()
+    for (const row of rawRows) {
+      const value = Number(row[spec.y2])
+      if (!Number.isFinite(value)) continue
+      const key = JSON.stringify(dims.map((dim) => row[dim]))
+      const bucket = sums.get(key) ?? { sum: 0, n: 0 }
+      bucket.sum += value
+      bucket.n += 1
+      sums.set(key, bucket)
+    }
+    const secondaryRows = rows.map((row) => {
+      const bucket = sums.get(JSON.stringify(dims.map((dim) => row[dim])))
+      return { ...row, __secondary: bucket && bucket.n ? bucket.sum / bucket.n : undefined }
+    })
+    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? '#07956a', strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as any) as any))
+  }
+
+  if (spec.refLines?.length) {
+    for (const line of spec.refLines) {
+      const guide = [{ x: line.value, y: line.value }]
+      if (line.axis === 'x') marks.push(ruleX(guide, { id: `ref-x-${line.id}`, x: 'x', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
+      else marks.push(ruleY(guide, { id: `ref-y-${line.id}`, y: 'y', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
+      if (line.label) {
+        marks.push(text(guide, ({ id: `ref-label-${line.id}`, ...(line.axis === 'x' ? { x: 'x' } : { y: 'y' }), text: line.label, fill: markColour, fontSize: 10, fontWeight: 600 } as any) as any))
+      }
+    }
   }
 
   if (spec.showRegression && spec.kind === 'scatter' && xMeta.kind === 'number' && yMeta?.kind === 'number') {
@@ -170,24 +289,104 @@ function chartSpec(
     ? [Math.max(extent[0], spec.zoomX.start), Math.min(extent[1], spec.zoomX.end)] as [number, number]
     : undefined
 
-  const xScale = horizontal
-    ? (yMeta?.kind === 'number' ? scaleLinear : () => scalePoint<string>().padding(0.5))
-    : xMeta.kind === 'number' ? scaleLinear : ['bar', 'box'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
-  const yScale = horizontal
-    ? () => scaleBand<string>().padding(0.18)
-    : spec.kind === 'histogram' ? scaleLinear : yMeta?.kind === 'number' ? scaleLinear : () => scalePoint<string>().padding(0.5)
-  const color = semanticColour ? { scale: () => scaleOrdinal<string, string>().range(spec.palette) } : undefined
+  const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
+  const yValueNumeric = !horizontal && yMeta?.kind === 'number'
+  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop', 'waterfall', 'heatmap'].includes(spec.kind)
+  const xDataExtent = xValueNumeric ? numericExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
+  const yDataExtent = yValueNumeric && spec.y ? numericExtent(rawRows, spec.y) : undefined
+  const xLogExtent = logAllowed && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
+  const yLogExtent = logAllowed && yValueNumeric && spec.y ? logExtent(rawRows, spec.y) : undefined
 
-  const configuredX = horizontal && yMeta?.kind === 'number' && (spec.yMin !== undefined || spec.yMax !== undefined)
-    ? scaleLinear().domain([spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))])
-    : zoomDomain
-      ? scaleLinear().domain(zoomDomain)
-      : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
-        ? scaleLinear().domain([spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1])
-        : undefined
-  const configuredY = !horizontal && yMeta?.kind === 'number' && (spec.yMin !== undefined || spec.yMax !== undefined)
-    ? scaleLinear().domain([spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))])
+  // Pick an effective scale, falling back to linear when the data can't support
+  // the request (log needs positive values + a non-zero baseline; sqrt needs
+  // non-negative values).
+  const resolveKind = (requested: ScaleKind | undefined, extent: readonly [number, number] | undefined, logExt: readonly [number, number] | undefined): ScaleKind => {
+    const kind = requested && requested !== 'auto' ? requested : 'linear'
+    if (kind === 'log') return logExt ? 'log' : 'linear'
+    if (kind === 'sqrt') return extent && extent[0] >= 0 ? 'sqrt' : 'linear'
+    return kind
+  }
+  const xKind = resolveKind(spec.xScale, xDataExtent, xLogExtent)
+  const yKind = resolveKind(spec.yScale, yDataExtent, yLogExtent)
+  const numericScale = (kind: ScaleKind) =>
+    kind === 'log' ? scaleLog : kind === 'sqrt' ? scaleSqrt : kind === 'symlog' ? scaleSymlog : scaleLinear
+
+  // Optional ordering of categorical x (or y for horizontal bars), ranked by
+  // the summed y value.
+  const categoryOrder = spec.categoryOrder && spec.categoryOrder !== 'auto' ? spec.categoryOrder : undefined
+  let categoryDomain: string[] | undefined
+  if (categoryOrder && !xValueNumeric && spec.x) {
+    const totals = new Map<string, number>()
+    for (const row of rawRows) {
+      const key = String(row[spec.x] ?? '')
+      if (!key) continue
+      const value = spec.y ? Number(row[spec.y]) : 1
+      totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(value) ? value : 0))
+    }
+    categoryDomain = [...totals.keys()].sort(categoryOrder === 'label-asc'
+      ? (a, b) => a.localeCompare(b)
+      : categoryOrder === 'value-asc'
+        ? (a, b) => (totals.get(a) ?? 0) - (totals.get(b) ?? 0)
+        : (a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0))
+  }
+
+  const bandPadding = spec.kind === 'heatmap' ? 0.05 : 0.18
+  const xBand = categoryDomain
+    ? scaleBand<string>().domain(categoryDomain).padding(bandPadding)
+    : () => scaleBand<string>().padding(bandPadding)
+  const xPoint = categoryDomain
+    ? scalePoint<string>().domain(categoryDomain).padding(0.5)
+    : () => scalePoint<string>().padding(0.5)
+
+  const xScale = horizontal
+    ? (xValueNumeric ? numericScale(xKind) : xPoint)
+    : xMeta.kind === 'number'
+      ? numericScale(xKind)
+      : ['bar', 'box', 'lollipop', 'violin', 'waterfall', 'heatmap'].includes(spec.kind)
+        ? xBand
+        : xPoint
+  const yScale = horizontal
+    ? xBand
+    : spec.kind === 'histogram' ? scaleLinear
+      : spec.kind === 'heatmap' ? xBand
+        : yValueNumeric ? numericScale(yKind) : xPoint
+
+  // A numeric colour field becomes a gradient on scatter dots; a heatmap always
+  // colours by its aggregated value. Connected geometry (bars/lines) needs
+  // discrete series identity, so it stays ordinal.
+  const heatmap = spec.kind === 'heatmap'
+  const colourMeta = spec.color ? dataset.columns.find((column) => column.key === spec.color) : undefined
+  const continuousColour = spec.kind === 'scatter' && Boolean(spec.color)
+    && (spec.colorScale === 'continuous' || (spec.colorScale !== 'categorical' && colourMeta?.kind === 'number'))
+  const gradient = heatmap || continuousColour
+  const colourStops = spec.palette.length >= 2
+    ? [spec.palette[0]!, spec.palette[Math.floor(spec.palette.length / 2)]!, spec.palette[spec.palette.length - 1]!]
+    : spec.palette
+  const color = semanticColour || heatmap
+    ? {
+        scale: () => (gradient ? d3ScaleLinear().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
+        ...(gradient
+          ? { legend: heatmap ? colorGradientLegend({ label: spec.size ?? 'count' }) : colorLegend({ label: spec.color }) }
+          : {}),
+      }
     : undefined
+
+  const xDomain: [number, number] | undefined = zoomDomain
+    ? zoomDomain
+    : xKind === 'log' && xLogExtent
+      ? xLogExtent
+      : horizontal && xValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
+        ? [spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))]
+        : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
+          ? [spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1]
+          : undefined
+  const yDomain: [number, number] | undefined = yKind === 'log' && yLogExtent
+    ? yLogExtent
+    : yValueNumeric && spec.y && (spec.yMin !== undefined || spec.yMax !== undefined)
+      ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))]
+      : undefined
+  const configuredX = xDomain ? numericScale(xKind)().domain(xDomain) : undefined
+  const configuredY = yDomain ? numericScale(yKind)().domain(yDomain) : undefined
 
   const controls = spec.zoomEnabled && extent && onZoom && xMeta.kind === 'number' && !horizontal
     ? [zoomX({
@@ -204,8 +403,9 @@ function chartSpec(
   return {
     marks,
     scales: {
-      x: { scale: (configuredX ?? xScale) as any, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
-      y: { scale: (configuredY ?? yScale) as any, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
+      x: { scale: (configuredX ?? xScale) as any, reverse: spec.xReverse ?? false, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
+      y: { scale: (configuredY ?? yScale) as any, reverse: spec.yReverse ?? false, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
+      ...(spec.y2 ? { y2: { channel: 'y' as const, scale: scaleLinear as any, nice: true, grid: false, axis: { label: spec.y2, side: 'right' as const } } } : {}),
     },
     ...(color ? { color } : {}),
     ...(controls ? { controls } : {}),
@@ -222,21 +422,56 @@ export function buildChart(
   const prepared = visibleRows(preparedRows(dataset, spec), spec)
   const raw = visibleRows(filteredRows(dataset, spec), spec)
 
+  if (spec.kind === 'pie' || spec.kind === 'donut') {
+    if (!spec.x || !spec.y) return null
+    const totals = new Map<string, number>()
+    for (const row of raw) {
+      const key = String(row[spec.x] ?? '')
+      if (!key) continue
+      const value = Number(row[spec.y] ?? 0)
+      totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(value) ? value : 0))
+    }
+    const slices = pie([...totals].map(([category, value]) => ({ category, value })), { value: 'value' } as any)
+    return defineChart({
+      marks: [polar({
+        inset: 8,
+        radiusRatio: 0.82,
+        marks: [radialArc(slices, ({
+          innerRadius: spec.kind === 'donut' ? ({ radius }: { radius: number }) => radius * 0.58 : 0,
+          cornerRadius: spec.barRadius,
+          color: 'category',
+          key: 'category',
+          fillOpacity: spec.fillOpacity,
+        } as any) as any)],
+        scales: { angle: null, radius: null },
+      } as any) as any],
+      scales: { x: null, y: null },
+      color: { scale: () => scaleOrdinal<string, string>().range(spec.palette), legend: colorLegend({ label: spec.x }) },
+    } as any) as any
+  }
+
   if (spec.facet) {
-    const faceted = facetChart(prepared, ({
-      by: spec.facet,
-      columns: 2,
-      minWidth: 240,
-      gap: 14,
-      axes: 'cell',
-      label: (value: unknown) => String(value),
-      chart(groupRows: readonly DataRow[]) {
-        const facetValue = String(groupRows[0]?.[spec.facet!] ?? '')
-        const rawFacet = raw.filter((row) => String(row[spec.facet!] ?? '') === facetValue)
-        return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as any
-      },
-    }) as any) as any
-    return defineChart(faceted as any, interactionOptions(spec) as any)
+    const facetMeta = dataset.columns.find((column) => column.key === spec.facet)
+    // Faceting a field the chart can't render (e.g. histogram over a date) would
+    // hand `null` to facetChart and crash; and a high-cardinality facet would
+    // render thousands of cells. Fall back to a single chart in both cases.
+    const canFacet = !facetMeta || facetMeta.uniqueCount <= 60
+    if (canFacet && chartSpec(prepared, raw, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom)) {
+      const faceted = facetChart(prepared, ({
+        by: spec.facet,
+        columns: 2,
+        minWidth: 240,
+        gap: 14,
+        axes: 'cell',
+        label: (value: unknown) => String(value),
+        chart(groupRows: readonly DataRow[]) {
+          const facetValue = String(groupRows[0]?.[spec.facet!] ?? '')
+          const rawFacet = raw.filter((row) => String(row[spec.facet!] ?? '') === facetValue)
+          return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as any
+        },
+      }) as any) as any
+      return defineChart(faceted as any, interactionOptions(spec) as any)
+    }
   }
 
   const specification = chartSpec(prepared, raw, dataset, spec, selectedRowId, onZoom)

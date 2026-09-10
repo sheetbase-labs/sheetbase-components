@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useImperativeHandle, useMemo, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
+  PaneLayout,
   loadInitialState,
   normaliseOperator,
   operatorShortLabel,
@@ -8,6 +9,8 @@ import {
   useIdleSave,
   usePersistedTheme,
   type FilterOperator,
+  type Layout,
+  type PaneSpec,
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
@@ -15,12 +18,22 @@ import type { PipelineRule, Row, RuleActionDef, RuleActionKind, RuleCondition, R
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun } from "./engine";
 
+export interface RulesEngineHandle {
+  /** Append a default rule, as the topbar button does. */
+  addRule(): void;
+}
+
 export interface RulesEngineProps {
   value?: PipelineRule[];
   initialRules?: PipelineRule[];
   onChange?: (next: PipelineRule[]) => void;
   /** Known pipeline fields for condition editors. */
   fields?: string[];
+  /**
+   * Optional dataset. When provided the dry-run pane evaluates every rule over
+   * these rows (match counts, rejected rows, routes) instead of the JSON probe.
+   */
+  rows?: readonly Row[];
   /** Host-declared action vocabulary. Empty (default) keeps kinds as free text; the component wires no predefined actions. */
   actions?: readonly RuleActionDef[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
@@ -29,6 +42,10 @@ export interface RulesEngineProps {
   onThemeChange?: (next: ThemeMode) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<PipelineRule[]>;
+  /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
+  chrome?: "full" | "none";
+  /** Imperative actions for hosts that render pane chrome. */
+  ref?: Ref<RulesEngineHandle>;
 }
 
 const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
@@ -41,6 +58,18 @@ const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Rules editor | dry run, each a pane. */
+const RULES_PANE_LAYOUT: Layout = {
+  kind: "split",
+  id: "rules-root",
+  direction: "row",
+  sizes: [0.68, 0.32],
+  children: [
+    { kind: "stack", id: "rules-main", panes: ["rules"], active: "rules" },
+    { kind: "stack", id: "rules-dry-run", panes: ["dry-run"], active: "dry-run" },
+  ],
+};
 
 function valueText(value: RuleCondition["value"]): string {
   if (value === undefined) return "";
@@ -66,7 +95,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -93,6 +122,10 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     }
   }
 
+  function addRule() {
+    commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }]);
+  }
+
   function patchRule(id: string, patch: Partial<PipelineRule>) {
     commit(rules.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -114,6 +147,20 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     }
   }, [probe, rules]);
 
+  const dataset = useMemo(() => (rows ? dryRun(rules, [...rows]) : null), [rules, rows]);
+  const datasetSummary = useMemo(() => {
+    if (!dataset) return null;
+    const counts = new Map<string, number>();
+    const routes = new Set<string>();
+    let rejected = 0;
+    for (const entry of dataset) {
+      for (const rule of entry.matched) counts.set(rule.id, (counts.get(rule.id) ?? 0) + 1);
+      if (entry.effects.rejected) rejected += 1;
+      for (const route of entry.effects.routes) routes.add(route);
+    }
+    return { counts, rejected, routes: [...routes], matched: dataset.filter((entry) => entry.matched.length > 0).length, total: dataset.length };
+  }, [dataset]);
+
   function onProbeChange(text: string) {
     setProbe(text);
     try { JSON.parse(text || "{}"); setProbeError(null); } catch { setProbeError("Invalid JSON — dry run paused."); }
@@ -121,20 +168,32 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   const active = rules.filter((r) => r.enabled).length;
 
+  useImperativeHandle(ref, () => ({ addRule }));
+
   return (
     <div className="sheetbase-scope sb-rules" data-theme={activeTheme}>
-      <div className="sb-frame">
-        <div className="sb-topbar">
-          <div className="sb-toolbar-group">
-            <span className="sb-stat">{active} of {rules.length} active</span>
+      <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
+        {chrome !== "none" && (
+          <div className="sb-topbar">
+            <div className="sb-toolbar-group">
+              <span className="sb-stat">{active} of {rules.length} active</span>
+            </div>
+            <div className="sb-topbar-actions">
+              {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
+              <button className="sb-btn primary" onClick={addRule}>+ Rule</button>
+            </div>
           </div>
-          <div className="sb-topbar-actions">
-            <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
-          </div>
-        </div>
-        <div className="sb-rules-body sb-plates">
-          <section className="sb-rules-main sb-plate">
+        )}
+        <PaneLayout
+          className="sb-panes--fit"
+          defaultLayout={RULES_PANE_LAYOUT}
+          panes={[
+            {
+              id: "rules",
+              title: "Pipeline rules",
+              dragHandle: "heading",
+              content: (
+                <section className="sb-rules-main sb-plate">
             <div className="sb-nl">
               <div className="sb-nl-row">
                 <input
@@ -233,26 +292,58 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
               ))}
               {rules.length === 0 && <li className="sb-muted" style={{ padding: 14 }}>No rules yet — describe one above.</li>}
             </ul>
-          </section>
-          <aside className="sb-rules-side sb-plate">
+                </section>
+              ),
+            },
+            {
+              id: "dry-run",
+              title: "Dry run",
+              dragHandle: "heading",
+              content: (
+                <aside className="sb-rules-side sb-plate">
             <div className="sb-panel-heading"><span>Dry run</span></div>
             <div className="sb-rules-editor">
-              <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>
-              {probeError ? <p className="sb-error">{probeError}</p> : probeResult && (
-                probeResult.matched.length === 0
-                  ? <p className="sb-muted">No rules match this row.</p>
-                  : <div>
-                    <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
-                    {probeResult.effects.rejected && <p className="sb-error">Rejected</p>}
-                    {probeResult.effects.routes.length > 0 && <p className="sb-muted">Route {probeResult.effects.routes.join(", ")}</p>}
-                    {Object.keys(probeResult.effects.transforms).length > 0 && (
-                      <pre className="sb-probe" style={{ minHeight: 0 }}>{JSON.stringify(probeResult.effects.output, null, 2)}</pre>
-                    )}
-                  </div>
+              {datasetSummary ? (
+                <>
+                  <p className="sb-muted">{datasetSummary.total} rows · {datasetSummary.matched} matched</p>
+                  {rules.length === 0 ? (
+                    <p className="sb-muted">No rules to evaluate.</p>
+                  ) : (
+                    <ul className="sb-match-list">
+                      {rules.map((rule) => (
+                        <li key={rule.id}>
+                          <strong>{rule.name}</strong>
+                          <small>{datasetSummary.counts.get(rule.id) ?? 0} of {datasetSummary.total} rows</small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {datasetSummary.rejected > 0 && <p className="sb-error">{datasetSummary.rejected} rejected</p>}
+                  {datasetSummary.routes.length > 0 && <p className="sb-muted">Route {datasetSummary.routes.join(", ")}</p>}
+                </>
+              ) : (
+                <>
+                  <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>
+                  {probeError ? <p className="sb-error">{probeError}</p> : probeResult && (
+                    probeResult.matched.length === 0
+                      ? <p className="sb-muted">No rules match this row.</p>
+                      : <div>
+                        <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
+                        {probeResult.effects.rejected && <p className="sb-error">Rejected</p>}
+                        {probeResult.effects.routes.length > 0 && <p className="sb-muted">Route {probeResult.effects.routes.join(", ")}</p>}
+                        {Object.keys(probeResult.effects.transforms).length > 0 && (
+                          <pre className="sb-probe" style={{ minHeight: 0 }}>{JSON.stringify(probeResult.effects.output, null, 2)}</pre>
+                        )}
+                      </div>
+                  )}
+                </>
               )}
             </div>
-          </aside>
-        </div>
+                </aside>
+              ),
+            },
+          ] satisfies PaneSpec[]}
+        />
       </div>
     </div>
   );

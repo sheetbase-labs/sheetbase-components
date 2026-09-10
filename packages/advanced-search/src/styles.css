@@ -1,5 +1,4 @@
-.sb-search-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); min-height: 560px; }
-.sb-search-main { min-width: 0; }
+.sb-search-main { min-width: 0; container-type: inline-size; }
 .sb-search-scroll { padding: 8px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .sb-group { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
 .sb-group-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--panel-2); border-radius: 6px 6px 0 0; flex-wrap: wrap; }
@@ -16,7 +15,17 @@
 .sb-filter-rule input { font-family: var(--font-mono); font-size: 11px; }
 .sb-filter-rule select:hover, .sb-filter-rule input:hover { border-color: var(--border-strong); }
 .sb-filter-rule select:focus, .sb-filter-rule input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
-.sb-search-controls { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 6px; }
+.sb-search-controls {
+  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+  gap: 6px 14px; border-top: 1px solid var(--border); padding-top: 8px;
+}
+/* Controls share the width instead of stacking in a narrow left column. */
+.sb-search-controls .sb-compact { grid-template-columns: auto minmax(96px, 150px); min-height: 22px; }
+.sb-search-controls .sb-input, .sb-search-controls .sb-select { width: 100%; }
+/* Narrow pane: give each condition row the full width instead of squeezing. */
+@container (max-width: 380px) {
+  .sb-filter-rule, .sb-filter-rule.between { grid-template-columns: minmax(0, 1fr); }
+}
 .sb-search-side { min-height: 0; }
 .sb-search-side > .sb-muted { margin: 0; }
 .sb-rownum { min-width: 34px !important; max-width: 34px !important; color: var(--faint); font-family: var(--font-mono); font-size: 10px; }

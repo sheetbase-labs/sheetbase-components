@@ -5,7 +5,7 @@ import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popove
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 
-export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, setSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, onReset, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
   menu: Menu
   spec: ChartSpec
   dataset: Dataset
@@ -15,7 +15,12 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   exportStatus: string | null
   importStatus: string | null
   dark: boolean
+  showThemeToggle: boolean
   setSpec(action: SetStateAction<ChartSpec>): void
+  /** Group/Filter edits (view-aware when the host controls an analysis view). */
+  onAnalysisSpec(action: SetStateAction<ChartSpec>): void
+  /** Restore the dataset's default chart. */
+  onReset(): void
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
   onChoosePlot(kind: ChartKind): void
@@ -35,11 +40,12 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
 }) {
   return (<>
     <div className="explorer-commandbar explorer-commandbar-v4">
-      <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
-      <span className="command-spacer"/><ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
+      <DataMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} onAnalysisSpec={onAnalysisSpec} onField={onField} onAutoKind={onAutoKind} onChoosePlot={onChoosePlot} />
+      <span className="command-spacer"/>{showThemeToggle && <ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />}{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
     <div className="sb-subbar explorer-subbar">
       <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
+      <button type="button" className="explorer-reset" onClick={onReset}>Reset</button>
     </div>
   </>)
 }
@@ -75,17 +81,20 @@ export function useDatasetSwap(dataset: Dataset | null): boolean {
   return false
 }
 
-export function ExplorerFrame({ framed = true, rootRef, panelCollapsed, panelHeight, children }: {
+export function ExplorerFrame({ framed = true, rootRef, panel = true, panelCollapsed, panelHeight, children }: {
   framed?: boolean
   rootRef: RefObject<HTMLDivElement | null>
+  /** Render the bottom data/SQL panel. Default true. */
+  panel?: boolean
   panelCollapsed: boolean
   panelHeight: number
   children: ReactNode
 }) {
+  const rows = !panel ? 'minmax(0, 1fr)' : panelCollapsed ? 'minmax(0, 1fr) 34px' : `minmax(0, 1fr) ${panelHeight}px`
   return (
     <div ref={rootRef} className={framed ? 'sheetbase-explorer framed' : 'sheetbase-explorer'}>
       {framed
-        ? <div className="app-shell explorer-app-v3"><div className="explorer-frame explorer-frame-v3 explorer-frame-v4" style={{ gridTemplateRows: panelCollapsed ? 'minmax(0, 1fr) 34px' : `minmax(0, 1fr) ${panelHeight}px` }}>{children}</div></div>
+        ? <div className="app-shell explorer-app-v3"><div className="explorer-frame explorer-frame-v3 explorer-frame-v4" style={{ gridTemplateRows: rows }}>{children}</div></div>
         : children}
     </div>
   )

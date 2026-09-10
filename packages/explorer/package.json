@@ -28,7 +28,8 @@
     "@tanstack/charts": "0.16.0",
     "alasql": "^4.6.6",
     "papaparse": "^5.5.3",
-    "sheetbase-shared": "workspace:*"
+    "sheetbase-shared": "workspace:*",
+    "sheetbase-table": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

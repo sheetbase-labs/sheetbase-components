@@ -65,6 +65,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   const [coordinator] = useState(() => new RevisionedCommitCoordinator(adapter));
   const loadedPagesRef = useRef(new Map<number, number>());
   const initialLoadRef = useRef(true);
+  const lastViewportRef = useRef<SpreadsheetViewport | null>(null);
   const [conflicts, setConflicts] = useState<readonly ConflictPanelEntry[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const conflictTriggerRef = useRef<HTMLButtonElement>(null);
@@ -91,11 +92,17 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     else if (forwardedRef) forwardedRef.current = instance;
   }, [forwardedRef]);
   useEffect(() => () => loader.dispose(), [loader]);
+  const previousQueryKeyRef = useRef(stableQueryKey);
   useEffect(() => {
+    const queryChanged = previousQueryKeyRef.current !== stableQueryKey;
+    previousQueryKeyRef.current = stableQueryKey;
     recordIdsRef.current.clear();
     loadedPagesRef.current.clear();
     initialLoadRef.current = true;
     setStatus((current) => ({ ...current, loadedRows: 0 }));
+    // Re-run the current viewport for the new query without remounting the grid.
+    if (queryChanged && lastViewportRef.current) void loadViewport(lastViewportRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stableQueryKey]);
   useEffect(() => () => {
     if (renderFrameRef.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(renderFrameRef.current);
@@ -127,7 +134,8 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
         page.records.forEach((record, offset) => recordIdsRef.current.set(page.request.rowStart + offset, record.recordId));
         for (const [address, cell] of materializeDatasetPage(page, stableFieldIds.map((fieldId, column) => ({ fieldId, column })))) cells.set(address, cell);
       }
-      tableRef.current?.hydrate(cells);
+      if (initial) tableRef.current?.replaceData(cells);
+      else tableRef.current?.hydrate(cells);
       const hydrationMs = performance.now() - hydrationStart;
       const loadedRows = [...loadedPagesRef.current.values()].reduce((sum, count) => sum + count, 0);
       initialLoadRef.current = false;
@@ -148,6 +156,13 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       onLoadError?.(error);
     }
   }, [coordinator, loader, onLoadError, onTotalRowsChange, stableFieldIds]);
+
+  const loadViewportRef = useRef(loadViewport);
+  const handleViewportChange = useCallback((viewport: SpreadsheetViewport) => {
+    lastViewportRef.current = viewport;
+    void loadViewportRef.current(viewport);
+  }, []);
+  useEffect(() => { loadViewportRef.current = loadViewport; });
 
   const mergeConflicts = useCallback((entries: readonly ConflictPanelEntry[]) => {
     if (entries.length === 0) return;
@@ -266,7 +281,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       sortMode="server"
       loadingRanges={loadingRanges}
       bindingResolver={(binding) => adapter.resolve(binding)}
-      onViewportChange={loadViewport}
+      onViewportChange={handleViewportChange}
       onFieldWrite={writeField}
       onRecordCreate={createRecord}
       onCellClickTiming={(milliseconds) => {

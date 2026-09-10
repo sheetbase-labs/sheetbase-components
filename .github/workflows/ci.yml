@@ -23,6 +23,10 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      - name: Build shared library
+        working-directory: packages/shared
+        run: bun run build:lib
+
       - name: Build table demo and library
         working-directory: packages/table
         run: bun run build && bun run build:lib && bun run budget && bun run bench
@@ -70,3 +74,25 @@ jobs:
         env:
           E2E_BROWSER: ${{ matrix.browser }}
         run: bunx playwright test --project=${{ matrix.browser }}
+
+  demo-e2e:
+    name: Demo Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Install Playwright browsers
+        working-directory: packages/demo
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run Playwright
+        working-directory: packages/demo
+        run: bunx playwright test --project=chromium

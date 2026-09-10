@@ -115,6 +115,8 @@ export type SpreadsheetHandle = {
   applyFormat(format: Partial<CellFormat>): void;
   focus(): void;
   hydrate(cells: ReadonlyMap<string, SpreadsheetHydrationCell>): void;
+  /** Replace all cells (e.g. after a server query change) instead of merging. */
+  replaceData(cells: ReadonlyMap<string, SpreadsheetHydrationCell>): void;
   /** Drops the write-state badge for an address (conflict resolutions); no undo history is touched. */
   clearWriteState(address: string): void;
   setFilter(filter: FilterClause): void;
@@ -729,6 +731,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setData((current) => applyCellMutation(current, cellChangesMutation("Hydrate page", changes)));
   }, [worksheet]);
 
+  /** Swap the whole dataset for a new query result, dropping rows no longer present. */
+  const replaceData = useCallback((cells: ReadonlyMap<string, SpreadsheetHydrationCell>) => {
+    const next = new Map<string, string>();
+    for (const [address, cell] of cells) {
+      worksheet.set(address, cell.binding);
+      if (cell.display) next.set(address, cell.display);
+    }
+    setData(next);
+  }, [worksheet]);
+
   const setFilter = useCallback((filter: FilterClause) => {
     onQueryChange?.({ ...query, filters: [...(query.filters ?? []).filter((item) => item.fieldId !== filter.fieldId), filter] });
   }, [onQueryChange, query]);
@@ -1056,6 +1068,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     applyFormat,
     focus: () => viewportRef.current?.focus(),
     hydrate,
+    replaceData,
     clearWriteState,
     setFilter,
     clearFilter,
@@ -1076,7 +1089,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       setHeldWrites(empty);
       onHeldFieldWritesChange?.([]);
     },
-  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, redo, removeAnnotationAt, replaceAll, rowHeights, scroll, selection, setFilter, undo, writeActiveCell]);
+  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, scroll, selection, setFilter, undo, writeActiveCell]);
 
   useEffect(() => {
     if (editing) onEditChange?.(draft);

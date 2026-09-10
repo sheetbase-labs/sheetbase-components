@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
+  PaneLayout,
   compileToDatasetQuery,
   countNodes,
   describeFilter,
   emptyCondition,
   emptyRoot,
+  ensureOperator,
   groupRows,
   normaliseOperator,
   operatorShortLabel,
   operatorsForField,
+  queryKey,
   usePersistedTheme,
   type Combinator,
   type ConditionNode,
@@ -17,6 +20,8 @@ import {
   type FilterNode,
   type FilterOperator,
   type GroupNode,
+  type Layout,
+  type PaneSpec,
   type SearchSpec,
   type SheetbaseField,
   type ThemeMode,
@@ -24,10 +29,16 @@ import {
   useIdleSave,
   type PersistenceAdapter,
 } from "sheetbase-shared";
+import { DataGrid } from "sheetbase-table";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
 
 export type SearchFieldInput = string | SheetbaseField;
+
+export interface AdvancedSearchHandle {
+  /** Reset the filter tree, as the topbar Clear button does. */
+  clear(): void;
+}
 
 export interface AdvancedSearchProps {
   value?: SearchSpec;
@@ -45,6 +56,13 @@ export interface AdvancedSearchProps {
   onDatasetQueryChange?: (query: DatasetQuery | undefined) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<SearchSpec>;
+  /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
+  chrome?: "full" | "none";
+  /** Controlled preview-pane visibility. Omit for internal state (default shown). */
+  preview?: boolean;
+  onPreviewChange?(next: boolean): void;
+  /** Imperative actions for hosts that render pane chrome. */
+  ref?: Ref<AdvancedSearchHandle>;
 }
 
 function fieldIdOf(field: SearchFieldInput): string {
@@ -67,6 +85,26 @@ function fieldIds(fields: readonly SearchFieldInput[]): string[] {
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Filter tree | preview, each a pane. */
+const SEARCH_PANE_LAYOUT: Layout = {
+  kind: "split",
+  id: "search-root",
+  direction: "row",
+  sizes: [0.48, 0.52],
+  children: [
+    { kind: "stack", id: "search-filter", panes: ["filter"], active: "filter" },
+    { kind: "stack", id: "search-preview", panes: ["preview"], active: "preview" },
+  ],
+};
+
+/** Just the filter pane, for when the preview is toggled off. */
+const SEARCH_FILTER_ONLY_LAYOUT: Layout = {
+  kind: "stack",
+  id: "search-filter-only",
+  panes: ["filter"],
+  active: "filter",
+};
 
 function updateNode(root: GroupNode, id: string, fn: (node: FilterNode) => FilterNode | null): GroupNode {
   function walk(node: FilterNode): FilterNode | null {
@@ -108,12 +146,6 @@ function kindOf(rows: SearchRow[], key: string): string {
     return "string";
   }
   return "string";
-}
-
-function cellText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
 }
 
 function boundsOf(value: unknown): [number, number] {
@@ -178,7 +210,11 @@ function ConditionRow({ node, fields, onPatch }: {
   return (
     <div className={canon === "between" ? "sb-filter-rule between" : "sb-filter-rule"}>
       {fields.length > 0 ? (
-        <select aria-label="Field" value={node.field} onChange={(e) => patch({ field: e.target.value })}>
+        <select aria-label="Field" value={node.field} onChange={(e) => {
+          // Re-point the operator when the new field doesn't accept it.
+          const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
+          patch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
+        }}>
           {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
           {fields.map((f) => <option key={fieldIdOf(f)} value={fieldIdOf(f)}>{fieldLabelOf(f)}</option>)}
         </select>
@@ -211,28 +247,30 @@ function parseValueInput(raw: string, operator: FilterOperator): ConditionNode["
   return raw;
 }
 
-function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: string[]; cap?: number }) {
+function PreviewTable({ rows, fields, cap }: { rows: SearchRow[]; fields: string[]; cap?: number }) {
   const columns = previewColumns(rows, fields);
   if (columns.length === 0) return <p className="sb-muted" style={{ padding: 14 }}>No columns.</p>;
   return (
-    <div className="sb-table-wrap">
-      <table className="sb-table">
-        <thead><tr><th className="sb-rownum">#</th>{columns.map((c) => <th key={c.key}>{c.key}<span>{c.kind}</span></th>)}</tr></thead>
-        <tbody>
-          {rows.slice(0, cap).map((row, i) => (
-            <tr key={i}><td className="sb-rownum">{i + 1}</td>{columns.map((c) => <td key={c.key}>{cellText(row[c.key])}</td>)}</tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      columns={columns.map((column) => ({ id: column.key, label: column.key, kind: column.kind }))}
+      rows={cap ? rows.slice(0, cap) : rows}
+      emptyMessage="No matches."
+    />
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter }: AdvancedSearchProps) {
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full", preview, onPreviewChange, ref }: AdvancedSearchProps) {
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
   const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
+  const [innerPreview, setInnerPreview] = useState(true);
+  const showPreview = preview ?? innerPreview;
+  function togglePreview() {
+    const next = !showPreview;
+    if (preview === undefined) setInnerPreview(next);
+    onPreviewChange?.(next);
+  }
 
   function commit(next: SearchSpec) {
     if (value === undefined) setDraft(next);
@@ -241,6 +279,10 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   function patchFilter(id: string, fn: (node: FilterNode) => FilterNode | null) {
     commit({ ...spec, filter: updateNode(spec.filter, id, fn) });
   }
+  function clear() {
+    commit({ filter: emptyRoot() });
+  }
+  useImperativeHandle(ref, () => ({ clear }));
 
   const matches = useMemo(() => (rows.length > 0 ? applySearch(rows, spec) : null), [rows, spec]);
   const nodes = countNodes(spec.filter);
@@ -249,26 +291,41 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
     spec.sort ? [{ fieldId: spec.sort.field, direction: spec.sort.direction }] : undefined,
   );
   const ids = fieldIds(fields);
+  const flattenedKey = flattened ? queryKey(flattened) : "";
 
   useEffect(() => {
     onDatasetQueryChange?.(flattened);
-  }, [flattened, onDatasetQueryChange]);
+    // flattened is a fresh object each render; key on its stable content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flattenedKey, onDatasetQueryChange]);
 
   return (
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
-      <div className="sb-frame">
-        <div className="sb-topbar">
-          <div className="sb-toolbar-group">
-            {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
-            <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+      <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
+        {chrome !== "none" && (
+          <div className="sb-topbar">
+            <div className="sb-toolbar-group">
+              {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
+              <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+            </div>
+            <div className="sb-topbar-actions">
+              {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
+              <button className={showPreview ? "sb-btn" : "sb-btn subtle"} aria-pressed={showPreview} onClick={togglePreview}>Preview</button>
+              <button className="sb-btn" onClick={clear}>Clear</button>
+            </div>
           </div>
-          <div className="sb-topbar-actions">
-            <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn" onClick={() => commit({ filter: emptyRoot() })}>Clear</button>
-          </div>
-        </div>
-        <div className="sb-search-body sb-plates">
-          <section className="sb-search-main sb-plate">
+        )}
+        <PaneLayout
+          key={showPreview ? "with-preview" : "filter-only"}
+          className="sb-panes--fit"
+          defaultLayout={showPreview ? SEARCH_PANE_LAYOUT : SEARCH_FILTER_ONLY_LAYOUT}
+          panes={[
+            {
+              id: "filter",
+              title: "Filter tree",
+              dragHandle: "heading",
+              content: (
+                <section className="sb-search-main sb-plate">
             <div className="sb-panel-heading"><span>Filter tree</span></div>
             <div className="sb-search-scroll">
               <GroupEditor node={spec.filter} depth={0} fields={fields} onPatch={patchFilter} />
@@ -297,17 +354,27 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                 </label>
               </div>
             </div>
-          </section>
-          <aside className="sb-search-side sb-plate">
-            {!matches ? (
-              <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
-            ) : spec.groupBy ? (
-              <GroupedPreview matches={matches} fields={ids} groupBy={spec.groupBy} />
-            ) : (
-              <PreviewTable rows={matches} fields={ids} />
-            )}
-          </aside>
-        </div>
+                </section>
+              ),
+            },
+            ...(showPreview ? [{
+              id: "preview",
+              title: "Preview",
+              dragHandle: false,
+              content: (
+                <aside className="sb-search-side sb-plate">
+                  {!matches ? (
+                    <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
+                  ) : spec.groupBy ? (
+                    <GroupedPreview matches={matches} fields={ids} groupBy={spec.groupBy} />
+                  ) : (
+                    <PreviewTable rows={matches} fields={ids} />
+                  )}
+                </aside>
+              ),
+            }] : []),
+          ] as PaneSpec[]}
+        />
       </div>
     </div>
   );

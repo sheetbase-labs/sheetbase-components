@@ -96,11 +96,6 @@
 :where(.sheetbase-explorer) table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 12px; background: var(--canvas); }
 .row-count { margin-left: auto; align-self: center; padding-right: 11px; color: var(--muted); font-size: 10px; }
 .bottom-content { min-height: 0; overflow: hidden; }
-:where(.sheetbase-explorer) th, :where(.sheetbase-explorer) td { height: 29px; min-width: 120px; max-width: 280px; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; }
-:where(.sheetbase-explorer) tbody tr:hover td { background: var(--accent-soft-2); }
-:where(.sheetbase-explorer) th { position: sticky; top: 0; z-index: 2; height: 31px; color: var(--accent-ink); background: var(--accent-soft); font-weight: 560; font-size: 10px; }
-:where(.sheetbase-explorer) th span { display: block; float: right; color: color-mix(in srgb, var(--accent) 65%, var(--muted)); font-size: 8.5px; font-weight: 500; }
-.table-note { position: sticky; left: 0; padding: 5px 8px; color: var(--muted); font-size: 9.5px; }
 .sql-workspace { height: 100%; display: grid; grid-template-rows: 38px 1fr auto; background: var(--canvas); }
 .sql-header { display: flex; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--muted); }
 .sql-header div { margin-left: auto; display: flex; gap: 4px; }
