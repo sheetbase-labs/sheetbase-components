@@ -37,10 +37,12 @@ const tableFallback: TablePresentationState = {
   annotations: [],
 };
 
-export function DemoTable({ theme: controlledTheme, onThemeChange }: {
+export function DemoTable({ theme: controlledTheme, onThemeChange, fields = tableFields }: {
   /** Controlled resolved theme. Omit to let the table own its presentation theme. */
   theme?: "light" | "dark";
   onThemeChange?: (mode: ThemeMode) => void;
+  /** Dataset header to show. Defaults to the built-in sample fields. */
+  fields?: ReadonlyArray<{ id: string; label: string; column: number; dataType: "text" | "number" | "boolean" | "date" | "relationship" }>;
 } = {}) {
   const adapter = useMemo(() => createLocalStoragePresentationAdapter(), []);
   const [presentation, setPresentation] = useTablePresentationState("sheetbase-demo:table", tableFallback, adapter);
@@ -74,9 +76,9 @@ export function DemoTable({ theme: controlledTheme, onThemeChange }: {
             ref={tableRef}
             initialData={initialData}
             rowCount={12}
-            columnCount={tableFields.length}
-            fieldIds={tableFields.map((field) => field.id)}
-            datasetHeader={{ fields: tableFields }}
+            columnCount={fields.length}
+            fieldIds={fields.map((field) => field.id)}
+            datasetHeader={{ fields }}
             theme={theme}
             onSelectionChange={setSelection}
           />

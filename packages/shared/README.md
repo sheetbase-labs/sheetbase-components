@@ -39,7 +39,10 @@ chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
 frame around a layout.
 
 Pane content renders through stable portals, so moving a pane between stacks or
-tabs keeps its component state.
+tabs keeps its component state. Panes nest: a component can host its own
+`PaneLayout`, and each layout only handles its own drags. Set `dragHandle` on a
+pane to start drags from the component top bar (default), an inner
+`.sb-panel-heading`, or nowhere.
 
 ### Keyboard
 

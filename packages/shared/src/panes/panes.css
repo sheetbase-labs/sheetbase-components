@@ -16,6 +16,8 @@
 }
 .sb-frame.sb-shell-frame { grid-template-rows: 33px minmax(0, 1fr); }
 .sb-frame.sb-shell-frame.has-subbar { grid-template-rows: 33px auto minmax(0, 1fr); }
+/* Frameless components drop their topbar; the body owns the single grid row. */
+.sb-frame.no-topbar { grid-template-rows: minmax(0, 1fr); }
 .sb-shell-flat {
   display: flex;
   flex-direction: column;
@@ -220,7 +222,6 @@
   grid-template-rows: 48px minmax(120px, 1fr) minmax(150px, 0.42fr);
 }
 /* Components ship fixed demo floors; let them flex to the pane instead. */
-.sb-panes--fit .sb-schema-body,
 .sb-panes--fit .sb-schema-canvas,
 .sb-panes--fit .sb-rules-body,
 .sb-panes--fit .sb-search-body { min-height: 0; }

@@ -45,6 +45,8 @@ export interface AdvancedSearchProps {
   onDatasetQueryChange?: (query: DatasetQuery | undefined) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<SearchSpec>;
+  /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
+  chrome?: "full" | "none";
 }
 
 function fieldIdOf(field: SearchFieldInput): string {
@@ -228,7 +230,7 @@ function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: s
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter }: AdvancedSearchProps) {
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full" }: AdvancedSearchProps) {
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
@@ -256,17 +258,19 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
 
   return (
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
-      <div className="sb-frame">
-        <div className="sb-topbar">
-          <div className="sb-toolbar-group">
-            {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
-            <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+      <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
+        {chrome !== "none" && (
+          <div className="sb-topbar">
+            <div className="sb-toolbar-group">
+              {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
+              <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+            </div>
+            <div className="sb-topbar-actions">
+              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              <button className="sb-btn" onClick={() => commit({ filter: emptyRoot() })}>Clear</button>
+            </div>
           </div>
-          <div className="sb-topbar-actions">
-            <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn" onClick={() => commit({ filter: emptyRoot() })}>Clear</button>
-          </div>
-        </div>
+        )}
         <div className="sb-search-body sb-plates">
           <section className="sb-search-main sb-plate">
             <div className="sb-panel-heading"><span>Filter tree</span></div>

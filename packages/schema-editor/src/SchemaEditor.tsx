@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ThemeToggleButton, loadInitialState, toFieldDataType, useIdleSave, usePersistedTheme, type FieldDataType, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
+import { ThemeToggleButton, PaneLayout, loadInitialState, toFieldDataType, useIdleSave, usePersistedTheme, type FieldDataType, type Layout, type PaneSpec, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 import {
   NODE_WIDTH,
@@ -25,15 +25,30 @@ export interface SchemaEditorProps {
   onHeaderFieldsChange?: (fields: Array<SheetbaseField & { column: number }>, modelName: string | null) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<SchemaGraph>;
+  /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
+  chrome?: "full" | "none";
 }
 
 const FIELD_TYPES: FieldDataType[] = ["text", "number", "boolean", "date", "datetime", "relationship"];
+
+/** Models list | canvas | inspector, each a real pane. */
+const SCHEMA_PANE_LAYOUT: Layout = {
+  kind: "split",
+  id: "schema-root",
+  direction: "row",
+  sizes: [0.22, 0.56, 0.22],
+  children: [
+    { kind: "stack", id: "schema-list", panes: ["list"], active: "list" },
+    { kind: "stack", id: "schema-canvas", panes: ["canvas"], active: "canvas" },
+    { kind: "stack", id: "schema-inspector", panes: ["inspector"], active: "inspector" },
+  ],
+};
 
 function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter }: SchemaEditorProps) {
+export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter, chrome = "full" }: SchemaEditorProps) {
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
   useIdleSave(persistKey, graph, adapter);
@@ -59,6 +74,12 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
       : (selected && laid.models.some((m) => m.name === selected) ? selected : laid.models[0]?.name ?? null);
     if (nextSelected !== selected) setSelected(nextSelected);
     const model = laid.models.find((m) => m.name === nextSelected) ?? null;
+    onHeaderFieldsChange?.(model ? tableHeaderFields(model) : [], model?.name ?? null);
+  }
+
+  function selectModel(name: string) {
+    setSelected(name);
+    const model = graph.models.find((m) => m.name === name) ?? null;
     onHeaderFieldsChange?.(model ? tableHeaderFields(model) : [], model?.name ?? null);
   }
 
@@ -138,170 +159,197 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
 
   return (
     <div className="sheetbase-scope sb-schema" data-theme={activeTheme}>
-      <div className="sb-frame">
-        <div className="sb-topbar">
-          <div className="sb-toolbar-group">
-            <button className="sb-icon-btn" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}>−</button>
-            <span className="sb-stat" style={{ minWidth: 44, textAlign: "center", fontFamily: "var(--font-sans)" }}>{Math.round(zoom * 100)}%</span>
-            <button className="sb-icon-btn" title="Zoom in" onClick={() => setZoom((z) => Math.min(2, +(z + 0.15).toFixed(2)))}>+</button>
-            <span className="sb-divider" />
-            <button className="sb-btn" onClick={fitView}>Fit</button>
-            <button className="sb-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
-            <span className="sb-divider" />
-            <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
-          </div>
-          <div className="sb-topbar-actions">
-            <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn primary" onClick={addModel}>+ Model</button>
-          </div>
-        </div>
-        <div className="sb-schema-body sb-plates">
-          <aside className="sb-schema-list sb-plate">
-            <div className="sb-panel-heading"><span>Models</span><span>{graph.models.length}</span></div>
-            <div className="sb-schema-list-items">
-              {graph.models.map((m) => (
-                <button key={m.name} className={m.name === selected ? "sb-schema-row active" : "sb-schema-row"} onClick={() => setSelected(m.name)}>
-                  <span className="sb-database-dot" />
-                  <span className="sb-schema-row-copy"><strong>{m.label || m.name}</strong><small>{m.fields.length} fields</small></span>
-                  {m.fields.some((f) => f.references) && <span className="sb-chip">linked</span>}
-                </button>
-              ))}
-              {graph.models.length === 0 && <p className="sb-muted" style={{ padding: "12px 14px" }}>No models yet — add one to start.</p>}
+      <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
+        {chrome !== "none" && (
+          <div className="sb-topbar">
+            <div className="sb-toolbar-group">
+              <button className="sb-icon-btn" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}>−</button>
+              <span className="sb-stat" style={{ minWidth: 44, textAlign: "center", fontFamily: "var(--font-sans)" }}>{Math.round(zoom * 100)}%</span>
+              <button className="sb-icon-btn" title="Zoom in" onClick={() => setZoom((z) => Math.min(2, +(z + 0.15).toFixed(2)))}>+</button>
+              <span className="sb-divider" />
+              <button className="sb-btn" onClick={fitView}>Fit</button>
+              <button className="sb-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
+              <span className="sb-divider" />
+              <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
             </div>
-            {errors.length > 0 && (
-              <div className="sb-schema-errors">
-                {errors.map((e) => <p key={e}>⚠ {e}</p>)}
-              </div>
-            )}
-          </aside>
-          <div
-            ref={canvasRef}
-            className="sb-schema-canvas sb-plate"
-            onWheel={(e) => { if (e.ctrlKey || e.metaKey) setZoom((z) => Math.min(2, Math.max(0.4, z - Math.sign(e.deltaY) * 0.08))); }}
-            onMouseDown={(e) => { if ((e.target as HTMLElement).dataset.pane === "1") dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y }; }}
-            onMouseMove={(e) => { const d = dragRef.current; if (d) setPan({ x: d.px + (e.clientX - d.sx), y: d.py + (e.clientY - d.sy) }); }}
-            onMouseUp={() => { dragRef.current = null; }}
-            onMouseLeave={() => { dragRef.current = null; }}
-          >
-            <div data-pane="1" className="sb-schema-pane" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}>
-              <svg className="sb-schema-edges" data-pane="1">
-                {relations.map((r) => {
-                  const a = posByModel[r.fromModel]!, b = posByModel[r.toModel]!;
-                  const x1 = a.x + NODE_WIDTH, y1 = a.y + 44, x2 = b.x, y2 = b.y + 44;
-                  const mx = (x1 + x2) / 2;
-                  return <path key={r.id} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#sb-arrow)" />;
-                })}
-                <defs>
-                  <marker id="sb-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                    <path d="M0,0 L8,4 L0,8" fill="none" strokeWidth="1.4" className="sb-edge-arrow" />
-                  </marker>
-                </defs>
-              </svg>
-              {graph.models.map((m) => {
-                const p = posByModel[m.name]!;
-                return (
-                  <div
-                    key={m.name}
-                    className={m.name === selected ? "sb-node active" : "sb-node"}
-                    style={{ left: p.x, top: p.y, width: NODE_WIDTH }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      setSelected(m.name);
-                      const origin = m.position ?? { x: 24, y: 24 };
-                      nodeDragRef.current = { name: m.name, x: origin.x, y: origin.y };
-                      setNodeDrag(nodeDragRef.current);
-                      let lx = e.clientX, ly = e.clientY;
-                      const track = (ev: MouseEvent) => {
-                        const current = nodeDragRef.current;
-                        if (!current) return;
-                        const next = { name: current.name, x: current.x + (ev.clientX - lx) / zoom, y: current.y + (ev.clientY - ly) / zoom };
-                        lx = ev.clientX;
-                        ly = ev.clientY;
-                        nodeDragRef.current = next;
-                        setNodeDrag(next);
-                      };
-                      const stop = () => {
-                        window.removeEventListener("mousemove", track);
-                        finishNodeDrag();
-                      };
-                      window.addEventListener("mousemove", track);
-                      window.addEventListener("mouseup", stop, { once: true });
-                    }}
-                  >
-                    <header><strong>{m.label || m.name}</strong><small>{m.name}</small></header>
-                    <ul>
-                      {m.fields.map((f) => (
-                        <li key={f.key}>
-                          <span className={`sb-type type-${f.type}`}>{f.type[0]!.toUpperCase()}</span>
-                          <span className="sb-node-field">{f.key}</span>
-                          {f.primaryKey && <span className="sb-chip">PK</span>}
-                          {f.references && <span className="sb-chip link">→ {f.references.model}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
+            <div className="sb-topbar-actions">
+              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              <button className="sb-btn primary" onClick={addModel}>+ Model</button>
             </div>
           </div>
-          <aside className="sb-schema-inspector sb-plate">
-            <div className="sb-panel-heading"><span>Inspector</span></div>
-            {!selectedModel ? (
-              <p className="sb-muted" style={{ padding: 14 }}>Select a model.</p>
-            ) : (
-              <div className="sb-inspector-scroll">
-                <section>
-                  <h3>Model</h3>
-                  <label className="sb-compact"><span>Table</span><input className="sb-input sb-mono" value={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { name: e.target.value.replace(/\s+/g, "_") })} /></label>
-                  <label className="sb-compact"><span>Label</span><input className="sb-input" value={selectedModel.label ?? ""} placeholder={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { label: e.target.value || undefined })} /></label>
-                  <div className="sb-row-btns">
-                    <button className="sb-link-btn" onClick={() => addField(selectedModel.name)}>+ Field</button>
-                    <button className="sb-link-btn danger" onClick={() => removeModel(selectedModel.name)}>Delete model</button>
+        )}
+        <PaneLayout
+          className="sb-panes--fit"
+          defaultLayout={SCHEMA_PANE_LAYOUT}
+          panes={[
+            {
+              id: "list",
+              title: "Models",
+              dragHandle: "heading",
+              content: (
+                <aside className="sb-schema-list sb-plate">
+                  <div className="sb-panel-heading"><span>Models</span><span>{graph.models.length}</span></div>
+                  <div className="sb-schema-list-items">
+                    {graph.models.map((m) => (
+                      <button key={m.name} className={m.name === selected ? "sb-schema-row active" : "sb-schema-row"} onClick={() => selectModel(m.name)}>
+                        <span className="sb-database-dot" />
+                        <span className="sb-schema-row-copy"><strong>{m.label || m.name}</strong><small>{m.fields.length} fields</small></span>
+                        {m.fields.some((f) => f.references) && <span className="sb-chip">linked</span>}
+                      </button>
+                    ))}
+                    {graph.models.length === 0 && <p className="sb-muted" style={{ padding: "12px 14px" }}>No models yet — add one to start.</p>}
                   </div>
-                </section>
-                <section>
-                  <h3>Fields · {selectedModel.fields.length}</h3>
-                  {selectedModel.fields.map((f, i) => (
-                    <div className="sb-field" key={`${f.key}-${i}`}>
-                      <div className="sb-field-key">
-                        <input className="sb-input sb-mono" aria-label="Field key" value={f.key} onChange={(e) => patchField(selectedModel.name, i, { key: e.target.value.replace(/\s+/g, "_") })} />
-                        <button className="sb-remove" title="Remove field" onClick={() => removeField(selectedModel.name, i)}>×</button>
-                      </div>
-                      <label className="sb-compact"><span>Type</span>
-                        <select
-                          className="sb-select"
-                          aria-label="Field type"
-                          value={toFieldDataType(f.type)}
-                          onChange={(e) => patchField(selectedModel.name, i, { type: toFieldDataType(e.target.value) })}
-                        >
-                          {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </label>
-                      <label className="sb-compact"><span>Related</span>
-                        <select
-                          className="sb-select"
-                          aria-label="References model"
-                          value={f.references?.model ?? ""}
-                          onChange={(e) => patchField(selectedModel.name, i, {
-                            references: e.target.value ? { model: e.target.value } : undefined,
-                            type: e.target.value ? "relationship" : f.type === "relationship" ? "text" : f.type,
-                          })}
-                        >
-                          <option value="">no relation</option>
-                          {graph.models.filter((m) => m.name !== selectedModel.name).map((m) => <option key={m.name} value={m.name}>→ {m.name}</option>)}
-                        </select>
-                      </label>
-                      <div className="sb-toggle-row">
-                        <label><input type="checkbox" checked={!!f.primaryKey} onChange={(e) => patchField(selectedModel.name, i, { primaryKey: e.target.checked || undefined })} /> Primary key</label>
-                        <label><input type="checkbox" checked={f.nullable ?? true} onChange={(e) => patchField(selectedModel.name, i, { nullable: e.target.checked })} /> Nullable</label>
-                      </div>
+                  {errors.length > 0 && (
+                    <div className="sb-schema-errors">
+                      {errors.map((e) => <p key={e}>⚠ {e}</p>)}
                     </div>
-                  ))}
-                </section>
-              </div>
-            )}
-          </aside>
-        </div>
+                  )}
+                </aside>
+              ),
+            },
+            {
+              id: "canvas",
+              title: "Canvas",
+              dragHandle: false,
+              content: (
+                <div
+                  ref={canvasRef}
+                  className="sb-schema-canvas sb-plate"
+                  onWheel={(e) => { if (e.ctrlKey || e.metaKey) setZoom((z) => Math.min(2, Math.max(0.4, z - Math.sign(e.deltaY) * 0.08))); }}
+                  onMouseDown={(e) => { if ((e.target as HTMLElement).dataset.pane === "1") dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y }; }}
+                  onMouseMove={(e) => { const d = dragRef.current; if (d) setPan({ x: d.px + (e.clientX - d.sx), y: d.py + (e.clientY - d.sy) }); }}
+                  onMouseUp={() => { dragRef.current = null; }}
+                  onMouseLeave={() => { dragRef.current = null; }}
+                >
+                  <div data-pane="1" className="sb-schema-pane" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}>
+                    <svg className="sb-schema-edges" data-pane="1">
+                      {relations.map((r) => {
+                        const a = posByModel[r.fromModel]!, b = posByModel[r.toModel]!;
+                        const x1 = a.x + NODE_WIDTH, y1 = a.y + 44, x2 = b.x, y2 = b.y + 44;
+                        const mx = (x1 + x2) / 2;
+                        return <path key={r.id} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#sb-arrow)" />;
+                      })}
+                      <defs>
+                        <marker id="sb-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                          <path d="M0,0 L8,4 L0,8" fill="none" strokeWidth="1.4" className="sb-edge-arrow" />
+                        </marker>
+                      </defs>
+                    </svg>
+                    {graph.models.map((m) => {
+                      const p = posByModel[m.name]!;
+                      return (
+                        <div
+                          key={m.name}
+                          className={m.name === selected ? "sb-node active" : "sb-node"}
+                          style={{ left: p.x, top: p.y, width: NODE_WIDTH }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setSelected(m.name);
+                            const origin = m.position ?? { x: 24, y: 24 };
+                            nodeDragRef.current = { name: m.name, x: origin.x, y: origin.y };
+                            setNodeDrag(nodeDragRef.current);
+                            let lx = e.clientX, ly = e.clientY;
+                            const track = (ev: MouseEvent) => {
+                              const current = nodeDragRef.current;
+                              if (!current) return;
+                              const next = { name: current.name, x: current.x + (ev.clientX - lx) / zoom, y: current.y + (ev.clientY - ly) / zoom };
+                              lx = ev.clientX;
+                              ly = ev.clientY;
+                              nodeDragRef.current = next;
+                              setNodeDrag(next);
+                            };
+                            const stop = () => {
+                              window.removeEventListener("mousemove", track);
+                              finishNodeDrag();
+                            };
+                            window.addEventListener("mousemove", track);
+                            window.addEventListener("mouseup", stop, { once: true });
+                          }}
+                        >
+                          <header><strong>{m.label || m.name}</strong><small>{m.name}</small></header>
+                          <ul>
+                            {m.fields.map((f) => (
+                              <li key={f.key}>
+                                <span className={`sb-type type-${f.type}`}>{f.type[0]!.toUpperCase()}</span>
+                                <span className="sb-node-field">{f.key}</span>
+                                {f.primaryKey && <span className="sb-chip">PK</span>}
+                                {f.references && <span className="sb-chip link">→ {f.references.model}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+            },
+            {
+              id: "inspector",
+              title: "Inspector",
+              dragHandle: "heading",
+              content: (
+                <aside className="sb-schema-inspector sb-plate">
+                  <div className="sb-panel-heading"><span>Inspector</span></div>
+                  {!selectedModel ? (
+                    <p className="sb-muted" style={{ padding: 14 }}>Select a model.</p>
+                  ) : (
+                    <div className="sb-inspector-scroll">
+                      <section>
+                        <h3>Model</h3>
+                        <label className="sb-compact"><span>Table</span><input className="sb-input sb-mono" value={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { name: e.target.value.replace(/\s+/g, "_") })} /></label>
+                        <label className="sb-compact"><span>Label</span><input className="sb-input" value={selectedModel.label ?? ""} placeholder={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { label: e.target.value || undefined })} /></label>
+                        <div className="sb-row-btns">
+                          <button className="sb-link-btn" onClick={() => addField(selectedModel.name)}>+ Field</button>
+                          <button className="sb-link-btn danger" onClick={() => removeModel(selectedModel.name)}>Delete model</button>
+                        </div>
+                      </section>
+                      <section>
+                        <h3>Fields · {selectedModel.fields.length}</h3>
+                        {selectedModel.fields.map((f, i) => (
+                          <div className="sb-field" key={`${f.key}-${i}`}>
+                            <div className="sb-field-key">
+                              <input className="sb-input sb-mono" aria-label="Field key" value={f.key} onChange={(e) => patchField(selectedModel.name, i, { key: e.target.value.replace(/\s+/g, "_") })} />
+                              <button className="sb-remove" title="Remove field" onClick={() => removeField(selectedModel.name, i)}>×</button>
+                            </div>
+                            <label className="sb-compact"><span>Type</span>
+                              <select
+                                className="sb-select"
+                                aria-label="Field type"
+                                value={toFieldDataType(f.type)}
+                                onChange={(e) => patchField(selectedModel.name, i, { type: toFieldDataType(e.target.value) })}
+                              >
+                                {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </label>
+                            <label className="sb-compact"><span>Related</span>
+                              <select
+                                className="sb-select"
+                                aria-label="References model"
+                                value={f.references?.model ?? ""}
+                                onChange={(e) => patchField(selectedModel.name, i, {
+                                  references: e.target.value ? { model: e.target.value } : undefined,
+                                  type: e.target.value ? "relationship" : f.type === "relationship" ? "text" : f.type,
+                                })}
+                              >
+                                <option value="">no relation</option>
+                                {graph.models.filter((m) => m.name !== selectedModel.name).map((m) => <option key={m.name} value={m.name}>→ {m.name}</option>)}
+                              </select>
+                            </label>
+                            <div className="sb-toggle-row">
+                              <label><input type="checkbox" checked={!!f.primaryKey} onChange={(e) => patchField(selectedModel.name, i, { primaryKey: e.target.checked || undefined })} /> Primary key</label>
+                              <label><input type="checkbox" checked={f.nullable ?? true} onChange={(e) => patchField(selectedModel.name, i, { nullable: e.target.checked })} /> Nullable</label>
+                            </div>
+                          </div>
+                        ))}
+                      </section>
+                    </div>
+                  )}
+                </aside>
+              ),
+            },
+          ] satisfies PaneSpec[]}
+        />
       </div>
     </div>
   );

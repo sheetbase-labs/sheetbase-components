@@ -29,6 +29,8 @@ export interface RulesEngineProps {
   onThemeChange?: (next: ThemeMode) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<PipelineRule[]>;
+  /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
+  chrome?: "full" | "none";
 }
 
 const OPERATOR_OPTIONS: FilterOperator[] = [...new Set([
@@ -66,7 +68,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full" }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -123,16 +125,18 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   return (
     <div className="sheetbase-scope sb-rules" data-theme={activeTheme}>
-      <div className="sb-frame">
-        <div className="sb-topbar">
-          <div className="sb-toolbar-group">
-            <span className="sb-stat">{active} of {rules.length} active</span>
+      <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
+        {chrome !== "none" && (
+          <div className="sb-topbar">
+            <div className="sb-toolbar-group">
+              <span className="sb-stat">{active} of {rules.length} active</span>
+            </div>
+            <div className="sb-topbar-actions">
+              <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+              <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
+            </div>
           </div>
-          <div className="sb-topbar-actions">
-            <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
-            <button className="sb-btn primary" onClick={() => commit([...rules, { id: uid("rule"), name: "New rule", when: "all", conditions: [{ field: fields[0] ?? "status", operator: "eq", value: "" }], actions: [{ kind: actions[0]?.kind ?? "" }], enabled: true, priority: 100 }])}>+ Rule</button>
-          </div>
-        </div>
+        )}
         <div className="sb-rules-body sb-plates">
           <section className="sb-rules-main sb-plate">
             <div className="sb-nl">

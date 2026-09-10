@@ -47,6 +47,11 @@ export interface PaneSpec {
   content: ReactNode;
   /** Show a close button in the header and allow keyboard close; requires `onClosePane`. */
   closable?: boolean;
+  /**
+   * Where a pointer drag begins for this pane: its component top bar (default),
+   * an inner `.sb-panel-heading`, or nowhere (`false`).
+   */
+  dragHandle?: "topbar" | "heading" | false;
 }
 
 export interface PaneLayoutProps {
@@ -322,11 +327,16 @@ export function PaneLayout({
       const body = target.closest(".sb-pane-body") as HTMLElement | null;
       if (!body) return;
       const stackId = (body.closest(".sb-pane-stack") as HTMLElement | null)?.dataset.stackId;
-      if (!stackId) return;
+      // Only own stacks: a nested PaneLayout handles its own events first.
+      if (!stackId || !stackRefs.current.has(stackId)) return;
+      const view = body.querySelector<HTMLElement>(".sb-pane-view:not([hidden])");
+      const paneId = view?.dataset.paneId;
+      if (!paneId) return;
+      const handle = view?.dataset.dragHandle;
+      if (handle === "false") return;
+      if (handle === "heading" ? !target.closest(".sb-panel-heading") : event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
       if (target.closest(INTERACTIVE_SELECTOR)) return;
-      if (event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
-      const paneId = body.querySelector<HTMLElement>(".sb-pane-view:not([hidden])")?.dataset.paneId;
-      if (paneId) beginDragRef.current(event as unknown as ReactPointerEvent, stackId, paneId);
+      beginDragRef.current(event as unknown as ReactPointerEvent, stackId, paneId);
     };
     root.addEventListener("pointerdown", onPointerDown);
     return () => root.removeEventListener("pointerdown", onPointerDown);
@@ -555,6 +565,7 @@ export function PaneLayout({
               role={tabbed ? "tabpanel" : undefined}
               id={tabbed ? `sb-pane-panel-${node.id}-${paneId}` : undefined}
               aria-labelledby={tabbed ? `sb-pane-tab-${node.id}-${paneId}` : undefined}
+              data-drag-handle={paneMap.get(paneId)?.dragHandle === undefined ? undefined : String(paneMap.get(paneId)?.dragHandle)}
               ref={(element) => attachHost(element, paneId)}
             >
               {CAN_PORTAL ? null : paneMap.get(paneId)?.content ?? <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>}
