@@ -70,12 +70,19 @@ function paneLabel(pane: PaneSpec | undefined, id: PaneId): ReactNode {
   return pane.tab ?? pane.title;
 }
 
+/** Height of a component's own toolbar, dragged from its empty space. */
+const TOP_BAR_PX = 40;
+
+/** Controls keep their own pointer behaviour; only inert chrome starts a drag. */
+const INTERACTIVE_SELECTOR =
+  "button, a, input, select, textarea, label, th, [contenteditable='true'], [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='menu'], [role='checkbox'], [role='combobox'], [role='slider'], [role='separator']";
+
 /**
  * A nestable multiplexer: panes tile into resizable splits and tabbed stacks.
- * Drag a tab onto another pane's edge to split, or onto its center to tab
- * together. The layout tree is host-owned, so it can be persisted or built
- * programmatically. Use inside `SheetbaseShell`, or anywhere a fill-height
- * container is available.
+ * Drag a pane onto another pane's edge to split, or onto its centre to tab them
+ * together. Grab a tabbed pane by its tab, or a lone pane by the empty chrome
+ * of its own top bar. The layout tree is host-owned, so it can be persisted or
+ * built programmatically.
  */
 export function PaneLayout({
   panes,
@@ -145,7 +152,10 @@ export function PaneLayout({
 
     const move = (native: PointerEvent) => {
       if (!dragging && Math.hypot(native.clientX - startX, native.clientY - startY) < 4) return;
-      dragging = true;
+      if (!dragging) {
+        dragging = true;
+        document.body.style.userSelect = "none";
+      }
       const hit = hitTest(native.clientX, native.clientY);
       setDrag({
         paneId,
@@ -157,6 +167,7 @@ export function PaneLayout({
     };
 
     const cleanup = () => {
+      document.body.style.userSelect = "";
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
@@ -177,6 +188,14 @@ export function PaneLayout({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+  }
+
+  /** Lone panes have no tab: drag from the empty chrome of the component's own top bar. */
+  function beginTopBarDrag(event: ReactPointerEvent, stackId: string, paneId: PaneId, body: HTMLElement | null) {
+    if (!body) return;
+    if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) return;
+    if (event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
+    beginDrag(event, stackId, paneId);
   }
 
   /** Keep two adjacent panes above the pixel floor while preserving their total. */
@@ -243,7 +262,7 @@ export function PaneLayout({
     const docked = drag && drag.overStackId === node.id ? drag.zone : null;
     return (
       <div className={cx("sb-pane-stack", tabbed && "is-tabbed")} key={node.id} ref={(element) => registerStack(node.id, element)}>
-        {tabbed ? (
+        {tabbed && (
           <div className="sb-pane-head">
             <div className="sb-pane-tabs" role="tablist">
               {node.panes.map((paneId) => {
@@ -282,18 +301,11 @@ export function PaneLayout({
               )}
             </div>
           </div>
-        ) : (
-          // A lone pane is chrome-less: the component is the surface. This grip is
-          // the only affordance and only appears on hover/focus.
-          <button
-            type="button"
-            className="sb-pane-grip"
-            title="Drag to rearrange"
-            aria-label="Drag pane"
-            onPointerDown={(event) => beginDrag(event, node.id, node.active)}
-          />
         )}
-        <div className="sb-pane-body">
+        <div
+          className="sb-pane-body"
+          onPointerDown={(event) => beginTopBarDrag(event, node.id, node.active, event.currentTarget)}
+        >
           {node.panes.map((paneId) => (
             <div className="sb-pane-view" key={paneId} hidden={paneId !== node.active} data-pane-id={paneId}>
               {paneMap.get(paneId)?.content ?? <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>}

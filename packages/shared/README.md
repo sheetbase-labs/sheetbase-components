@@ -20,9 +20,10 @@ import "sheetbase-shared/panes.css";
 
 `SheetbaseShell` is the shared application frame (topbar / subbar / body) built
 from the same `.sb-frame` primitives every component uses. `PaneLayout` is a
-nestable multiplexer: panes tile into resizable splits and tabbed stacks, and a
-pane's tab can be dragged onto another pane's edge to split, or its centre to
-tab them together.
+nestable multiplexer: panes tile into resizable splits and tabbed stacks. Grab
+a tabbed pane by its tab, or a lone pane by the empty chrome of its own top
+bar, then drop on another pane's edge to split or its centre to tab them
+together.
 
 ```tsx
 <SheetbaseShell theme={theme} onToggleTheme={toggleTheme}>

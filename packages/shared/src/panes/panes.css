@@ -31,6 +31,8 @@
 .sb-panes {
   min-height: 0;
   min-width: 0;
+  flex: 1 1 0;
+  width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -134,28 +136,6 @@
 .sb-pane-tab.dragging { opacity: 0.4; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
 .sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
-/* Hover-only drag handle for lone panes, tucked into the frame's top padding. */
-.sb-pane-grip {
-  position: absolute;
-  top: 1px;
-  left: 50%;
-  z-index: 3;
-  width: 30px;
-  height: 6px;
-  padding: 0;
-  transform: translateX(-50%);
-  border: 0;
-  border-radius: 999px;
-  background: var(--border-strong);
-  opacity: 0;
-  pointer-events: none;
-  cursor: grab;
-  touch-action: none;
-  transition: opacity 120ms ease, background 120ms ease;
-}
-.sb-pane-stack:hover > .sb-pane-grip,
-.sb-pane-grip:focus-visible { opacity: 0.85; pointer-events: auto; }
-.sb-pane-grip:hover { background: var(--accent); }
 .sb-pane-body {
   flex: 1 1 0;
   min-height: 0;
