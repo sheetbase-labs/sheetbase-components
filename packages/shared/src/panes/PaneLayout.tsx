@@ -366,11 +366,11 @@ export function PaneLayout({
     // Stacks do not move during a drag, so snapshot their rects once instead of
     // measuring every stack on every pointer move.
     stackRectsRef.current = new Map([...stackRefs.current].map(([id, element]) => [id, element.getBoundingClientRect()]));
-    // A pane dragged out of a tab strip is leaving its group: dropping it on
-    // another pane's body mints a new pane (split) rather than re-tabbing it.
-    const sourceIsTab = (findStack(layout, stackId)?.panes.length ?? 1) > 1;
+    // Dragging a pane onto another pane always splits it into its own pane.
+    // Tabbing together is deliberate: drop onto a target's tab, or use the
+    // pane menu's "Tab with". (Dropping on its own pane pops it out below.)
     const effectiveZone = (hit: { stackId: string; zone: DropZone; tabIndex: number | null } | null) =>
-      hit && sourceIsTab && hit.tabIndex === null && hit.stackId !== stackId && hit.zone === "center"
+      hit && hit.tabIndex === null && hit.stackId !== stackId && hit.zone === "center"
         ? { ...hit, zone: "right" as DropZone }
         : hit;
     let dragging = false;

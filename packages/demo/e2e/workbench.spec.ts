@@ -31,48 +31,65 @@ async function reset(page: Page) {
 }
 
 
-test("docks a pane by dragging its own toolbar", async ({ page }) => {
+/** Drag a named tab onto another pane. */
+async function dragTabOnto(page: Page, tabName: string, to: Locator) {
+  const tb = await page.getByRole("tab", { name: tabName }).boundingBox();
+  const b = await to.boundingBox();
+  if (!tb || !b) throw new Error("drag source or target not visible");
+  await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+}
+
+test("dragging a pane onto another splits it, never tabs it", async ({ page }) => {
   await reset(page);
   const explorer = stackWith(page, ".sheetbase-explorer");
-  await expect(explorer.getByRole("tab")).toHaveCount(0);
-
   await dragTableOnto(page, explorer);
-  await expect(explorer.getByRole("tab")).toHaveText(["Explorer", "Table"]);
-  // Source stack collapsed away, so the tree shrank.
-  await expect.poll(() => topStacks(page)).toBe(2);
+
+  // Both are lone panes side by side in one split — no tab group.
+  await expect(explorer.getByRole("tab")).toHaveCount(0);
+  await expect(stackWith(page, ".table-surface")).toHaveCount(1);
+  const siblings = await page.evaluate(() => {
+    const table = document.querySelector(".table-surface")?.closest(".sb-split-cell");
+    const explorer = document.querySelector(".sheetbase-explorer")?.closest(".sb-split-cell");
+    return Boolean(table && explorer && table.parentElement === explorer.parentElement);
+  });
+  expect(siblings).toBe(true);
 });
 
 test("preserves pane component state across a move", async ({ page }) => {
   await reset(page);
   await page.locator(".table-surface").evaluate((el) => el.setAttribute("data-marker", "kept"));
 
-  const explorer = stackWith(page, ".sheetbase-explorer");
-  await dragTableOnto(page, explorer);
+  await dragTableOnto(page, stackWith(page, ".sheetbase-explorer"));
 
-  await expect(explorer.getByRole("tab", { name: "Table" })).toBeVisible();
   // Portals keep the same DOM node, so the marker survives the remount-free move.
   await expect(page.locator(".table-surface")).toHaveAttribute("data-marker", "kept");
 });
 
 test("persists the layout to localStorage and restores it", async ({ page }) => {
   await reset(page);
-  const explorer = stackWith(page, ".sheetbase-explorer");
-  await dragTableOnto(page, explorer);
-  await expect(explorer.getByRole("tab")).toHaveText(["Explorer", "Table"]);
+  await dragTabOnto(page, "Search", stackWith(page, ".table-surface"));
+  await expect.poll(() => topStacks(page)).toBe(4);
 
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("sheetbase-demo:workbench")))
     .toContain('"version":1');
 
   await page.reload({ waitUntil: "networkidle" });
-  await expect(stackWith(page, ".sheetbase-explorer").getByRole("tab")).toHaveText(["Explorer", "Table"]);
+  await expect.poll(() => topStacks(page)).toBe(4);
 });
 
 test("navigates and reorders tabs with the keyboard", async ({ page }) => {
   await reset(page);
-  const explorer = stackWith(page, ".sheetbase-explorer");
-  await dragTableOnto(page, explorer);
+  const table = stackWith(page, ".table-surface");
+  await table.hover();
+  await table.getByRole("button", { name: "Pane actions" }).click();
+  await page.getByRole("menuitem", { name: "Explorer" }).click();
 
+  const explorer = stackWith(page, ".sheetbase-explorer");
+  await expect(explorer.getByRole("tab")).toHaveText(["Explorer", "Table"]);
   await explorer.getByRole("tab", { name: "Explorer" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(explorer.getByRole("tab", { name: "Table" })).toHaveAttribute("aria-selected", "true");
