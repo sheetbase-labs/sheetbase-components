@@ -232,6 +232,16 @@ test("dragging a tab onto a pane makes a new pane, not a tab group", async ({ pa
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
+test("dropping a pane on another stack's tab still splits, not groups", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  await dragTableOnto(page, page.getByRole("tab", { name: "Schema" }));
+
+  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules", "Search"]);
+  await expect(analysis.getByRole("tab", { name: "Table" })).toHaveCount(0);
+  await expect(stackWith(page, ".table-surface")).toHaveCount(1);
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
