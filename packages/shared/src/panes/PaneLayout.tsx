@@ -70,6 +70,8 @@ export interface PaneLayoutHandle {
   movePane(paneId: PaneId, targetStackId: string, zone?: DropZone): void;
   /** Place a pane the host just added to `panes` into a stack. */
   addPane(paneId: PaneId, stackId: string): void;
+  /** Pull a tab out into its own pane, docked after its stack (`row` = right, `column` = below). */
+  splitOut(paneId: PaneId, direction?: SplitDirection): void;
   /** Show a pane's tab. */
   activate(paneId: PaneId): void;
   /** Remove a pane from the layout and notify `onClosePane`. */
@@ -158,13 +160,15 @@ function splitFor(direction: Direction): { direction: SplitDirection; before: bo
 }
 
 /** Per-pane actions: tab this pane into another stack, add a new pane, close. */
-function PaneMenu({ stackId, theme, otherStacks, closable, onTabInto, onRequestNewPane, onClose }: {
+function PaneMenu({ stackId, theme, otherStacks, closable, canSplit, onTabInto, onRequestNewPane, onSplitOut, onClose }: {
   stackId: string;
   theme?: ThemeMode;
   otherStacks: ReadonlyArray<{ id: string; label: ReactNode }>;
   closable: boolean;
+  canSplit: boolean;
   onTabInto(stackId: string): void;
   onRequestNewPane?(stackId: string): void;
+  onSplitOut(): void;
   onClose(): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -208,6 +212,9 @@ function PaneMenu({ stackId, theme, otherStacks, closable, onTabInto, onRequestN
             ))}
             {onRequestNewPane && (
               <button type="button" role="menuitem" onClick={() => { onRequestNewPane(stackId); setOpen(false); }}>New pane…</button>
+            )}
+            {canSplit && (
+              <button type="button" role="menuitem" onClick={() => { onSplitOut(); setOpen(false); }}>Split into pane</button>
             )}
             {closable && (
               <button type="button" role="menuitem" onClick={() => { onClose(); setOpen(false); }}>Close pane</button>
@@ -579,6 +586,15 @@ export function PaneLayout({
       }
       return;
     }
+    if (event.altKey && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      event.preventDefault();
+      const next = splitPaneOut(layout, paneId, "column", event.key === "ArrowUp");
+      if (next !== layout) {
+        commit(next);
+        setAnnouncement(`Split ${typeof paneMap.get(paneId)?.title === "string" ? paneMap.get(paneId)?.title : paneId} ${event.key === "ArrowUp" ? "up" : "down"}`);
+      }
+      return;
+    }
     if (event.altKey && event.shiftKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
       const from = node.panes.indexOf(paneId);
@@ -616,8 +632,10 @@ export function PaneLayout({
         theme={theme}
         otherStacks={otherStacks}
         closable={Boolean(activePane?.closable && onClosePane)}
+        canSplit={node.panes.length > 1}
         onTabInto={(target) => commit(movePane(layout, node.active, target, "center"))}
         onRequestNewPane={onRequestNewPane}
+        onSplitOut={() => commit(splitPaneOut(layout, node.active, "row", false))}
         onClose={() => { if (activePane) requestClose(activePane.id, node.id); }}
       />
     );
@@ -738,6 +756,7 @@ export function PaneLayout({
     tabInto: (paneId: PaneId, targetStackId: string) => commit(movePane(layout, paneId, targetStackId, "center")),
     movePane: (paneId: PaneId, targetStackId: string, zone: DropZone = "center") => commit(movePane(layout, paneId, targetStackId, zone)),
     addPane: (paneId: PaneId, stackId: string) => commit(addPaneToStack(layout, stackId, paneId)),
+    splitOut: (paneId: PaneId, direction: SplitDirection = "row") => commit(splitPaneOut(layout, paneId, direction, false)),
     activate: (paneId: PaneId) => {
       const stack = stackOf(layout, paneId);
       if (stack) commit(setActivePane(layout, stack.id, paneId));

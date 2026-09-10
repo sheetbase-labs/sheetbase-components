@@ -166,6 +166,18 @@ test("re-opens a closed pane through the 'New pane…' action", async ({ page })
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
+test("splits a tab out into its own pane", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await analysis.getByRole("button", { name: "Pane actions" }).click();
+  await page.getByRole("menuitem", { name: "Split into pane" }).click();
+
+  await expect.poll(() => topStacks(page)).toBe(4);
+  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules"]);
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
