@@ -9,3 +9,6 @@ test-results
 playwright-report
 presentation.db
 .vite
+
+# generated declaration files must not be committed next to sources
+packages/*/src/**/*.d.ts
