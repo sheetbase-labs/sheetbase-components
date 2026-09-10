@@ -75,9 +75,9 @@ The pane actions menu (`paneMenu`: `"head"` default, `"hover"` for lone panes,
 action (`onRequestNewPane`). Dragging a tab onto another pane's centre also tabs
 them together.
 
-To turn a tab back into its own pane, use **Split into pane** in the menu, drag
-the tab onto another pane's edge, press `Alt`+`Shift`+`↑`/`↓` on a tab, or call
-`splitPaneOut` / the handle's `splitOut(paneId, direction)`.
+To turn a tab back into its own pane, drag it onto its own pane (or another
+pane's edge), use **Split into pane** in the menu, press `Alt`+`Shift`+`↑`/`↓`
+on a tab, or call `splitPaneOut` / the handle's `splitOut(paneId, direction)`.
 
 ### Keyboard
 

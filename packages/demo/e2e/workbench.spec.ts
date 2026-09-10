@@ -178,6 +178,24 @@ test("splits a tab out into its own pane", async ({ page }) => {
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
+test("pops a tab out by dropping it back on its own pane", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  const searchTab = analysis.getByRole("tab", { name: "Search" });
+  const tb = await searchTab.boundingBox();
+  const ab = await analysis.boundingBox();
+  if (!tb || !ab) throw new Error("tab or pane not visible");
+
+  await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(ab.x + ab.width / 2, ab.y + ab.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  await expect.poll(() => topStacks(page)).toBe(4);
+  await expect(analysis.getByRole("tab")).toHaveText(["Schema", "Rules"]);
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

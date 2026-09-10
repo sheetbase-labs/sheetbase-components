@@ -416,6 +416,12 @@ export function PaneLayout({
         }
         return;
       }
+      // Dropping a tab back on its own pane pops it out into its own pane.
+      if (hit.stackId === stackId && hit.zone === "center") {
+        const next = splitPaneOut(layout, paneId, "row", false);
+        if (next !== layout) commit(next);
+        return;
+      }
       commit(movePane(layout, paneId, hit.stackId, hit.zone));
     };
 
