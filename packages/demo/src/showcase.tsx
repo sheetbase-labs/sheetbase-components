@@ -11,7 +11,7 @@ import {
   type TablePresentationState,
   type ThemeMode,
 } from "sheetbase-table";
-import { App as Explorer, inferColumns, type Dataset } from "sheetbase-explorer";
+import { App as Explorer, type Dataset } from "sheetbase-explorer";
 import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
 import type { SchemaGraph } from "sheetbase-schemaeditor";
 import type { SearchRow } from "sheetbase-advanced-search";
@@ -189,15 +189,42 @@ export const searchFields = tableFields.map((field) => field.id);
 export const searchRows = sampleRows;
 
 /**
- * Wrap rows the explorer can chart. Columns come from the full sample so their
- * kinds/cardinality stay stable even when `rows` is a filtered subset.
+ * Wrap rows the explorer can chart. Columns come from the shared field contract
+ * (the schema selection that also feeds the table and search), with cardinality
+ * measured against the full sample so grouping choices stay stable.
  */
-export function createExplorerDataset(rows: readonly Record<string, unknown>[]): Dataset {
+export function createExplorerDataset(
+  rows: readonly Record<string, unknown>[],
+  fields: readonly { id: string; label: string; dataType: string }[] = tableFields,
+): Dataset {
+  const columns = fields.map((field) => {
+    const kind = field.dataType === "number" ? "number" as const
+      : field.dataType === "boolean" ? "boolean" as const
+        : field.dataType === "date" || field.dataType === "datetime" ? "date" as const
+          : "string" as const;
+    const values = sampleRows.map((row) => row[field.id as keyof SampleRow]);
+    return {
+      key: field.id,
+      kind,
+      nullable: values.some((value) => value === null || value === undefined || value === ""),
+      uniqueCount: new Set(values.map((value) => String(value))).size,
+    };
+  });
+  return { name: "samples", source: "Workspace", columns, rows: rows as Record<string, unknown>[] };
+}
+
+/** Build a schema graph from table fields, so the schema can reflect the table. */
+export function schemaFromFields(
+  fields: readonly { id: string; label: string; dataType: string }[],
+  name = "sample",
+  label = "Sample",
+): SchemaGraph {
   return {
-    name: "samples",
-    source: "Workspace",
-    columns: inferColumns(sampleRows as unknown as Record<string, unknown>[]),
-    rows: rows as Record<string, unknown>[],
+    models: [{
+      name,
+      label,
+      fields: fields.map((field) => ({ key: field.id, label: field.label, type: field.dataType as SchemaGraph["models"][number]["fields"][number]["type"] })),
+    }],
   };
 }
 

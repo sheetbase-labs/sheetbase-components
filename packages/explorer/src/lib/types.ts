@@ -26,9 +26,18 @@ export type ErrorMode = 'none' | 'explicit' | 'sd' | 'sem' | 'ci95'
 export type FilterLogic = 'and' | 'or'
 export type PaletteKind = 'sheetbase' | 'muted' | 'warm' | 'cool' | 'mono' | 'custom'
 /** Axis mapping: auto uses linear for numeric fields. */
-export type ScaleKind = 'auto' | 'linear' | 'log'
+export type ScaleKind = 'auto' | 'linear' | 'log' | 'sqrt' | 'symlog'
 /** Colour mapping: auto uses a gradient for numeric fields, categories otherwise. */
 export type ColorScaleKind = 'auto' | 'categorical' | 'continuous'
+/** Line/area interpolation. */
+export type LineCurveKind = 'auto' | 'smooth' | 'step' | 'monotone'
+
+export interface ReferenceLine {
+  id: string
+  axis: 'x' | 'y'
+  value: number
+  label?: string
+}
 
 export interface FilterRule {
   id: string
@@ -82,8 +91,17 @@ export interface ChartSpec {
   /** Axis mapping. 'auto' (or unset) uses linear for numeric fields. */
   xScale?: ScaleKind
   yScale?: ScaleKind
+  /** Flip an axis so values increase towards the origin. */
+  xReverse?: boolean
+  yReverse?: boolean
   /** Colour mapping: 'auto' gradients numeric colour fields, categories otherwise. */
   colorScale?: ColorScaleKind
+  /** Size scatter dots by a numeric field. */
+  size?: string
+  /** Line/area interpolation. */
+  lineCurve?: LineCurveKind
+  /** Horizontal/vertical guides drawn over the marks. */
+  refLines?: ReferenceLine[]
 }
 
 export interface SavedExploration {

@@ -7,6 +7,10 @@ declare module 'd3-scale' {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function scaleLog(): any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export function scaleSqrt(): any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export function scaleSymlog(): any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function scaleLinear(): any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function scaleSequential(interpolator: (t: number) => string): any

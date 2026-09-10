@@ -30,6 +30,7 @@ import {
   ruleActions,
   ruleFields,
   rulesStarter,
+  schemaFromFields,
   schemaStarter,
   sampleRows,
   tableFields,
@@ -106,8 +107,8 @@ export function Workbench() {
     [view],
   );
   const explorerDataset = useMemo(
-    () => createExplorerDataset(viewRows as readonly Record<string, unknown>[]),
-    [viewRows],
+    () => createExplorerDataset(viewRows as readonly Record<string, unknown>[], headerFields),
+    [viewRows, headerFields],
   );
   const closedAdapter = useMemo(() => createLocalStorageAdapter<string[]>(), []);
   const [closed, setClosed] = useState<ReadonlySet<string>>(
@@ -142,6 +143,7 @@ export function Workbench() {
         <>
           <button className="sb-btn" onClick={() => schemaRef.current?.fitView()}>Fit</button>
           <button className="sb-btn" onClick={() => schemaRef.current?.resetView()}>Reset</button>
+          <button className="sb-btn" title="Rebuild the schema from the table's columns" onClick={() => setGraph(schemaFromFields(headerFields, "sample", "Sample"))}>From table</button>
           <button className="sb-btn primary" onClick={() => schemaRef.current?.addModel()}>+ Model</button>
         </>
       ),

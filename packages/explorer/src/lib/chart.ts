@@ -6,6 +6,7 @@ import {
   binX,
   boxY,
   colorLegend,
+  d3Curve,
   defineChart,
   dot,
   facetChart,
@@ -14,7 +15,10 @@ import {
   lineY,
   link,
   rect,
+  ruleX,
+  ruleY,
   stack,
+  text,
   tickY,
 } from '@tanstack/charts'
 import { tooltip } from '@tanstack/charts/tooltip'
@@ -25,9 +29,10 @@ import { scaleBand } from '@tanstack/charts/scales/band'
 import { scaleLinear } from '@tanstack/charts/scales/linear'
 import { scaleOrdinal } from '@tanstack/charts/scales/ordinal'
 import { scalePoint } from '@tanstack/charts/scales/point'
-import { scaleLinear as d3ScaleLinear, scaleLog } from 'd3-scale'
+import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
+import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
 import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
-import type { ChartSpec, DataRow, Dataset } from './types'
+import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
 
 function visibleRows(rows: DataRow[], spec: ChartSpec) {
   const seriesField = spec.color ?? spec.group
@@ -148,6 +153,12 @@ function chartSpec(
       ? stack({ offset: 'normalize' })
       : undefined
 
+  const curve = spec.lineCurve === 'smooth' ? d3Curve(curveBasis)
+    : spec.lineCurve === 'step' ? d3Curve(curveStep)
+      : spec.lineCurve === 'monotone' ? d3Curve(curveMonotoneX)
+        : undefined
+  const lineCurve = curve ? { curve } : {}
+
   if (spec.kind === 'histogram') {
     if (xMeta.kind !== 'number') return null
     const bins = binX(rows, ({ value: (row: DataRow) => Number(row[spec.x!]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as any)
@@ -160,13 +171,24 @@ function chartSpec(
   } else if (spec.kind === 'bar') {
     marks.push(barY(rows, ({ id: 'bars', x: spec.x, y: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
   } else if (spec.kind === 'area') {
-    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
-    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
+    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
+    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
   } else if (spec.kind === 'line') {
-    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping }) as any))
+    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
   } else {
     const rendered = spec.kind === 'scatter' ? decimatePoints(rows, MAX_SCATTER_POINTS) : rows
-    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
+    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.kind === 'scatter' && spec.size ? spec.size : spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
+  }
+
+  if (spec.refLines?.length) {
+    for (const line of spec.refLines) {
+      const guide = [{ x: line.value, y: line.value }]
+      if (line.axis === 'x') marks.push(ruleX(guide, { id: `ref-x-${line.id}`, x: 'x', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
+      else marks.push(ruleY(guide, { id: `ref-y-${line.id}`, y: 'y', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
+      if (line.label) {
+        marks.push(text(guide, ({ id: `ref-label-${line.id}`, ...(line.axis === 'x' ? { x: 'x' } : { y: 'y' }), text: line.label, fill: markColour, fontSize: 10, fontWeight: 600 } as any) as any))
+      }
+    }
   }
 
   if (spec.showRegression && spec.kind === 'scatter' && xMeta.kind === 'number' && yMeta?.kind === 'number') {
@@ -189,24 +211,34 @@ function chartSpec(
 
   const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
   const yValueNumeric = !horizontal && yMeta?.kind === 'number'
-  // Log axes need positive data; without it we fall back to linear rather than
-  // letting the library infer a (zero-based) log domain and throw. Bar-like
-  // marks also need a zero baseline, which a log axis cannot provide.
   const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area'].includes(spec.kind)
-  const xLogExtent = logAllowed && spec.xScale === 'log' && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
-  const yLogExtent = logAllowed && spec.yScale === 'log' && yValueNumeric ? logExtent(rawRows, spec.y!) : undefined
-  const xLog = Boolean(xLogExtent)
-  const yLog = Boolean(yLogExtent)
-  const numericScale = (log: boolean) => (log ? scaleLog : scaleLinear)
+  const xDataExtent = xValueNumeric ? numericExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
+  const yDataExtent = yValueNumeric && spec.y ? numericExtent(rawRows, spec.y) : undefined
+  const xLogExtent = logAllowed && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
+  const yLogExtent = logAllowed && yValueNumeric && spec.y ? logExtent(rawRows, spec.y) : undefined
+
+  // Pick an effective scale, falling back to linear when the data can't support
+  // the request (log needs positive values + a non-zero baseline; sqrt needs
+  // non-negative values).
+  const resolveKind = (requested: ScaleKind | undefined, extent: readonly [number, number] | undefined, logExt: readonly [number, number] | undefined): ScaleKind => {
+    const kind = requested && requested !== 'auto' ? requested : 'linear'
+    if (kind === 'log') return logExt ? 'log' : 'linear'
+    if (kind === 'sqrt') return extent && extent[0] >= 0 ? 'sqrt' : 'linear'
+    return kind
+  }
+  const xKind = resolveKind(spec.xScale, xDataExtent, xLogExtent)
+  const yKind = resolveKind(spec.yScale, yDataExtent, yLogExtent)
+  const numericScale = (kind: ScaleKind) =>
+    kind === 'log' ? scaleLog : kind === 'sqrt' ? scaleSqrt : kind === 'symlog' ? scaleSymlog : scaleLinear
 
   const xScale = horizontal
-    ? (xValueNumeric ? numericScale(xLog) : () => scalePoint<string>().padding(0.5))
+    ? (xValueNumeric ? numericScale(xKind) : () => scalePoint<string>().padding(0.5))
     : xMeta.kind === 'number'
-      ? numericScale(xLog)
+      ? numericScale(xKind)
       : ['bar', 'box'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
   const yScale = horizontal
     ? () => scaleBand<string>().padding(0.18)
-    : spec.kind === 'histogram' ? scaleLinear : yValueNumeric ? numericScale(yLog) : () => scalePoint<string>().padding(0.5)
+    : spec.kind === 'histogram' ? scaleLinear : yValueNumeric ? numericScale(yKind) : () => scalePoint<string>().padding(0.5)
 
   // A numeric colour field becomes a gradient on scatter dots; connected
   // geometry (bars/lines) needs discrete series identity, so it stays ordinal.
@@ -225,20 +257,20 @@ function chartSpec(
 
   const xDomain: [number, number] | undefined = zoomDomain
     ? zoomDomain
-    : xLog && xLogExtent
+    : xKind === 'log' && xLogExtent
       ? xLogExtent
       : horizontal && xValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
         ? [spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))]
         : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
           ? [spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1]
           : undefined
-  const yDomain: [number, number] | undefined = yLog && yLogExtent
+  const yDomain: [number, number] | undefined = yKind === 'log' && yLogExtent
     ? yLogExtent
-    : yValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
+    : yValueNumeric && spec.y && (spec.yMin !== undefined || spec.yMax !== undefined)
       ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))]
       : undefined
-  const configuredX = xDomain ? numericScale(xLog)().domain(xDomain) : undefined
-  const configuredY = yDomain ? numericScale(yLog)().domain(yDomain) : undefined
+  const configuredX = xDomain ? numericScale(xKind)().domain(xDomain) : undefined
+  const configuredY = yDomain ? numericScale(yKind)().domain(yDomain) : undefined
 
   const controls = spec.zoomEnabled && extent && onZoom && xMeta.kind === 'number' && !horizontal
     ? [zoomX({
@@ -255,8 +287,8 @@ function chartSpec(
   return {
     marks,
     scales: {
-      x: { scale: (configuredX ?? xScale) as any, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
-      y: { scale: (configuredY ?? yScale) as any, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
+      x: { scale: (configuredX ?? xScale) as any, reverse: spec.xReverse ?? false, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
+      y: { scale: (configuredY ?? yScale) as any, reverse: spec.yReverse ?? false, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
     },
     ...(color ? { color } : {}),
     ...(controls ? { controls } : {}),
