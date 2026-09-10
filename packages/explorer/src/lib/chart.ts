@@ -226,6 +226,18 @@ function chartSpec(
     marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.kind === 'scatter' && spec.size ? spec.size : spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
   }
 
+  if (spec.labels && spec.x && spec.y && ['scatter', 'line', 'area', 'bar', 'lollipop'].includes(spec.kind)) {
+    const labelField = spec.labelField
+    marks.push(text(rows as any, ({
+      id: 'data-labels', x: spec.x, y: spec.y,
+      text: labelField
+        ? (row: DataRow) => String(row[labelField] ?? '')
+        : (row: DataRow) => { const value = Number(row[spec.y!]); return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '' },
+      dy: spec.kind === 'bar' || spec.kind === 'lollipop' ? -6 : -8,
+      anchor: 'middle', fill: '#52525b', fontSize: 10, fontWeight: 600,
+    } as any) as any))
+  }
+
   if (spec.refLines?.length) {
     for (const line of spec.refLines) {
       const guide = [{ x: line.value, y: line.value }]
@@ -277,18 +289,45 @@ function chartSpec(
   const numericScale = (kind: ScaleKind) =>
     kind === 'log' ? scaleLog : kind === 'sqrt' ? scaleSqrt : kind === 'symlog' ? scaleSymlog : scaleLinear
 
+  // Optional ordering of categorical x (or y for horizontal bars), ranked by
+  // the summed y value.
+  const categoryOrder = spec.categoryOrder && spec.categoryOrder !== 'auto' ? spec.categoryOrder : undefined
+  let categoryDomain: string[] | undefined
+  if (categoryOrder && !xValueNumeric && spec.x) {
+    const totals = new Map<string, number>()
+    for (const row of rawRows) {
+      const key = String(row[spec.x] ?? '')
+      if (!key) continue
+      const value = spec.y ? Number(row[spec.y]) : 1
+      totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(value) ? value : 0))
+    }
+    categoryDomain = [...totals.keys()].sort(categoryOrder === 'label-asc'
+      ? (a, b) => a.localeCompare(b)
+      : categoryOrder === 'value-asc'
+        ? (a, b) => (totals.get(a) ?? 0) - (totals.get(b) ?? 0)
+        : (a, b) => (totals.get(b) ?? 0) - (totals.get(a) ?? 0))
+  }
+
+  const bandPadding = spec.kind === 'heatmap' ? 0.05 : 0.18
+  const xBand = categoryDomain
+    ? scaleBand<string>().domain(categoryDomain).padding(bandPadding)
+    : () => scaleBand<string>().padding(bandPadding)
+  const xPoint = categoryDomain
+    ? scalePoint<string>().domain(categoryDomain).padding(0.5)
+    : () => scalePoint<string>().padding(0.5)
+
   const xScale = horizontal
-    ? (xValueNumeric ? numericScale(xKind) : () => scalePoint<string>().padding(0.5))
+    ? (xValueNumeric ? numericScale(xKind) : xPoint)
     : xMeta.kind === 'number'
       ? numericScale(xKind)
       : ['bar', 'box', 'lollipop', 'violin', 'waterfall', 'heatmap'].includes(spec.kind)
-        ? () => scaleBand<string>().padding(spec.kind === 'heatmap' ? 0.05 : 0.18)
-        : () => scalePoint<string>().padding(0.5)
+        ? xBand
+        : xPoint
   const yScale = horizontal
-    ? () => scaleBand<string>().padding(0.18)
+    ? xBand
     : spec.kind === 'histogram' ? scaleLinear
-      : spec.kind === 'heatmap' ? () => scaleBand<string>().padding(0.05)
-        : yValueNumeric ? numericScale(yKind) : () => scalePoint<string>().padding(0.5)
+      : spec.kind === 'heatmap' ? xBand
+        : yValueNumeric ? numericScale(yKind) : xPoint
 
   // A numeric colour field becomes a gradient on scatter dots; a heatmap always
   // colours by its aggregated value. Connected geometry (bars/lines) needs

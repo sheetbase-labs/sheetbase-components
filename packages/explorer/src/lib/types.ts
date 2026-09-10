@@ -102,6 +102,12 @@ export interface ChartSpec {
   lineCurve?: LineCurveKind
   /** Horizontal/vertical guides drawn over the marks. */
   refLines?: ReferenceLine[]
+  /** Draw a text label at each mark. */
+  labels?: boolean
+  /** Field shown in data labels (defaults to the y value). */
+  labelField?: string
+  /** Ordering of categorical x values. */
+  categoryOrder?: 'auto' | 'value-asc' | 'value-desc' | 'label-asc'
 }
 
 export interface SavedExploration {
