@@ -1,22 +1,30 @@
 import { describe, expect, it } from "vitest";
+import { createMemoryAdapter } from "../persistence";
 import {
   addPaneToStack,
   containsPane,
   findStack,
   listPanes,
   listStacks,
+  loadPaneLayoutState,
   makeStack,
   movePane,
   normaliseSizes,
+  paneLayoutState,
+  parsePaneLayoutState,
   pruneLayout,
+  reconcileLayout,
   removePane,
+  reorderStack,
   setActivePane,
   setSplitSizes,
   singleStack,
+  splitPaneOut,
   splitStack,
   stackOf,
   type Layout,
   type LayoutNode,
+  type PaneLayoutState,
   type SplitNode,
   type StackNode,
 } from "./layout";
@@ -200,5 +208,89 @@ describe("pruneLayout", () => {
 
   it("returns null when nothing survives", () => {
     expect(pruneLayout(stack("a", ["one"]), [])).toBeNull();
+  });
+});
+
+describe("reorderStack", () => {
+  it("moves a pane forward in the tab order", () => {
+    const next = reorderStack(stack("a", ["one", "two", "three"], "one"), "a", "one", 2) as StackNode;
+    expect(next.panes).toEqual(["two", "three", "one"]);
+    expect(next.active).toBe("one");
+  });
+
+  it("moves a pane backward in the tab order", () => {
+    const next = reorderStack(stack("a", ["one", "two", "three"], "three"), "a", "three", 0) as StackNode;
+    expect(next.panes).toEqual(["three", "one", "two"]);
+  });
+
+  it("ignores a pane that is not in the stack", () => {
+    const before = stack("a", ["one", "two"]);
+    expect(reorderStack(before, "a", "nope", 0)).toEqual(before);
+  });
+});
+
+describe("splitPaneOut", () => {
+  it("pulls a pane out of a multi-pane stack", () => {
+    const next = splitPaneOut(stack("a", ["one", "two"], "two"), "two", "row", false, { stackId: "out", splitId: "sp" }) as SplitNode;
+    expect(next.kind).toBe("split");
+    expect((next.children[0] as StackNode).id).toBe("a");
+    expect((next.children[0] as StackNode).panes).toEqual(["one"]);
+    expect((next.children[1] as StackNode)).toMatchObject({ id: "out", panes: ["two"] });
+  });
+
+  it("is a no-op for a lone pane", () => {
+    const before = stack("a", ["one"]);
+    expect(splitPaneOut(before, "one", "column", true, { stackId: "out", splitId: "sp" })).toEqual(before);
+  });
+});
+
+describe("pane layout persistence", () => {
+  it("wraps and parses the versioned state", () => {
+    const layout: Layout = stack("a", ["one"]);
+    expect(paneLayoutState(layout)).toEqual({ version: 1, layout });
+    expect(parsePaneLayoutState({ version: 1, layout })).toEqual({ version: 1, layout });
+  });
+
+  it("tolerates a legacy bare layout", () => {
+    const layout: Layout = stack("a", ["one"]);
+    expect(parsePaneLayoutState(layout)).toEqual({ version: 1, layout });
+  });
+
+  it("rejects unrecognised values", () => {
+    expect(parsePaneLayoutState(undefined)).toBeUndefined();
+    expect(parsePaneLayoutState(42)).toBeUndefined();
+    expect(parsePaneLayoutState({ hello: "world" })).toBeUndefined();
+  });
+
+  it("loads, reconciles and drops unknown panes", () => {
+    const adapter = createMemoryAdapter<PaneLayoutState>();
+    adapter.save("k", paneLayoutState(split("root", "row", [stack("a", ["one"]), stack("b", ["gone"])])));
+    const loaded = loadPaneLayoutState(adapter, "k", ["one", "two"], null);
+    expect(listPanes(loaded)).toEqual(["one", "two"]);
+  });
+
+  it("falls back when nothing is stored", () => {
+    const fallback: Layout = stack("x", ["one"]);
+    expect(loadPaneLayoutState(createMemoryAdapter<PaneLayoutState>(), "k", ["one"], fallback)).toBe(fallback);
+  });
+});
+
+describe("reconcileLayout", () => {
+  it("appends panes missing from the tree to the first stack", () => {
+    const layout: Layout = split("root", "row", [stack("a", ["one"]), stack("b", ["two"])]);
+    const next = reconcileLayout(layout, ["one", "two", "three"], null) as SplitNode;
+    // First stack in tree order is "a".
+    expect((next.children[0] as StackNode).panes).toEqual(["one", "three"]);
+    expect((next.children[0] as StackNode).active).toBe("one");
+  });
+
+  it("drops unknown panes", () => {
+    const layout: Layout = split("root", "row", [stack("a", ["one"]), stack("b", ["gone"])]);
+    expect(reconcileLayout(layout, ["one"], null)).toMatchObject({ kind: "stack", id: "a" });
+  });
+
+  it("returns the fallback when the stored tree is unusable", () => {
+    const fallback: Layout = stack("f", ["one"]);
+    expect(reconcileLayout(null, ["one"], fallback)).toEqual(fallback);
   });
 });

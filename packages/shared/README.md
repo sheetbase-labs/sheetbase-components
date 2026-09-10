@@ -34,10 +34,22 @@ together.
 Outside a `SheetbaseShell` (or any `.sheetbase-scope`), pass `theme` so the pane
 chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
 
-The layout is a plain JSON tree (`StackNode | SplitNode`), so it persists like
-any other sheetbase state via `persistKey`/`adapter`. Saves happen for
-controlled and uncontrolled layouts; loads apply when uncontrolled, so a
-controlled host loads its own initial state with `loadInitialState`. The pure
+Pane content renders through stable portals, so moving a pane between stacks or
+tabs keeps its component state.
+
+### Keyboard
+
+- Tab strip: `Left`/`Right`/`Home`/`End` move and activate, `Alt`+`Shift`+`Left`/`Right` reorder, `Delete` closes.
+- Focused pane: `Alt`+arrow joins the nearest stack in that direction, `Alt`+`Shift`+arrow pulls the pane out into a split, `Delete` closes.
+- Splitters: arrow keys resize.
+
+### Persistence
+
+Persistence is a versioned `PaneLayoutState` (`{ version, layout }`). Saves
+happen for controlled and uncontrolled layouts; loads apply when uncontrolled,
+so a controlled host loads its own initial state with `loadPaneLayoutState`.
+Loading reconciles against the current `panes` — unknown panes are dropped and
+new ones appended — so stored layouts survive pane-set changes. The pure
 operations in `layout.ts` (`movePane`, `removePane`, `splitStack`, …) can be
 used without React.
 

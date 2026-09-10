@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -8,18 +9,28 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { loadInitialState, useIdleSave, type PersistenceAdapter } from "../persistence";
+import { createPortal } from "react-dom";
+import { useIdleSave, type PersistenceAdapter } from "../persistence";
 import type { ThemeMode } from "../ThemeToggle";
 import {
+  findStack,
+  loadPaneLayoutState,
   movePane,
+  paneLayoutState,
+  pruneLayout,
+  removePane,
+  reorderStack,
   setActivePane,
   setSplitSizes,
   singleStack,
+  splitPaneOut,
   type DropZone,
   type Layout,
   type LayoutNode,
   type PaneId,
+  type PaneLayoutState,
   type SplitNode,
+  type SplitDirection,
   type StackNode,
 } from "./layout";
 
@@ -33,7 +44,7 @@ export interface PaneSpec {
   /** Right-aligned header controls (buttons, menus). */
   actions?: ReactNode;
   content: ReactNode;
-  /** Show a close button in the header; requires `onClosePane`. */
+  /** Show a close button in the header and allow keyboard close; requires `onClosePane`. */
   closable?: boolean;
 }
 
@@ -45,13 +56,14 @@ export interface PaneLayoutProps {
   defaultLayout?: Layout;
   onLayoutChange?: (next: Layout) => void;
   /**
-   * Persist the layout under this key via `adapter`. Saves run for controlled
-   * and uncontrolled layouts; loads only apply when uncontrolled (a controlled
-   * host owns its initial state).
+   * Persist the layout under this key via `adapter` (versioned wrapper). Saves
+   * run for controlled and uncontrolled layouts; loads reconcile against
+   * `panes` and apply when uncontrolled (a controlled host owns its initial
+   * state — use `loadPaneLayoutState`).
    */
   persistKey?: string;
-  adapter?: PersistenceAdapter<Layout>;
-  /** Called when a `closable` pane's close button is pressed. */
+  adapter?: PersistenceAdapter<PaneLayoutState>;
+  /** Called when a `closable` pane is closed (pointer or keyboard). */
   onClosePane?: (id: PaneId) => void;
   /** Resize floor in pixels applied to splitter drags. Default 140. */
   minPaneSize?: number;
@@ -64,13 +76,27 @@ export interface PaneLayoutProps {
   className?: string;
 }
 
+type Direction = "left" | "right" | "up" | "down";
+
 interface DragState {
   paneId: PaneId;
+  sourceStackId: string;
   x: number;
   y: number;
   overStackId: string | null;
   zone: DropZone | null;
+  /** Index of the tab under the pointer, for same-stack reordering. */
+  overTabIndex: number | null;
 }
+
+/** A component's own toolbar height; drag starts in that band. */
+const TOP_BAR_PX = 40;
+
+/** Controls keep their own pointer behaviour; only inert chrome starts a drag. */
+const INTERACTIVE_SELECTOR =
+  "button, a, input, select, textarea, label, th, [contenteditable='true'], [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='menu'], [role='checkbox'], [role='combobox'], [role='slider'], [role='separator']";
+
+const CAN_PORTAL = typeof document !== "undefined";
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -81,19 +107,25 @@ function paneLabel(pane: PaneSpec | undefined, id: PaneId): ReactNode {
   return pane.tab ?? pane.title;
 }
 
-/** Height of a component's own toolbar, dragged from its empty space. */
-const TOP_BAR_PX = 40;
-
-/** Controls keep their own pointer behaviour; only inert chrome starts a drag. */
-const INTERACTIVE_SELECTOR =
-  "button, a, input, select, textarea, label, th, [contenteditable='true'], [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='menu'], [role='checkbox'], [role='combobox'], [role='slider'], [role='separator']";
+function splitFor(direction: Direction): { direction: SplitDirection; before: boolean } {
+  if (direction === "left") return { direction: "row", before: true };
+  if (direction === "right") return { direction: "row", before: false };
+  if (direction === "up") return { direction: "column", before: true };
+  return { direction: "column", before: false };
+}
 
 /**
  * A nestable multiplexer: panes tile into resizable splits and tabbed stacks.
  * Drag a pane onto another pane's edge to split, or onto its centre to tab them
  * together. Grab a tabbed pane by its tab, or a lone pane by the empty chrome
- * of its own top bar. The layout tree is host-owned, so it can be persisted or
- * built programmatically.
+ * of its own top bar.
+ *
+ * Pane content is rendered through stable portals, so moving a pane between
+ * stacks or tabs preserves its component state.
+ *
+ * Keyboard: in a tab strip, Left/Right/Home/End move and activate, Alt+Shift+Left/Right
+ * reorder, Delete closes. On any focused pane, Alt+Arrow joins the nearest stack in
+ * that direction, Alt+Shift+Arrow pulls the pane out into a split, Delete closes.
  */
 export function PaneLayout({
   panes,
@@ -109,23 +141,63 @@ export function PaneLayout({
 }: PaneLayoutProps) {
   const paneMap = useMemo(() => new Map(panes.map((pane) => [pane.id, pane])), [panes]);
   const paneIds = useMemo(() => panes.map((pane) => pane.id), [panes]);
+  const paneIdsKey = paneIds.join("\u0000");
 
   const [innerLayout, setInnerLayout] = useState<Layout>(() =>
     controlledLayout !== undefined
       ? controlledLayout
-      : loadInitialState(persistKey, adapter, defaultLayout ?? singleStack(paneIds)),
+      : loadPaneLayoutState(adapter, persistKey, paneIds, defaultLayout ?? singleStack(paneIds)),
   );
   const layout = controlledLayout !== undefined ? controlledLayout : innerLayout;
-  // Persist whatever is current. Controlled hosts load their own initial state
-  // (see the README) because the `layout` prop wins over the stored value.
-  useIdleSave(persistKey, layout, adapter);
+  // Persist whatever is current. Controlled hosts load their own initial state.
+  const state = useMemo(() => paneLayoutState(layout), [layout]);
+  useIdleSave(persistKey, state, adapter);
 
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const stackRefs = useRef(new Map<string, HTMLElement>());
+  const hostsRef = useRef(new Map<PaneId, HTMLDivElement>());
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Drop panes the host no longer offers. Additions are handled at load time
+  // (reconcile), never at runtime, so an intentionally closed pane stays closed.
+  const lastPaneIdsRef = useRef(paneIdsKey);
+  useEffect(() => {
+    if (lastPaneIdsRef.current === paneIdsKey) return;
+    lastPaneIdsRef.current = paneIdsKey;
+    if (controlledLayout !== undefined) return;
+    setInnerLayout((current) => pruneLayout(current, paneIds));
+  }, [paneIdsKey, paneIds, controlledLayout]);
+
+  // Stable DOM hosts so React keeps pane state when a pane moves between stacks.
+  function hostFor(id: PaneId): HTMLDivElement | null {
+    if (!CAN_PORTAL) return null;
+    let host = hostsRef.current.get(id);
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "sb-pane-host";
+      hostsRef.current.set(id, host);
+    }
+    return host;
+  }
+
+  function attachHost(slot: HTMLElement | null, id: PaneId) {
+    if (!slot) return;
+    const host = hostsRef.current.get(id);
+    if (host && host.parentElement !== slot) slot.appendChild(host);
+  }
 
   function commit(next: Layout) {
     if (controlledLayout === undefined) setInnerLayout(next);
     onLayoutChange?.(next);
+  }
+
+  function requestClose(paneId: PaneId, stackId: string) {
+    const pane = paneMap.get(paneId);
+    if (!pane?.closable || !onClosePane) return;
+    commit(removePane(layout, paneId, stackId));
+    onClosePane(paneId);
+    setAnnouncement(`Closed ${typeof pane.tab === "string" ? pane.tab : typeof pane.title === "string" ? pane.title : paneId}`);
   }
 
   function registerStack(id: string, element: HTMLElement | null) {
@@ -133,8 +205,18 @@ export function PaneLayout({
     else stackRefs.current.delete(id);
   }
 
-  /** Which stack sits under the pointer, and which edge band (if any) is nearest. */
-  function hitTest(x: number, y: number): { stackId: string; zone: DropZone } | null {
+  /** Stack under the pointer plus edge zone, or the tab under it for reordering. */
+  function hitTest(x: number, y: number): { stackId: string; zone: DropZone; tabIndex: number | null } | null {
+    const under = document.elementFromPoint(x, y) as HTMLElement | null;
+    const tab = under?.closest(".sb-pane-tab") as HTMLElement | null;
+    if (tab) {
+      const stackEl = tab.closest(".sb-pane-stack") as HTMLElement | null;
+      const stackId = stackEl?.dataset.stackId;
+      if (stackId) {
+        const siblings = Array.from((tab.parentElement as HTMLElement).children);
+        return { stackId, zone: "center", tabIndex: siblings.indexOf(tab) };
+      }
+    }
     for (const [stackId, element] of stackRefs.current) {
       const rect = element.getBoundingClientRect();
       if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
@@ -155,7 +237,7 @@ export function PaneLayout({
           nearest = distance;
         }
       }
-      return { stackId, zone };
+      return { stackId, zone, tabIndex: null };
     }
     return null;
   }
@@ -175,10 +257,12 @@ export function PaneLayout({
       const hit = hitTest(native.clientX, native.clientY);
       setDrag({
         paneId,
+        sourceStackId: stackId,
         x: native.clientX,
         y: native.clientY,
         overStackId: hit?.stackId ?? null,
         zone: hit?.zone ?? null,
+        overTabIndex: hit?.tabIndex ?? null,
       });
     };
 
@@ -197,8 +281,21 @@ export function PaneLayout({
         return;
       }
       const hit = hitTest(native.clientX, native.clientY);
-      if (hit) commit(movePane(layout, paneId, hit.stackId, hit.zone));
       setDrag(null);
+      if (!hit) return;
+      if (hit.tabIndex !== null) {
+        if (hit.stackId === stackId) {
+          const stack = findStack(layout, stackId);
+          const hovered = stack?.panes[hit.tabIndex];
+          const without = stack?.panes.filter((id) => id !== paneId) ?? [];
+          const index = hovered ? without.indexOf(hovered) : -1;
+          if (index >= 0) commit(reorderStack(layout, stackId, paneId, index));
+        } else {
+          commit(movePane(layout, paneId, hit.stackId, "center"));
+        }
+        return;
+      }
+      commit(movePane(layout, paneId, hit.stackId, hit.zone));
     };
 
     window.addEventListener("pointermove", move);
@@ -206,13 +303,29 @@ export function PaneLayout({
     window.addEventListener("pointercancel", up);
   }
 
-  /** Lone panes have no tab: drag from the empty chrome of the component's own top bar. */
-  function beginTopBarDrag(event: ReactPointerEvent, stackId: string, paneId: PaneId, body: HTMLElement | null) {
-    if (!body) return;
-    if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) return;
-    if (event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
-    beginDrag(event, stackId, paneId);
-  }
+  // Portaled content does not bubble React events to `.sb-pane-body`, so the
+  // top-bar drag is delegated natively from the root.
+  const beginDragRef = useRef(beginDrag);
+  useEffect(() => {
+    beginDragRef.current = beginDrag;
+  });
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      const body = target.closest(".sb-pane-body") as HTMLElement | null;
+      if (!body) return;
+      const stackId = (body.closest(".sb-pane-stack") as HTMLElement | null)?.dataset.stackId;
+      if (!stackId) return;
+      if (target.closest(INTERACTIVE_SELECTOR)) return;
+      if (event.clientY - body.getBoundingClientRect().top > TOP_BAR_PX) return;
+      const paneId = body.querySelector<HTMLElement>(".sb-pane-view:not([hidden])")?.dataset.paneId;
+      if (paneId) beginDragRef.current(event as unknown as ReactPointerEvent, stackId, paneId);
+    };
+    root.addEventListener("pointerdown", onPointerDown);
+    return () => root.removeEventListener("pointerdown", onPointerDown);
+  }, []);
 
   /** Keep two adjacent panes above the pixel floor while preserving their total. */
   function resizedSizes(split: SplitNode, index: number, next: number, minFraction: number): number[] {
@@ -272,25 +385,134 @@ export function PaneLayout({
     commit(setSplitSizes(layout, split.id, resizedSizes(split, index, (split.sizes[index] ?? 0) + step, minFraction)));
   }
 
+  function nearestStackInDirection(fromId: string, direction: Direction): string | null {
+    const from = stackRefs.current.get(fromId);
+    if (!from) return null;
+    const a = from.getBoundingClientRect();
+    const ax = a.left + a.width / 2;
+    const ay = a.top + a.height / 2;
+    let best: string | null = null;
+    let bestDistance = Infinity;
+    for (const [id, element] of stackRefs.current) {
+      if (id === fromId) continue;
+      const rect = element.getBoundingClientRect();
+      const dx = rect.left + rect.width / 2 - ax;
+      const dy = rect.top + rect.height / 2 - ay;
+      const forward = direction === "left" ? dx < -8 : direction === "right" ? dx > 8 : direction === "up" ? dy < -8 : dy > 8;
+      if (!forward) continue;
+      const distance = direction === "left" || direction === "right" ? Math.abs(dx) : Math.abs(dy);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  function onStackKeyDown(event: KeyboardEvent, node: StackNode) {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    const paneId = node.active;
+    const pane = paneMap.get(paneId);
+    const name = typeof pane?.title === "string" ? pane.title : paneId;
+    if (event.key === "Delete" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      if (pane?.closable && onClosePane) {
+        event.preventDefault();
+        requestClose(paneId, node.id);
+      }
+      return;
+    }
+    const direction: Direction | null =
+      event.key === "ArrowLeft" ? "left"
+      : event.key === "ArrowRight" ? "right"
+      : event.key === "ArrowUp" ? "up"
+      : event.key === "ArrowDown" ? "down"
+      : null;
+    if (!direction || !event.altKey) return;
+    event.preventDefault();
+    if (event.shiftKey) {
+      const { direction: axis, before } = splitFor(direction);
+      const next = splitPaneOut(layout, paneId, axis, before);
+      if (next !== layout) {
+        commit(next);
+        setAnnouncement(`Split ${name} ${direction}`);
+      }
+    } else {
+      const targetStack = nearestStackInDirection(node.id, direction);
+      if (targetStack) {
+        commit(movePane(layout, paneId, targetStack, "center"));
+        setAnnouncement(`Moved ${name} ${direction}`);
+      }
+    }
+  }
+
+  function onTabKeyDown(event: KeyboardEvent, node: StackNode, paneId: PaneId, index: number) {
+    const tablist = event.currentTarget.parentElement as HTMLElement | null;
+    if (!tablist) return;
+    const tabs = Array.from(tablist.querySelectorAll<HTMLElement>('[role="tab"]'));
+    if (event.key === "Delete") {
+      const pane = paneMap.get(paneId);
+      if (pane?.closable && onClosePane) {
+        event.preventDefault();
+        requestClose(paneId, node.id);
+      }
+      return;
+    }
+    if (event.altKey && event.shiftKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault();
+      const from = node.panes.indexOf(paneId);
+      const to = Math.max(0, Math.min(node.panes.length - 1, from + (event.key === "ArrowLeft" ? -1 : 1)));
+      if (to !== from) commit(reorderStack(layout, node.id, paneId, to));
+      return;
+    }
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextPane = node.panes[nextIndex];
+    if (nextPane) {
+      commit(setActivePane(layout, node.id, nextPane));
+      setAnnouncement(`${typeof paneMap.get(nextPane)?.title === "string" ? paneMap.get(nextPane)?.title : nextPane} selected`);
+    }
+    tabs[nextIndex]?.focus();
+  }
+
   function renderStack(node: StackNode): ReactNode {
     const tabbed = node.panes.length > 1;
     const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
-    const docked = drag && drag.overStackId === node.id ? drag.zone : null;
+    const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
     return (
-      <div className={cx("sb-pane-stack", tabbed && "is-tabbed")} key={node.id} ref={(element) => registerStack(node.id, element)}>
+      <div
+        className={cx("sb-pane-stack", tabbed && "is-tabbed")}
+        key={node.id}
+        data-stack-id={node.id}
+        role="group"
+        aria-label={typeof activePane?.title === "string" ? activePane.title : undefined}
+        tabIndex={tabbed ? -1 : 0}
+        ref={(element) => registerStack(node.id, element)}
+        onKeyDown={(event) => onStackKeyDown(event, node)}
+      >
         {tabbed && (
           <div className="sb-pane-head">
-            <div className="sb-pane-tabs" role="tablist">
-              {node.panes.map((paneId) => {
+            <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
+              {node.panes.map((paneId, index) => {
                 const pane = paneMap.get(paneId);
                 return (
                   <button
                     key={paneId}
                     type="button"
                     role="tab"
+                    id={`sb-pane-tab-${node.id}-${paneId}`}
+                    aria-controls={`sb-pane-panel-${node.id}-${paneId}`}
                     aria-selected={paneId === node.active}
+                    tabIndex={paneId === node.active ? 0 : -1}
                     className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
                     onPointerDown={(event) => beginDrag(event, node.id, paneId)}
+                    onKeyDown={(event) => onTabKeyDown(event, node, paneId, index)}
                     onClick={(event) => {
                       // Keyboard activation only; pointer clicks are resolved on pointerup.
                       if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
@@ -310,7 +532,7 @@ export function PaneLayout({
                   className="sb-icon-btn"
                   title="Close pane"
                   aria-label="Close pane"
-                  onClick={() => onClosePane(activePane.id)}
+                  onClick={() => requestClose(activePane.id, node.id)}
                 >
                   ×
                 </button>
@@ -318,13 +540,19 @@ export function PaneLayout({
             </div>
           </div>
         )}
-        <div
-          className="sb-pane-body"
-          onPointerDown={(event) => beginTopBarDrag(event, node.id, node.active, event.currentTarget)}
-        >
+        <div className="sb-pane-body">
           {node.panes.map((paneId) => (
-            <div className="sb-pane-view" key={paneId} hidden={paneId !== node.active} data-pane-id={paneId}>
-              {paneMap.get(paneId)?.content ?? <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>}
+            <div
+              className="sb-pane-view"
+              key={paneId}
+              hidden={paneId !== node.active}
+              data-pane-id={paneId}
+              role={tabbed ? "tabpanel" : undefined}
+              id={tabbed ? `sb-pane-panel-${node.id}-${paneId}` : undefined}
+              aria-labelledby={tabbed ? `sb-pane-tab-${node.id}-${paneId}` : undefined}
+              ref={(element) => attachHost(element, paneId)}
+            >
+              {CAN_PORTAL ? null : paneMap.get(paneId)?.content ?? <p className="sb-muted" style={{ padding: 14 }}>Unknown pane “{paneId}”.</p>}
             </div>
           ))}
         </div>
@@ -366,13 +594,20 @@ export function PaneLayout({
       className={cx("sb-panes", theme && "sheetbase-scope", className)}
       data-theme={theme}
       data-dragging={drag ? "true" : undefined}
+      ref={rootRef}
     >
       {layout ? renderNode(layout) : <p className="sb-muted" style={{ padding: 14 }}>No panes.</p>}
+      {CAN_PORTAL &&
+        panes.map((pane) => {
+          const host = hostFor(pane.id);
+          return host ? createPortal(pane.content, host, pane.id) : null;
+        })}
       {drag && (
         <div className="sb-pane-drag-ghost" style={{ left: drag.x, top: drag.y }}>
           {paneLabel(ghostPane, drag.paneId)}
         </div>
       )}
+      <div className="sb-pane-live" aria-live="polite" aria-atomic="true">{announcement}</div>
     </div>
   );
 }

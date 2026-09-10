@@ -3,9 +3,10 @@ import {
   PaneLayout,
   ThemeToggleButton,
   createLocalStorageAdapter,
-  loadInitialState,
+  loadPaneLayoutState,
   usePersistedTheme,
   type Layout,
+  type PaneLayoutState,
   type PaneSpec,
 } from "sheetbase-shared";
 import { RulesEngine, type PipelineRule } from "sheetbase-rulesengine";
@@ -23,6 +24,7 @@ import {
 } from "./showcase";
 
 const WORKBENCH_LAYOUT_KEY = "sheetbase-demo:workbench";
+const WORKBENCH_PANE_IDS = ["table", "explorer", "schema", "rules", "search"];
 
 /** Start with the table large on the left, explorer top-right, analysis tabs bottom-right. */
 const workbenchLayout: Layout = {
@@ -51,27 +53,37 @@ const workbenchLayout: Layout = {
  */
 export function Workbench() {
   const { activeTheme, toggleTheme } = usePersistedTheme({});
-  const adapter = useMemo(() => createLocalStorageAdapter<Layout>(), []);
-  const [layout, setLayout] = useState<Layout>(() => loadInitialState(WORKBENCH_LAYOUT_KEY, adapter, workbenchLayout));
+  const adapter = useMemo(() => createLocalStorageAdapter<PaneLayoutState>(), []);
+  const [layout, setLayout] = useState<Layout>(() =>
+    loadPaneLayoutState(adapter, WORKBENCH_LAYOUT_KEY, WORKBENCH_PANE_IDS, workbenchLayout),
+  );
   const [graph, setGraph] = useState<SchemaGraph>(schemaStarter);
   const [rules, setRules] = useState<PipelineRule[]>(rulesStarter);
+  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const onThemeChange = () => toggleTheme();
 
   const panes: PaneSpec[] = [
-    { id: "table", title: "Table", content: <DemoTable theme={activeTheme} onThemeChange={onThemeChange} /> },
-    { id: "explorer", title: "Explorer", content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} /> },
+    { id: "table", title: "Table", closable: true, content: <DemoTable theme={activeTheme} onThemeChange={onThemeChange} /> },
+    { id: "explorer", title: "Explorer", closable: true, content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} /> },
     {
       id: "schema",
       title: "Schema",
+      closable: true,
       content: <SchemaEditor value={graph} onChange={setGraph} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "rules",
       title: "Rules",
+      closable: true,
       content: <RulesEngine value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
-    { id: "search", title: "Search", content: <AdvancedSearch fields={searchFields} rows={searchRows} theme={activeTheme} onThemeChange={onThemeChange} /> },
-  ];
+    { id: "search", title: "Search", closable: true, content: <AdvancedSearch fields={searchFields} rows={searchRows} theme={activeTheme} onThemeChange={onThemeChange} /> },
+  ].filter((pane) => !closed.has(pane.id));
+
+  function reset() {
+    setClosed(new Set());
+    setLayout(workbenchLayout);
+  }
 
   return (
     <div className="sb-demo-stage">
@@ -82,12 +94,13 @@ export function Workbench() {
           onLayoutChange={setLayout}
           persistKey={WORKBENCH_LAYOUT_KEY}
           adapter={adapter}
+          onClosePane={(id) => setClosed((current) => new Set(current).add(id))}
           theme={activeTheme}
           className="sb-panes--fit"
         />
       </div>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
-        <button className="sb-btn" onClick={() => setLayout(workbenchLayout)}>Reset layout</button>
+        <button className="sb-btn" onClick={reset}>Reset layout</button>
         <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
       </div>
     </div>

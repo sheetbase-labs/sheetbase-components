@@ -7,6 +7,8 @@
  * stack or docked beside, above or below any other stack.
  */
 
+import type { PersistenceAdapter } from "../persistence";
+
 export type PaneId = string;
 
 /** `row` splits side by side (left/right); `column` stacks vertically (top/bottom). */
@@ -257,4 +259,100 @@ export function pruneLayout(layout: Layout, paneIds: Iterable<PaneId>): Layout {
     return { ...node, children, sizes: normaliseSizes(sizes) };
   };
   return walk(layout);
+}
+
+/** Move a pane to `index` within its stack's tab order. `index` counts the other panes. */
+export function reorderStack(layout: Layout, stackId: string, paneId: PaneId, index: number): Layout {
+  return replaceStack(layout, stackId, (stack) => {
+    if (!stack.panes.includes(paneId)) return stack;
+    const without = stack.panes.filter((id) => id !== paneId);
+    const at = Math.max(0, Math.min(without.length, index));
+    return { ...stack, panes: [...without.slice(0, at), paneId, ...without.slice(at)], active: paneId };
+  });
+}
+
+/**
+ * Pull a pane out of its stack into a new stack docked on `direction`/`before`.
+ * No-op for a lone pane (a split of one is the same layout).
+ */
+export function splitPaneOut(
+  layout: Layout,
+  paneId: PaneId,
+  direction: SplitDirection,
+  before: boolean,
+  ids: { stackId?: string; splitId?: string } = {},
+): Layout {
+  const source = stackOf(layout, paneId);
+  if (!source || source.panes.length < 2) return layout;
+  const next = splitStack(layout, source.id, paneId, direction, before, ids);
+  return removePane(next, paneId, source.id);
+}
+
+/* ── Persistence ───────────────────────────────────────────────────────── */
+
+/** Bump when the persisted shape changes and add a branch in `parsePaneLayoutState`. */
+export const PANE_LAYOUT_VERSION = 1;
+
+export interface PaneLayoutState {
+  version: number;
+  layout: Layout;
+}
+
+export function paneLayoutState(layout: Layout): PaneLayoutState {
+  return { version: PANE_LAYOUT_VERSION, layout };
+}
+
+/** Tolerates a legacy bare layout as well as the versioned wrapper. */
+export function parsePaneLayoutState(value: unknown): PaneLayoutState | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.version === "number") {
+    // Future: migrate older versions onto PANE_LAYOUT_VERSION here.
+    return { version: PANE_LAYOUT_VERSION, layout: (record.layout ?? null) as Layout };
+  }
+  if (record.kind === "stack" || record.kind === "split") {
+    return { version: PANE_LAYOUT_VERSION, layout: value as Layout };
+  }
+  return undefined;
+}
+
+/**
+ * Reconcile a layout with the panes the host actually offers: drop unknown
+ * panes, and append any panes missing from the tree to the first stack.
+ */
+export function reconcileLayout(layout: Layout, paneIds: readonly PaneId[], fallback: Layout): Layout {
+  const allowed = new Set(paneIds);
+  const next = pruneLayout(layout, allowed);
+  if (!next) return pruneLayout(fallback, allowed) ?? singleStack(paneIds);
+  const present = new Set(listPanes(next));
+  const missing = paneIds.filter((id) => !present.has(id));
+  if (missing.length === 0) return next;
+  const target = listStacks(next)[0];
+  if (!target) return singleStack(paneIds);
+  let merged: Layout = next;
+  for (const id of missing) merged = addPaneToStack(merged, target.id, id);
+  return setActivePane(merged, target.id, target.active);
+}
+
+function isThenable(value: unknown): boolean {
+  return typeof value === "object" && value !== null && "then" in value;
+}
+
+/** Synchronous load + migrate + reconcile. Async adapters should hydrate later via a controlled layout. */
+export function loadPaneLayoutState(
+  adapter: PersistenceAdapter<PaneLayoutState> | undefined,
+  key: string | undefined,
+  paneIds: readonly PaneId[],
+  fallback: Layout,
+): Layout {
+  if (!key || !adapter) return fallback;
+  let raw: unknown;
+  try {
+    raw = adapter.load(key);
+  } catch {
+    return fallback;
+  }
+  if (raw === undefined || isThenable(raw)) return fallback;
+  const state = parsePaneLayoutState(raw);
+  return reconcileLayout(state ? state.layout : fallback, paneIds, fallback);
 }

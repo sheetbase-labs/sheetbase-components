@@ -134,8 +134,24 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
 }
 .sb-pane-tab.dragging { opacity: 0.4; }
+.sb-pane-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
 .sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+.sb-pane-stack:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; border-radius: 13px; }
+/* Announcer for keyboard moves; invisible but read by assistive tech. */
+.sb-pane-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0 0 0 0);
+}
+/* Stable portal host; keeps pane component state across stack moves. */
+.sb-pane-host { min-width: 0; min-height: 0; }
 .sb-pane-body {
   flex: 1 1 0;
   min-height: 0;
@@ -186,15 +202,18 @@
  * `className="sb-panes--fit"`.
  */
 .sb-panes--fit .sb-pane-view { overflow: hidden; }
-.sb-panes--fit .sb-pane-view > * { width: 100%; height: 100%; min-height: 0; min-width: 0; }
-.sb-panes--fit .sb-pane-view > .sheetbase-scope > .sb-frame,
-.sb-panes--fit .sb-pane-view > .sheetbase-explorer.framed > .app-shell,
-.sb-panes--fit .sb-pane-view > .table-surface {
+.sb-panes--fit .sb-pane-host { width: 100%; height: 100%; min-width: 0; min-height: 0; display: flex; }
+.sb-panes--fit .sb-pane-host > * { flex: 1 1 0; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+/* SSR / non-portal fallback renders content straight into the slot. */
+.sb-panes--fit .sb-pane-view > .sheetbase-scope { width: 100%; height: 100%; min-height: 0; }
+.sb-panes--fit .sb-pane-view .sb-frame,
+.sb-panes--fit .sb-pane-view .app-shell,
+.sb-panes--fit .sb-pane-view .table-surface {
   width: 100%;
   height: 100%;
   min-height: 0;
 }
-.sb-panes--fit .sb-pane-view > .sheetbase-explorer.framed > .app-shell > .explorer-frame {
+.sb-panes--fit .sb-pane-view .explorer-frame {
   height: 100%;
   min-height: 0;
   /* Base is 48px / minmax(280px,1fr) / 250px, tuned for a full-height stage. */
