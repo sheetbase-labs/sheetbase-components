@@ -158,8 +158,9 @@ function splitFor(direction: Direction): { direction: SplitDirection; before: bo
 }
 
 /** Per-pane actions: tab this pane into another stack, add a new pane, close. */
-function PaneMenu({ stackId, otherStacks, closable, onTabInto, onRequestNewPane, onClose }: {
+function PaneMenu({ stackId, theme, otherStacks, closable, onTabInto, onRequestNewPane, onClose }: {
   stackId: string;
+  theme?: ThemeMode;
   otherStacks: ReadonlyArray<{ id: string; label: ReactNode }>;
   closable: boolean;
   onTabInto(stackId: string): void;
@@ -173,7 +174,8 @@ function PaneMenu({ stackId, otherStacks, closable, onTabInto, onRequestNewPane,
   function toggle() {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({ top: rect.bottom + 4, left: Math.max(8, rect.right - 180) });
+      const openUp = rect.bottom + 180 > window.innerHeight;
+      setPosition({ top: openUp ? Math.max(8, rect.top - 180) : rect.bottom + 4, left: Math.max(8, rect.right - 180) });
     }
     setOpen((value) => !value);
   }
@@ -197,7 +199,7 @@ function PaneMenu({ stackId, otherStacks, closable, onTabInto, onRequestNewPane,
       {open && CAN_PORTAL && createPortal(
         <>
           <button type="button" className="sb-pane-menu-backdrop" aria-label="Close pane menu" onClick={() => setOpen(false)} />
-          <div className="sb-pane-menu" role="menu" style={{ top: position.top, left: position.left }}>
+          <div className="sheetbase-scope sb-pane-menu" role="menu" data-theme={theme} style={{ top: position.top, left: position.left }}>
             {otherStacks.length > 0 && <p className="sb-pane-menu-label">Tab with</p>}
             {otherStacks.map((stack) => (
               <button key={stack.id} type="button" role="menuitem" onClick={() => { onTabInto(stack.id); setOpen(false); }}>
@@ -611,6 +613,7 @@ export function PaneLayout({
     const menu = paneMenu === "off" ? null : (
       <PaneMenu
         stackId={node.id}
+        theme={theme}
         otherStacks={otherStacks}
         closable={Boolean(activePane?.closable && onClosePane)}
         onTabInto={(target) => commit(movePane(layout, node.active, target, "center"))}

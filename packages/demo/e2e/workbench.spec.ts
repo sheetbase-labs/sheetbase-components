@@ -143,6 +143,7 @@ test("tabs a pane through its actions menu", async ({ page }) => {
   const table = stackWith(page, ".table-surface");
   await table.hover();
   await table.getByRole("button", { name: "Pane actions" }).click();
+  await expect(page.getByText("Tab with")).toBeVisible();
   await page.getByRole("menuitem", { name: "Explorer" }).click();
   await expect(stackWith(page, ".sheetbase-explorer").getByRole("tab")).toHaveText(["Explorer", "Table"]);
 });
