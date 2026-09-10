@@ -192,11 +192,11 @@
   text-align: left;
 }
 .sb-pane-menu > button:hover { background: var(--accent-soft-2); }
-/* Hover-only action surface for lone panes (no header bar). */
+/* Hover-only menu for lone panes, kept off the top bar's own controls. */
 .sb-pane-fab {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  right: 6px;
+  bottom: 6px;
   z-index: 6;
   display: flex;
   align-items: center;
