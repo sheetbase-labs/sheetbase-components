@@ -97,6 +97,20 @@ new ones appended — so stored layouts survive pane-set changes. The pure
 operations in `layout.ts` (`movePane`, `removePane`, `splitStack`, …) can be
 used without React.
 
+## Workspace
+
+`WorkspaceProvider` shares host-owned state (`fields`, `rows`, `query`) so
+components interact without the host wiring each pair. Components read slices
+with `useWorkspace`, `useWorkspaceQuery`, `useWorkspaceFields` or
+`useWorkspaceRows`, and report edits through their existing callbacks — e.g.
+`AdvancedSearch` writes `query`, a query-driven table reads it.
+
+```tsx
+<WorkspaceProvider value={{ fields, rows, query }}>
+  {/* search sets query; table consumes it */}
+</WorkspaceProvider>
+```
+
 ## Build
 
 `bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and

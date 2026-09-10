@@ -73,9 +73,10 @@ test("persists the layout to localStorage and restores it", async ({ page }) => 
   await dragTabOnto(page, "Search", stackWith(page, ".table-surface"));
   await expect.poll(() => topStacks(page)).toBe(4);
 
+  // Wait for the idle save to record the detached Search pane before reloading.
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem("sheetbase-demo:workbench")))
-    .toContain('"version":1');
+    .toContain('"panes":["search"]');
 
   await page.reload({ waitUntil: "networkidle" });
   await expect.poll(() => topStacks(page)).toBe(4);
@@ -254,6 +255,28 @@ test("dragging a tab within its own group pops it out", async ({ page }) => {
   await expect(search.locator(".sb-pane-head")).toHaveCount(0);
   await expect(search.locator(".sb-search .sb-topbar")).toHaveCount(1);
   await expect(search.getByRole("tab")).toHaveCount(0);
+});
+
+test("a search filter drives the query-driven table", async ({ page }) => {
+  await reset(page);
+  const table = page.locator(".table-surface");
+  await expect(table).toContainText("SMP-2087");
+
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Search" }) });
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await page.getByRole("button", { name: "+ Condition" }).first().click();
+  const condition = page.locator(".sb-filter-rule").first();
+  await condition.getByLabel("Field").selectOption("status");
+  await condition.getByLabel("Operator").selectOption("eq");
+  await condition.getByLabel("Value").fill("failed");
+
+  // The shared workspace query filters the table pane live.
+  await expect(table).toContainText("SMP-2084");
+  await expect(table).not.toContainText("SMP-2087");
+
+  // Turning the search preview off hides the search's own preview pane.
+  await analysis.getByRole("button", { name: "Preview" }).click();
+  await expect(page.locator(".sb-search .sb-table")).toHaveCount(0);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {

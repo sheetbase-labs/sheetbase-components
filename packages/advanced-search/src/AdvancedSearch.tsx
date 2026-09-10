@@ -11,6 +11,7 @@ import {
   normaliseOperator,
   operatorShortLabel,
   operatorsForField,
+  queryKey,
   usePersistedTheme,
   type Combinator,
   type ConditionNode,
@@ -55,6 +56,9 @@ export interface AdvancedSearchProps {
   adapter?: PersistenceAdapter<SearchSpec>;
   /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
   chrome?: "full" | "none";
+  /** Controlled preview-pane visibility. Omit for internal state (default shown). */
+  preview?: boolean;
+  onPreviewChange?(next: boolean): void;
   /** Imperative actions for hosts that render pane chrome. */
   ref?: Ref<AdvancedSearchHandle>;
 }
@@ -90,6 +94,14 @@ const SEARCH_PANE_LAYOUT: Layout = {
     { kind: "stack", id: "search-filter", panes: ["filter"], active: "filter" },
     { kind: "stack", id: "search-preview", panes: ["preview"], active: "preview" },
   ],
+};
+
+/** Just the filter pane, for when the preview is toggled off. */
+const SEARCH_FILTER_ONLY_LAYOUT: Layout = {
+  kind: "stack",
+  id: "search-filter-only",
+  panes: ["filter"],
+  active: "filter",
 };
 
 function updateNode(root: GroupNode, id: string, fn: (node: FilterNode) => FilterNode | null): GroupNode {
@@ -252,11 +264,18 @@ function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: s
   );
 }
 
-export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full", ref }: AdvancedSearchProps) {
+export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows = [], theme, defaultTheme = "light", onThemeChange, onDatasetQueryChange, persistKey, adapter, chrome = "full", preview, onPreviewChange, ref }: AdvancedSearchProps) {
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
   const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
+  const [innerPreview, setInnerPreview] = useState(true);
+  const showPreview = preview ?? innerPreview;
+  function togglePreview() {
+    const next = !showPreview;
+    if (preview === undefined) setInnerPreview(next);
+    onPreviewChange?.(next);
+  }
 
   function commit(next: SearchSpec) {
     if (value === undefined) setDraft(next);
@@ -277,10 +296,13 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
     spec.sort ? [{ fieldId: spec.sort.field, direction: spec.sort.direction }] : undefined,
   );
   const ids = fieldIds(fields);
+  const flattenedKey = flattened ? queryKey(flattened) : "";
 
   useEffect(() => {
     onDatasetQueryChange?.(flattened);
-  }, [flattened, onDatasetQueryChange]);
+    // flattened is a fresh object each render; key on its stable content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flattenedKey, onDatasetQueryChange]);
 
   return (
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
@@ -293,13 +315,15 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
+              <button className={showPreview ? "sb-btn" : "sb-btn subtle"} aria-pressed={showPreview} onClick={togglePreview}>Preview</button>
               <button className="sb-btn" onClick={clear}>Clear</button>
             </div>
           </div>
         )}
         <PaneLayout
+          key={showPreview ? "with-preview" : "filter-only"}
           className="sb-panes--fit"
-          defaultLayout={SEARCH_PANE_LAYOUT}
+          defaultLayout={showPreview ? SEARCH_PANE_LAYOUT : SEARCH_FILTER_ONLY_LAYOUT}
           panes={[
             {
               id: "filter",
@@ -338,7 +362,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                 </section>
               ),
             },
-            {
+            ...(showPreview ? [{
               id: "preview",
               title: "Preview",
               dragHandle: false,
@@ -353,8 +377,8 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                   )}
                 </aside>
               ),
-            },
-          ] satisfies PaneSpec[]}
+            }] : []),
+          ] as PaneSpec[]}
         />
       </div>
     </div>

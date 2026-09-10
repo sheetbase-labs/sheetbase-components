@@ -3,6 +3,7 @@ import {
   PaneLayout,
   SheetbaseShell,
   ThemeToggleButton,
+  WorkspaceProvider,
   applySearch,
   createLocalStorageAdapter,
   emptyRoot,
@@ -10,6 +11,7 @@ import {
   loadPaneLayoutState,
   useIdleSave,
   usePersistedTheme,
+  type DatasetQuery,
   type Layout,
   type PaneLayoutHandle,
   type PaneLayoutState,
@@ -21,7 +23,6 @@ import { RulesEngine, type PipelineRule, type RulesEngineHandle } from "sheetbas
 import { SchemaEditor, type SchemaEditorHandle, type SchemaGraph } from "sheetbase-schemaeditor";
 import { AdvancedSearch, type AdvancedSearchHandle } from "sheetbase-advanced-search";
 import {
-  DemoTable,
   Explorer,
   ruleActions,
   ruleFields,
@@ -30,6 +31,7 @@ import {
   sampleRows,
   tableFields,
 } from "./showcase";
+import { QueryTable } from "./QueryTable";
 
 const WORKBENCH_LAYOUT_KEY = "sheetbase-demo:workbench";
 const WORKBENCH_CLOSED_KEY = "sheetbase-demo:workbench:closed";
@@ -74,7 +76,13 @@ export function Workbench() {
   const [graph, setGraph] = useState<SchemaGraph>(() => loadInitialState(WORKBENCH_SCHEMA_KEY, graphAdapter, schemaStarter));
   const [rules, setRules] = useState<PipelineRule[]>(() => loadInitialState(WORKBENCH_RULES_KEY, rulesAdapter, rulesStarter));
   const [searchSpec, setSearchSpec] = useState<SearchSpec>(() => loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, { filter: emptyRoot() }));
+  const [query, setQuery] = useState<DatasetQuery>({});
+  const [searchPreview, setSearchPreview] = useState(true);
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
+  const workspace = useMemo(
+    () => ({ fields: headerFields as readonly SheetbaseField[], rows: sampleRows, query }),
+    [headerFields, query],
+  );
   // Pipeline: the schema's fields feed search, search filters the rows, rules
   // evaluate the filtered rows, the table shows the raw rows.
   const activeSearchFields = useMemo(() => headerFields.map((field) => field.id), [headerFields]);
@@ -102,7 +110,7 @@ export function Workbench() {
   }, []);
 
   const panes: PaneSpec[] = [
-    { id: "table", title: "Table", closable: true, content: <DemoTable fields={headerFields} theme={activeTheme} onThemeChange={onThemeChange} /> },
+    { id: "table", title: "Table", closable: true, content: <QueryTable theme={activeTheme} /> },
     { id: "explorer", title: "Explorer", closable: true, content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} /> },
     {
       id: "schema",
@@ -140,13 +148,21 @@ export function Workbench() {
       id: "search",
       title: "Search",
       closable: true,
-      actions: <button className="sb-btn" onClick={() => searchRef.current?.clear()}>Clear</button>,
+      actions: (
+        <>
+          <button className={searchPreview ? "sb-btn" : "sb-btn subtle"} aria-pressed={searchPreview} onClick={() => setSearchPreview((value) => !value)}>Preview</button>
+          <button className="sb-btn" onClick={() => searchRef.current?.clear()}>Clear</button>
+        </>
+      ),
       content: ({ tabbed }: { tabbed: boolean }) => (
         <AdvancedSearch
           ref={searchRef}
           chrome={tabbed ? "none" : "full"}
           value={searchSpec}
           onChange={setSearchSpec}
+          preview={searchPreview}
+          onPreviewChange={setSearchPreview}
+          onDatasetQueryChange={(next) => setQuery(next ?? {})}
           fields={activeSearchFields}
           rows={sampleRows}
           persistKey={WORKBENCH_SEARCH_KEY}
@@ -181,8 +197,9 @@ export function Workbench() {
 
   return (
     <div className="sb-demo-stage">
-      <SheetbaseShell theme={activeTheme} header={false} className="sb-demo-workbench">
-        <PaneLayout
+      <WorkspaceProvider value={workspace}>
+        <SheetbaseShell theme={activeTheme} header={false} className="sb-demo-workbench">
+          <PaneLayout
           ref={panesRef}
           panes={panes}
           layout={layout}
@@ -196,7 +213,8 @@ export function Workbench() {
           theme={activeTheme}
           className="sb-panes--fit sb-workbench-panes"
         />
-      </SheetbaseShell>
+        </SheetbaseShell>
+      </WorkspaceProvider>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
         {filteredRows.length !== sampleRows.length && <span className="sb-muted">filtered {filteredRows.length} / {sampleRows.length} rows</span>}
         <span className="sb-muted" title="demo build">{__BUILD__}</span>
