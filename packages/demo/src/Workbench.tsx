@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   PaneLayout,
   SheetbaseShell,
@@ -50,18 +50,23 @@ export function Workbench() {
   const [layout, setLayout] = useState<Layout>(workbenchLayout);
   const [graph, setGraph] = useState<SchemaGraph>(schemaStarter);
   const [rules, setRules] = useState<PipelineRule[]>(rulesStarter);
+  const onThemeChange = () => toggleTheme();
 
-  const panes = useMemo<PaneSpec[]>(() => [
-    { id: "table", title: "Table", content: <DemoTable /> },
-    { id: "explorer", title: "Explorer", content: <Explorer /> },
-    { id: "schema", title: "Schema", content: <SchemaEditor value={graph} onChange={setGraph} /> },
+  const panes: PaneSpec[] = [
+    { id: "table", title: "Table", content: <DemoTable theme={activeTheme} onThemeChange={onThemeChange} /> },
+    { id: "explorer", title: "Explorer", content: <Explorer theme={activeTheme} onThemeChange={onThemeChange} /> },
+    {
+      id: "schema",
+      title: "Schema",
+      content: <SchemaEditor value={graph} onChange={setGraph} theme={activeTheme} onThemeChange={onThemeChange} />,
+    },
     {
       id: "rules",
       title: "Rules",
-      content: <RulesEngine value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} />,
+      content: <RulesEngine value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
-    { id: "search", title: "Search", content: <AdvancedSearch fields={searchFields} rows={searchRows} /> },
-  ], [graph, rules]);
+    { id: "search", title: "Search", content: <AdvancedSearch fields={searchFields} rows={searchRows} theme={activeTheme} onThemeChange={onThemeChange} /> },
+  ];
 
   return (
     <div className="sb-demo-stage">

@@ -9,6 +9,7 @@ import {
   type SpreadsheetHandle,
   type SpreadsheetSelection,
   type TablePresentationState,
+  type ThemeMode,
 } from "sheetbase-table";
 import { App as Explorer } from "sheetbase-explorer";
 import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
@@ -36,10 +37,15 @@ const tableFallback: TablePresentationState = {
   annotations: [],
 };
 
-export function DemoTable() {
+export function DemoTable({ theme: controlledTheme, onThemeChange }: {
+  /** Controlled resolved theme. Omit to let the table own its presentation theme. */
+  theme?: "light" | "dark";
+  onThemeChange?: (mode: ThemeMode) => void;
+} = {}) {
   const adapter = useMemo(() => createLocalStoragePresentationAdapter(), []);
   const [presentation, setPresentation] = useTablePresentationState("sheetbase-demo:table", tableFallback, adapter);
-  const theme = useResolvedTheme(presentation.theme);
+  const resolvedTheme = useResolvedTheme(presentation.theme);
+  const theme = controlledTheme ?? resolvedTheme;
   const initialData = useMemo(() => new Map<string, string>([
     ["A1", "SMP-2084"], ["B1", "Donor 14"], ["C1", "Plasma"],
     ["A2", "SMP-2087"], ["B2", "Donor 18"], ["C2", "Lysate"],
@@ -58,8 +64,11 @@ export function DemoTable() {
             mixedFormats={selection.mixedFormats}
             onFormat={(format) => tableRef.current?.applyFormat(format)}
             theme={theme}
-            themeMode={presentation.theme}
-            onThemeChange={(mode) => setPresentation((current) => ({ ...current, theme: mode }))}
+            themeMode={controlledTheme ?? presentation.theme}
+            onThemeChange={(mode) => {
+              if (controlledTheme === undefined) setPresentation((current) => ({ ...current, theme: mode }));
+              onThemeChange?.(mode);
+            }}
           />
           <Spreadsheet
             ref={tableRef}

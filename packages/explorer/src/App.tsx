@@ -41,6 +41,12 @@ export interface AppProps {
    */
   frame?: boolean
   /**
+   * Controlled theme. When provided the host owns it and edits are reported
+   * through onThemeChange, so a parent shell can keep every pane in sync.
+   */
+  theme?: 'light' | 'dark'
+  onThemeChange?(theme: 'light' | 'dark'): void
+  /**
    * Fixed chart height in pixels. Unframed auto-height hosts should pass
    * this: without an independent bound, measuring the stage feeds back
    * into the rendered height and the layout grows without limit.
@@ -88,6 +94,8 @@ export function App(props: AppProps = {}) {
   }, [spec, sql])
   const [tab, setTab] = useState<BottomTab>('data')
   const [dark, setDark] = useState(restored.theme === 'dark')
+  const controlledTheme = props.theme
+  const isDark = controlledTheme !== undefined ? controlledTheme === 'dark' : dark
   const [menu, setMenu] = useState<Menu>(null)
   const [measuredHeight, setMeasuredHeight] = useState(420)
   const chartHeight = props.chartHeight ?? measuredHeight
@@ -99,7 +107,7 @@ export function App(props: AppProps = {}) {
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const chartStageRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-  const persisted = useMemo<PersistedExplorerState>(() => ({ version: CURRENT_EXPLORATION_VERSION, theme: dark ? 'dark' : 'light', spec, sql, saved, updatedAt: new Date().toISOString() }), [spec, sql, saved, dark])
+  const persisted = useMemo<PersistedExplorerState>(() => ({ version: CURRENT_EXPLORATION_VERSION, theme: isDark ? 'dark' : 'light', spec, sql, saved, updatedAt: new Date().toISOString() }), [spec, sql, saved, isDark])
   useIdleExplorerSave(EXPLORER_STORAGE_KEY, persisted, defaultExplorerAdapter)
   const adoptDataset = useCallback((loaded: Dataset) => {
     baseDatasetRef.current = loaded
@@ -123,7 +131,7 @@ export function App(props: AppProps = {}) {
     if (spec.zoomX !== undefined && props.spec === undefined) setInternalSpec({ ...spec, zoomX: undefined })
   }
 
-  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = dark ? 'dark' : 'light' }, [dark, dataset])
+  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark, dataset])
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
     const stage = chartStageRef.current
@@ -259,11 +267,17 @@ export function App(props: AppProps = {}) {
     setPanelHeight((height) => Math.max(120, Math.min(560, height + delta)))
   }
 
+  function toggleDark() {
+    const next = !isDark
+    if (controlledTheme === undefined) setDark(next)
+    props.onThemeChange?.(next ? 'dark' : 'light')
+  }
+
   if (!dataset) return <div className="loading">Loading Explorer…</div>
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={spec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={dark} setSpec={setSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={() => setDark((value) => !value)} />
+    <CommandBar menu={menu} spec={spec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} setSpec={setSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
     <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={spec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${spec.kind} chart of ${spec.y} by ${spec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
   </section></main>
   <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>
