@@ -28,6 +28,7 @@ import {
   useIdleSave,
   type PersistenceAdapter,
 } from "sheetbase-shared";
+import { DataGrid } from "sheetbase-table";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
 
@@ -146,12 +147,6 @@ function kindOf(rows: SearchRow[], key: string): string {
   return "string";
 }
 
-function cellText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
 function boundsOf(value: unknown): [number, number] {
   if (Array.isArray(value) && value.length >= 2) return [Number(value[0]) || 0, Number(value[1]) || 0];
   if (value && typeof value === "object" && "low" in value && "high" in value) {
@@ -247,20 +242,15 @@ function parseValueInput(raw: string, operator: FilterOperator): ConditionNode["
   return raw;
 }
 
-function PreviewTable({ rows, fields, cap = 60 }: { rows: SearchRow[]; fields: string[]; cap?: number }) {
+function PreviewTable({ rows, fields, cap }: { rows: SearchRow[]; fields: string[]; cap?: number }) {
   const columns = previewColumns(rows, fields);
   if (columns.length === 0) return <p className="sb-muted" style={{ padding: 14 }}>No columns.</p>;
   return (
-    <div className="sb-table-wrap">
-      <table className="sb-table">
-        <thead><tr><th className="sb-rownum">#</th>{columns.map((c) => <th key={c.key}>{c.key}<span>{c.kind}</span></th>)}</tr></thead>
-        <tbody>
-          {rows.slice(0, cap).map((row, i) => (
-            <tr key={i}><td className="sb-rownum">{i + 1}</td>{columns.map((c) => <td key={c.key}>{cellText(row[c.key])}</td>)}</tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataGrid
+      columns={columns.map((column) => ({ id: column.key, label: column.key, kind: column.kind }))}
+      rows={cap ? rows.slice(0, cap) : rows}
+      emptyMessage="No matches."
+    />
   );
 }
 

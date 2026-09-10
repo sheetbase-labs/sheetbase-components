@@ -87,6 +87,14 @@
 .sb-remove { width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); flex: none; }
 .sb-remove:hover { background: var(--panel-2); color: var(--danger); }
 .sb-table th span { display: block; float: right; color: color-mix(in srgb, var(--accent) 65%, var(--muted)); font-size: 8.5px; font-weight: 500; }
+.sb-table tbody tr.selected td { background: var(--accent-soft); }
+.sb-rownum { min-width: 34px !important; max-width: 34px !important; color: var(--faint); font-family: var(--font-mono); font-size: 10px; }
+.sb-sort-button {
+  display: inline-flex; align-items: center; gap: 6px; width: 100%;
+  padding: 0; border: 0; background: transparent; color: inherit;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left; cursor: pointer;
+}
+.sb-sort-button:hover { color: var(--accent-dark); }
 .sb-icon-btn svg { width: 14px; height: 14px; display: block; }
 .sb-topbar .sb-btn:hover, .sb-topbar .sb-icon-btn:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .sb-topbar .sb-btn.primary:hover { background: var(--accent-dark); color: #fff; }
