@@ -196,6 +196,25 @@ test("pops a tab out by dropping it back on its own pane", async ({ page }) => {
   await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
 });
 
+test("dragging a tab onto a pane makes a new pane, not a tab group", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  const tableStack = stackWith(page, ".table-surface");
+  const searchTab = analysis.getByRole("tab", { name: "Search" });
+  const tb = await searchTab.boundingBox();
+  const table = await tableStack.boundingBox();
+  if (!tb || !table) throw new Error("tab or pane not visible");
+
+  await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(table.x + table.width / 2, table.y + table.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  await expect.poll(() => topStacks(page)).toBe(4);
+  await expect(tableStack.getByRole("tab")).toHaveCount(0);
+  await expect(page.locator('[data-pane-id="search"]')).toHaveCount(1);
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
