@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   PaneLayout,
-  SheetbaseShell,
+  ThemeToggleButton,
   usePersistedTheme,
   type Layout,
   type PaneSpec,
@@ -70,21 +70,18 @@ export function Workbench() {
 
   return (
     <div className="sb-demo-stage">
-      <SheetbaseShell
-        className="sb-demo-workbench"
-        theme={activeTheme}
-        onToggleTheme={toggleTheme}
-        toolbar={<span className="sb-shell-label">Sheetbase workbench</span>}
-        actions={<button className="sb-btn subtle" onClick={() => setLayout(workbenchLayout)}>Reset layout</button>}
-        subbar={<span className="sb-muted">Drag a tab onto another pane’s edge to split, or its centre to tab together.</span>}
-      >
+      <div className="sb-workbench">
         <PaneLayout
           panes={panes}
           layout={layout}
           onLayoutChange={setLayout}
           className="sb-panes--fit"
         />
-      </SheetbaseShell>
+      </div>
+      <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
+        <button className="sb-btn" onClick={() => setLayout(workbenchLayout)}>Reset layout</button>
+        <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
+      </div>
     </div>
   );
 }
