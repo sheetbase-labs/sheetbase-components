@@ -1,9 +1,11 @@
+/// <reference path="../d3-scale.d.ts" />
 import {
   areaY,
   barX,
   barY,
   binX,
   boxY,
+  colorLegend,
   defineChart,
   dot,
   facetChart,
@@ -23,6 +25,7 @@ import { scaleBand } from '@tanstack/charts/scales/band'
 import { scaleLinear } from '@tanstack/charts/scales/linear'
 import { scaleOrdinal } from '@tanstack/charts/scales/ordinal'
 import { scalePoint } from '@tanstack/charts/scales/point'
+import { scaleLinear as d3ScaleLinear, scaleLog } from 'd3-scale'
 import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
 import type { ChartSpec, DataRow, Dataset } from './types'
 
@@ -57,6 +60,20 @@ function numericExtent(rows: DataRow[], field: string) {
   if (!found) return undefined
   if (min === max) return [min - 0.5, max + 0.5] as const
   return [min, max] as const
+}
+
+/** Positive data extent for a log axis; undefined when no usable values exist. */
+function logExtent(rows: DataRow[], field: string): [number, number] | undefined {
+  let min = Infinity
+  let max = -Infinity
+  for (const row of rows) {
+    const value = Number(row[field])
+    if (!Number.isFinite(value) || value <= 0) continue
+    if (value < min) min = value
+    if (value > max) max = value
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return undefined
+  return [min, max]
 }
 
 function interactionOptions(spec: ChartSpec) {
@@ -170,24 +187,58 @@ function chartSpec(
     ? [Math.max(extent[0], spec.zoomX.start), Math.min(extent[1], spec.zoomX.end)] as [number, number]
     : undefined
 
+  const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
+  const yValueNumeric = !horizontal && yMeta?.kind === 'number'
+  // Log axes need positive data; without it we fall back to linear rather than
+  // letting the library infer a (zero-based) log domain and throw. Bar-like
+  // marks also need a zero baseline, which a log axis cannot provide.
+  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area'].includes(spec.kind)
+  const xLogExtent = logAllowed && spec.xScale === 'log' && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
+  const yLogExtent = logAllowed && spec.yScale === 'log' && yValueNumeric ? logExtent(rawRows, spec.y!) : undefined
+  const xLog = Boolean(xLogExtent)
+  const yLog = Boolean(yLogExtent)
+  const numericScale = (log: boolean) => (log ? scaleLog : scaleLinear)
+
   const xScale = horizontal
-    ? (yMeta?.kind === 'number' ? scaleLinear : () => scalePoint<string>().padding(0.5))
-    : xMeta.kind === 'number' ? scaleLinear : ['bar', 'box'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
+    ? (xValueNumeric ? numericScale(xLog) : () => scalePoint<string>().padding(0.5))
+    : xMeta.kind === 'number'
+      ? numericScale(xLog)
+      : ['bar', 'box'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
   const yScale = horizontal
     ? () => scaleBand<string>().padding(0.18)
-    : spec.kind === 'histogram' ? scaleLinear : yMeta?.kind === 'number' ? scaleLinear : () => scalePoint<string>().padding(0.5)
-  const color = semanticColour ? { scale: () => scaleOrdinal<string, string>().range(spec.palette) } : undefined
+    : spec.kind === 'histogram' ? scaleLinear : yValueNumeric ? numericScale(yLog) : () => scalePoint<string>().padding(0.5)
 
-  const configuredX = horizontal && yMeta?.kind === 'number' && (spec.yMin !== undefined || spec.yMax !== undefined)
-    ? scaleLinear().domain([spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))])
-    : zoomDomain
-      ? scaleLinear().domain(zoomDomain)
-      : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
-        ? scaleLinear().domain([spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1])
-        : undefined
-  const configuredY = !horizontal && yMeta?.kind === 'number' && (spec.yMin !== undefined || spec.yMax !== undefined)
-    ? scaleLinear().domain([spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))])
+  // A numeric colour field becomes a gradient on scatter dots; connected
+  // geometry (bars/lines) needs discrete series identity, so it stays ordinal.
+  const colourMeta = spec.color ? dataset.columns.find((column) => column.key === spec.color) : undefined
+  const continuousColour = spec.kind === 'scatter' && Boolean(spec.color)
+    && (spec.colorScale === 'continuous' || (spec.colorScale !== 'categorical' && colourMeta?.kind === 'number'))
+  const colourStops = spec.palette.length >= 2
+    ? [spec.palette[0]!, spec.palette[Math.floor(spec.palette.length / 2)]!, spec.palette[spec.palette.length - 1]!]
+    : spec.palette
+  const color = semanticColour
+    ? {
+        scale: () => (continuousColour ? d3ScaleLinear().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
+        ...(continuousColour ? { legend: colorLegend({ label: spec.color }) } : {}),
+      }
     : undefined
+
+  const xDomain: [number, number] | undefined = zoomDomain
+    ? zoomDomain
+    : xLog && xLogExtent
+      ? xLogExtent
+      : horizontal && xValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
+        ? [spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))]
+        : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
+          ? [spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1]
+          : undefined
+  const yDomain: [number, number] | undefined = yLog && yLogExtent
+    ? yLogExtent
+    : yValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
+      ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))]
+      : undefined
+  const configuredX = xDomain ? numericScale(xLog)().domain(xDomain) : undefined
+  const configuredY = yDomain ? numericScale(yLog)().domain(yDomain) : undefined
 
   const controls = spec.zoomEnabled && extent && onZoom && xMeta.kind === 'number' && !horizontal
     ? [zoomX({
@@ -223,20 +274,27 @@ export function buildChart(
   const raw = visibleRows(filteredRows(dataset, spec), spec)
 
   if (spec.facet) {
-    const faceted = facetChart(prepared, ({
-      by: spec.facet,
-      columns: 2,
-      minWidth: 240,
-      gap: 14,
-      axes: 'cell',
-      label: (value: unknown) => String(value),
-      chart(groupRows: readonly DataRow[]) {
-        const facetValue = String(groupRows[0]?.[spec.facet!] ?? '')
-        const rawFacet = raw.filter((row) => String(row[spec.facet!] ?? '') === facetValue)
-        return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as any
-      },
-    }) as any) as any
-    return defineChart(faceted as any, interactionOptions(spec) as any)
+    const facetMeta = dataset.columns.find((column) => column.key === spec.facet)
+    // Faceting a field the chart can't render (e.g. histogram over a date) would
+    // hand `null` to facetChart and crash; and a high-cardinality facet would
+    // render thousands of cells. Fall back to a single chart in both cases.
+    const canFacet = !facetMeta || facetMeta.uniqueCount <= 60
+    if (canFacet && chartSpec(prepared, raw, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom)) {
+      const faceted = facetChart(prepared, ({
+        by: spec.facet,
+        columns: 2,
+        minWidth: 240,
+        gap: 14,
+        axes: 'cell',
+        label: (value: unknown) => String(value),
+        chart(groupRows: readonly DataRow[]) {
+          const facetValue = String(groupRows[0]?.[spec.facet!] ?? '')
+          const rawFacet = raw.filter((row) => String(row[spec.facet!] ?? '') === facetValue)
+          return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as any
+        },
+      }) as any) as any
+      return defineChart(faceted as any, interactionOptions(spec) as any)
+    }
   }
 
   const specification = chartSpec(prepared, raw, dataset, spec, selectedRowId, onZoom)

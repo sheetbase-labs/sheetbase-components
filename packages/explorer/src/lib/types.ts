@@ -25,6 +25,10 @@ export type BarLayout = 'grouped' | 'stacked' | 'normalized'
 export type ErrorMode = 'none' | 'explicit' | 'sd' | 'sem' | 'ci95'
 export type FilterLogic = 'and' | 'or'
 export type PaletteKind = 'sheetbase' | 'muted' | 'warm' | 'cool' | 'mono' | 'custom'
+/** Axis mapping: auto uses linear for numeric fields. */
+export type ScaleKind = 'auto' | 'linear' | 'log'
+/** Colour mapping: auto uses a gradient for numeric fields, categories otherwise. */
+export type ColorScaleKind = 'auto' | 'categorical' | 'continuous'
 
 export interface FilterRule {
   id: string
@@ -75,6 +79,11 @@ export interface ChartSpec {
   primaryColor?: string
   paletteKind?: PaletteKind
   hiddenSeries?: string[]
+  /** Axis mapping. 'auto' (or unset) uses linear for numeric fields. */
+  xScale?: ScaleKind
+  yScale?: ScaleKind
+  /** Colour mapping: 'auto' gradients numeric colour fields, categories otherwise. */
+  colorScale?: ColorScaleKind
 }
 
 export interface SavedExploration {

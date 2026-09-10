@@ -317,6 +317,12 @@ test("search and explorer share one analysis view", async ({ page }) => {
   await chart.getByRole("button", { name: "Group" }).click();
   await page.locator(".explorer-commandbar .tool-popover select").first().selectOption("material");
   await expect(page.locator(".sb-search-controls select").first()).toHaveValue("material");
+
+  // Explorer Reset clears the shared view, including the search filter.
+  await page.locator(".menu-backdrop").click();
+  await expect(page.locator(".sb-filter-rule")).toHaveCount(1);
+  await chart.getByRole("button", { name: "Reset" }).click();
+  await expect(page.locator(".sb-filter-rule")).toHaveCount(0);
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {

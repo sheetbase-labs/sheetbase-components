@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
-import { applyView, type AnalysisView } from 'sheetbase-shared'
+import { applyView, emptyRoot, type AnalysisView } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { sampleAdapter } from './lib/adapters/sample'
@@ -18,6 +18,25 @@ import {
 import {
   BottomPanel, initialSpec, initialSql, smartKindFor, type BottomTab, type Menu,
 } from './explorer-popovers'
+
+/** Sensible starting channels for a dataset: most groupable category + first numeric. */
+function channelDefaults(loaded: Dataset): Partial<ChartSpec> {
+  const numeric = loaded.columns.filter((column) => column.kind === 'number')
+  const categorical = loaded.columns.filter((column) => column.kind !== 'number')
+  const groupable = categorical
+    .filter((column) => column.uniqueCount > 1 && column.uniqueCount <= 60)
+    .sort((a, b) => a.uniqueCount - b.uniqueCount)
+  const x = groupable[0]?.key ?? categorical[0]?.key ?? loaded.columns[0]?.key
+  const y = numeric[0]?.key ?? categorical[0]?.key
+  const categoricalX = Boolean(x) && !numeric.some((column) => column.key === x)
+  const numericY = Boolean(y) && numeric.some((column) => column.key === y)
+  return {
+    x, y, group: undefined, color: undefined, facet: undefined,
+    errorMode: 'none', errorLow: undefined, errorHigh: undefined,
+    filters: [], filterLogic: 'and', hiddenSeries: [], zoomX: undefined,
+    ...(categoricalX && numericY ? { kind: 'bar' as const, aggregate: 'mean' as const } : { aggregate: 'none' as const }),
+  }
+}
 
 export interface AppProps {
   /** Dataset sources listed under Import. Defaults to the built-in sample. */
@@ -133,11 +152,18 @@ export function App(props: AppProps = {}) {
   const adoptDataset = useCallback((loaded: Dataset) => {
     baseDatasetRef.current = loaded
     setInternalDataset(loaded); setSql(initialSql); setSqlError(null); setSelectedRow(undefined)
-    const numeric = loaded.columns.filter((column) => column.kind === 'number')
-    const x = numeric[0]?.key ?? loaded.columns[0]?.key
-    const y = numeric[1]?.key ?? numeric[0]?.key
-    setSpec((current) => ({ ...current, x, y, group: undefined, color: undefined, facet: undefined, errorMode: 'none', errorLow: undefined, errorHigh: undefined, filters: [], filterLogic: 'and', aggregate: 'none', hiddenSeries: [], zoomX: undefined }))
+    setSpec((current) => ({ ...current, ...channelDefaults(loaded) }))
   }, [setSpec])
+  /** Back to the dataset's default chart, clearing any shared view filters. */
+  const resetChart = useCallback(() => {
+    setSpec((current) => ({ ...current, ...(dataset ? channelDefaults(dataset) : initialSpec) }))
+    setSelectedRow(undefined)
+    setSql(initialSql)
+    setSqlError(null)
+    if (viewRef.current && onViewChangeRef.current) {
+      onViewChangeRef.current({ ...viewRef.current, filter: emptyRoot(), groupBy: undefined, sort: undefined, limit: undefined })
+    }
+  }, [dataset, setSpec])
   const didInitialLoadRef = useRef(false)
   useEffect(() => {
     if (props.dataset || didInitialLoadRef.current) return
@@ -377,7 +403,7 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
     <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${chartSpec.kind} chart of ${chartSpec.y} by ${chartSpec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
   </section></main>
   {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}

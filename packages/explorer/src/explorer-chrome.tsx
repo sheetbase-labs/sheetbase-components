@@ -5,7 +5,7 @@ import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popove
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 
-export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, onReset, onField, onAutoKind, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
   menu: Menu
   spec: ChartSpec
   dataset: Dataset
@@ -19,6 +19,8 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
   setSpec(action: SetStateAction<ChartSpec>): void
   /** Group/Filter edits (view-aware when the host controls an analysis view). */
   onAnalysisSpec(action: SetStateAction<ChartSpec>): void
+  /** Restore the dataset's default chart. */
+  onReset(): void
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
   onChoosePlot(kind: ChartKind): void
@@ -43,6 +45,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
     </div>
     <div className="sb-subbar explorer-subbar">
       <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
+      <button type="button" className="explorer-reset" onClick={onReset}>Reset</button>
     </div>
   </>)
 }

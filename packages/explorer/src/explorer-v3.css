@@ -29,6 +29,8 @@
 .explorer-subbar .explorer-tool small, .explorer-subbar .explorer-tool b { color: inherit; opacity: 0.75; }
 .explorer-subbar .explorer-tool:hover, .explorer-subbar .explorer-tool.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-dark); }
 .command-spacer { flex: 1 1 auto; }
+.explorer-reset { height: 24px; margin-left: auto; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 11px; font-weight: 600; cursor: pointer; }
+.explorer-reset:hover { border-color: var(--border-strong); background: var(--panel-2); }
 /* Command-bar actions ride the shared shell (.sb-btn/.sb-icon-btn). */
 .style-popover { width: 340px; }
 .style-popover .range-control { grid-template-columns: 82px minmax(120px, 1fr) 36px; }
