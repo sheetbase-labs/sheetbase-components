@@ -22,13 +22,15 @@ export const tableFields = [
   { id: "sample_id", label: "sample_id", column: 0, dataType: "text" as const },
   { id: "donor", label: "donor", column: 1, dataType: "text" as const },
   { id: "material", label: "material", column: 2, dataType: "text" as const },
+  { id: "status", label: "status", column: 3, dataType: "text" as const },
+  { id: "amount", label: "amount", column: 4, dataType: "number" as const },
 ];
 
-/** The table's data, also handed to the rules engine so rules run over real rows. */
+/** One dataset shared by every pane: table rows, search rows and rules input. */
 export const sampleRows = [
-  { sample_id: "SMP-2084", donor: "Donor 14", material: "Plasma" },
-  { sample_id: "SMP-2087", donor: "Donor 18", material: "Lysate" },
-  { sample_id: "SMP-2091", donor: "Donor 22", material: "Supernatant" },
+  { sample_id: "SMP-2084", donor: "Donor 14", material: "Plasma", status: "failed", amount: 6000 },
+  { sample_id: "SMP-2087", donor: "Donor 18", material: "Lysate", status: "ok", amount: 100 },
+  { sample_id: "SMP-2091", donor: "Donor 22", material: "Supernatant", status: "blocked", amount: 50 },
 ];
 
 const tableFallback: TablePresentationState = {
@@ -102,38 +104,34 @@ export function DemoTable({ theme: controlledTheme, onThemeChange, fields = tabl
 export const schemaStarter: SchemaGraph = {
   models: [
     {
-      name: "customer", label: "Customer",
+      name: "sample", label: "Sample",
       fields: [
-        { key: "id", type: "text", primaryKey: true },
-        { key: "name", type: "text" },
-        { key: "email", type: "text" },
+        { key: "sample_id", type: "text", primaryKey: true },
+        { key: "donor", type: "text" },
+        { key: "material", type: "text" },
+        { key: "status", type: "text" },
+        { key: "amount", type: "number" },
       ],
     },
     {
-      name: "order", label: "Order",
+      name: "donor", label: "Donor",
       fields: [
         { key: "id", type: "text", primaryKey: true },
-        { key: "customer_id", type: "relationship", references: { model: "customer" } },
-        { key: "total", type: "number" },
-        { key: "status", type: "text" },
+        { key: "name", type: "text" },
       ],
     },
   ],
 };
 
 export const rulesStarter: PipelineRule[] = [
-  parseNaturalLanguageRule("when material is Plasma then route to plasma-queue"),
-  parseNaturalLanguageRule("reject rows where donor is Donor 22"),
+  parseNaturalLanguageRule("when status is failed then route to review-queue"),
+  parseNaturalLanguageRule("reject rows where amount is greater than 5000"),
 ];
 
 export const ruleActions = sampleRuleActions;
-export const ruleFields = ["sample_id", "donor", "material"];
+export const ruleFields = tableFields.map((field) => field.id);
 
-export const searchFields = ["status", "amount", "region"];
-export const searchRows: SearchRow[] = [
-  { status: "failed", amount: 6000, region: "eu" },
-  { status: "ok", amount: 100, region: "us" },
-  { status: "blocked", amount: 50, region: "eu" },
-];
+export const searchFields = tableFields.map((field) => field.id);
+export const searchRows = sampleRows;
 
 export { Explorer };

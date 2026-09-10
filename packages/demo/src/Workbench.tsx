@@ -2,7 +2,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   PaneLayout,
   ThemeToggleButton,
+  applySearch,
   createLocalStorageAdapter,
+  emptyRoot,
   loadInitialState,
   loadPaneLayoutState,
   useIdleSave,
@@ -23,8 +25,6 @@ import {
   ruleFields,
   rulesStarter,
   schemaStarter,
-  searchFields,
-  searchRows,
   sampleRows,
   tableFields,
 } from "./showcase";
@@ -71,8 +71,12 @@ export function Workbench() {
   const searchAdapter = useMemo(() => createLocalStorageAdapter<SearchSpec>(), []);
   const [graph, setGraph] = useState<SchemaGraph>(() => loadInitialState(WORKBENCH_SCHEMA_KEY, graphAdapter, schemaStarter));
   const [rules, setRules] = useState<PipelineRule[]>(() => loadInitialState(WORKBENCH_RULES_KEY, rulesAdapter, rulesStarter));
+  const [searchSpec, setSearchSpec] = useState<SearchSpec>(() => loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, { filter: emptyRoot() }));
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
-  const [datasetQuery, setDatasetQuery] = useState("");
+  // Pipeline: the schema's fields feed search, search filters the rows, rules
+  // evaluate the filtered rows, the table shows the raw rows.
+  const activeSearchFields = useMemo(() => headerFields.map((field) => field.id), [headerFields]);
+  const filteredRows = useMemo(() => applySearch(sampleRows, searchSpec), [searchSpec]);
   const closedAdapter = useMemo(() => createLocalStorageAdapter<string[]>(), []);
   const [closed, setClosed] = useState<ReadonlySet<string>>(
     () => new Set(loadInitialState(WORKBENCH_CLOSED_KEY, closedAdapter, [] as string[])),
@@ -127,7 +131,7 @@ export function Workbench() {
       title: "Rules",
       closable: true,
       actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
-      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={sampleRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={filteredRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
@@ -138,14 +142,12 @@ export function Workbench() {
         <AdvancedSearch
           ref={searchRef}
           chrome="none"
-          fields={searchFields}
-          rows={searchRows}
+          value={searchSpec}
+          onChange={setSearchSpec}
+          fields={activeSearchFields}
+          rows={sampleRows}
           persistKey={WORKBENCH_SEARCH_KEY}
           adapter={searchAdapter}
-          onDatasetQueryChange={(query) => {
-            const count = query?.filters?.length ?? 0;
-            setDatasetQuery(count > 0 ? `${count} flat filter${count === 1 ? "" : "s"}` : "");
-          }}
           theme={activeTheme}
           onThemeChange={onThemeChange}
         />
@@ -158,6 +160,7 @@ export function Workbench() {
     setLayout(workbenchLayout);
     setGraph(schemaStarter);
     setRules(rulesStarter);
+    setSearchSpec({ filter: emptyRoot() });
     setHeaderFields(tableFields);
   }
 
@@ -176,7 +179,7 @@ export function Workbench() {
         />
       </div>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
-        {datasetQuery && <span className="sb-muted">search → {datasetQuery}</span>}
+        {filteredRows.length !== sampleRows.length && <span className="sb-muted">filtered {filteredRows.length} / {sampleRows.length} rows</span>}
         <button className="sb-btn" onClick={reset}>Reset layout</button>
         <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
       </div>

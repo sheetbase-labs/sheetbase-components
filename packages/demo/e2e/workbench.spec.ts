@@ -89,8 +89,8 @@ test("schema body is three resizable panes and drives the table header", async (
   await expect(page.locator(".sb-schema .sb-resizer")).toHaveCount(2);
 
   // Selecting a model pipes its fields into the table pane.
-  await schema.getByRole("button", { name: /Order/ }).click();
-  await expect(page.locator(".table-surface").getByText("customer_id", { exact: true })).toBeVisible();
+  await schema.getByRole("button", { name: /Donor/ }).click();
+  await expect(page.locator(".table-surface").getByText("name", { exact: true })).toBeVisible();
 });
 
 test("frameless panes own a single bar with re-homed actions", async ({ page }) => {
@@ -114,7 +114,22 @@ test("rules dry-run evaluates the table rows", async ({ page }) => {
   const rules = page.locator(".sb-rules");
   await expect(rules).toContainText("3 rows");
   await expect(rules).toContainText("of 3 rows");
-  await expect(rules).toContainText("plasma-queue");
+  await expect(rules).toContainText("review-queue");
+});
+
+test("search filters the rows the rules evaluate", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+
+  await analysis.getByRole("tab", { name: "Search" }).click();
+  await page.getByRole("button", { name: "+ Condition" }).first().click();
+  const condition = page.locator(".sb-filter-rule").first();
+  await condition.getByLabel("Field").selectOption("status");
+  await condition.getByLabel("Operator").selectOption("eq");
+  await condition.getByLabel("Value").fill("failed");
+
+  await analysis.getByRole("tab", { name: "Rules" }).click();
+  await expect(page.locator(".sb-rules")).toContainText("1 rows");
 });
 
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
