@@ -308,6 +308,9 @@
   box-shadow: none;
   background: transparent;
 }
+/* Components' own top bars rely on the frame's 4px padding; shared mode has
+   none, so drop the compensating negative margin to match the explorer bar. */
+.sb-panes--shared .sb-topbar { margin: 0; }
 
 /*
  * Fit mode: components keep their own frame, border and background — the same
