@@ -29,6 +29,11 @@ export interface RulesEngineProps {
   onChange?: (next: PipelineRule[]) => void;
   /** Known pipeline fields for condition editors. */
   fields?: string[];
+  /**
+   * Optional dataset. When provided the dry-run pane evaluates every rule over
+   * these rows (match counts, rejected rows, routes) instead of the JSON probe.
+   */
+  rows?: readonly Row[];
   /** Host-declared action vocabulary. Empty (default) keeps kinds as free text; the component wires no predefined actions. */
   actions?: readonly RuleActionDef[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
@@ -90,7 +95,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -141,6 +146,20 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
       return null;
     }
   }, [probe, rules]);
+
+  const dataset = useMemo(() => (rows ? dryRun(rules, [...rows]) : null), [rules, rows]);
+  const datasetSummary = useMemo(() => {
+    if (!dataset) return null;
+    const counts = new Map<string, number>();
+    const routes = new Set<string>();
+    let rejected = 0;
+    for (const entry of dataset) {
+      for (const rule of entry.matched) counts.set(rule.id, (counts.get(rule.id) ?? 0) + 1);
+      if (entry.effects.rejected) rejected += 1;
+      for (const route of entry.effects.routes) routes.add(route);
+    }
+    return { counts, rejected, routes: [...routes], matched: dataset.filter((entry) => entry.matched.length > 0).length, total: dataset.length };
+  }, [dataset]);
 
   function onProbeChange(text: string) {
     setProbe(text);
@@ -284,18 +303,40 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                 <aside className="sb-rules-side sb-plate">
             <div className="sb-panel-heading"><span>Dry run</span></div>
             <div className="sb-rules-editor">
-              <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>
-              {probeError ? <p className="sb-error">{probeError}</p> : probeResult && (
-                probeResult.matched.length === 0
-                  ? <p className="sb-muted">No rules match this row.</p>
-                  : <div>
-                    <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
-                    {probeResult.effects.rejected && <p className="sb-error">Rejected</p>}
-                    {probeResult.effects.routes.length > 0 && <p className="sb-muted">Route {probeResult.effects.routes.join(", ")}</p>}
-                    {Object.keys(probeResult.effects.transforms).length > 0 && (
-                      <pre className="sb-probe" style={{ minHeight: 0 }}>{JSON.stringify(probeResult.effects.output, null, 2)}</pre>
-                    )}
-                  </div>
+              {datasetSummary ? (
+                <>
+                  <p className="sb-muted">{datasetSummary.total} rows · {datasetSummary.matched} matched</p>
+                  {rules.length === 0 ? (
+                    <p className="sb-muted">No rules to evaluate.</p>
+                  ) : (
+                    <ul className="sb-match-list">
+                      {rules.map((rule) => (
+                        <li key={rule.id}>
+                          <strong>{rule.name}</strong>
+                          <small>{datasetSummary.counts.get(rule.id) ?? 0} of {datasetSummary.total} rows</small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {datasetSummary.rejected > 0 && <p className="sb-error">{datasetSummary.rejected} rejected</p>}
+                  {datasetSummary.routes.length > 0 && <p className="sb-muted">Route {datasetSummary.routes.join(", ")}</p>}
+                </>
+              ) : (
+                <>
+                  <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>
+                  {probeError ? <p className="sb-error">{probeError}</p> : probeResult && (
+                    probeResult.matched.length === 0
+                      ? <p className="sb-muted">No rules match this row.</p>
+                      : <div>
+                        <ul className="sb-match-list">{probeResult.matched.map((m) => <li key={m.id}><strong>{m.name}</strong><small>{m.actions.map((a) => (a.target ? `${a.kind} → ${a.target}` : a.kind)).join(", ")}</small></li>)}</ul>
+                        {probeResult.effects.rejected && <p className="sb-error">Rejected</p>}
+                        {probeResult.effects.routes.length > 0 && <p className="sb-muted">Route {probeResult.effects.routes.join(", ")}</p>}
+                        {Object.keys(probeResult.effects.transforms).length > 0 && (
+                          <pre className="sb-probe" style={{ minHeight: 0 }}>{JSON.stringify(probeResult.effects.output, null, 2)}</pre>
+                        )}
+                      </div>
+                  )}
+                </>
               )}
             </div>
                 </aside>

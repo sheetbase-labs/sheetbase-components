@@ -25,6 +25,7 @@ import {
   schemaStarter,
   searchFields,
   searchRows,
+  sampleRows,
   tableFields,
 } from "./showcase";
 
@@ -126,7 +127,7 @@ export function Workbench() {
       title: "Rules",
       closable: true,
       actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
-      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: <RulesEngine ref={rulesRef} chrome="none" value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={sampleRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",

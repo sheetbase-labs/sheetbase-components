@@ -24,6 +24,13 @@ export const tableFields = [
   { id: "material", label: "material", column: 2, dataType: "text" as const },
 ];
 
+/** The table's data, also handed to the rules engine so rules run over real rows. */
+export const sampleRows = [
+  { sample_id: "SMP-2084", donor: "Donor 14", material: "Plasma" },
+  { sample_id: "SMP-2087", donor: "Donor 18", material: "Lysate" },
+  { sample_id: "SMP-2091", donor: "Donor 22", material: "Supernatant" },
+];
+
 const tableFallback: TablePresentationState = {
   version: 2,
   theme: "system",
@@ -48,11 +55,15 @@ export function DemoTable({ theme: controlledTheme, onThemeChange, fields = tabl
   const [presentation, setPresentation] = useTablePresentationState("sheetbase-demo:table", tableFallback, adapter);
   const resolvedTheme = useResolvedTheme(presentation.theme);
   const theme = controlledTheme ?? resolvedTheme;
-  const initialData = useMemo(() => new Map<string, string>([
-    ["A1", "SMP-2084"], ["B1", "Donor 14"], ["C1", "Plasma"],
-    ["A2", "SMP-2087"], ["B2", "Donor 18"], ["C2", "Lysate"],
-    ["A3", "SMP-2091"], ["B3", "Donor 22"], ["C3", "Supernatant"],
-  ]), []);
+  const initialData = useMemo(() => {
+    const map = new Map<string, string>();
+    sampleRows.forEach((row, r) => {
+      tableFields.forEach((field, c) => {
+        map.set(`${String.fromCharCode(65 + c)}${r + 1}`, String(row[field.id as keyof typeof row] ?? ""));
+      });
+    });
+    return map;
+  }, []);
   const tableRef = useRef<SpreadsheetHandle>(null);
   const [selection, setSelection] = useState<SpreadsheetSelection>({ address: "A1", range: "A1", input: "" });
   return (
@@ -111,12 +122,12 @@ export const schemaStarter: SchemaGraph = {
 };
 
 export const rulesStarter: PipelineRule[] = [
-  parseNaturalLanguageRule("when status is failed then route to review-queue"),
-  parseNaturalLanguageRule("reject rows where amount is greater than 5000"),
+  parseNaturalLanguageRule("when material is Plasma then route to plasma-queue"),
+  parseNaturalLanguageRule("reject rows where donor is Donor 22"),
 ];
 
 export const ruleActions = sampleRuleActions;
-export const ruleFields = ["status", "amount", "region", "email"];
+export const ruleFields = ["sample_id", "donor", "material"];
 
 export const searchFields = ["status", "amount", "region"];
 export const searchRows: SearchRow[] = [

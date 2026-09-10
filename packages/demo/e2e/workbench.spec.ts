@@ -106,6 +106,17 @@ test("frameless panes own a single bar with re-homed actions", async ({ page }) 
   await expect(page.locator(".sb-search .sb-pane-stack")).toHaveCount(2);
 });
 
+test("rules dry-run evaluates the table rows", async ({ page }) => {
+  await reset(page);
+  const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
+  await analysis.getByRole("tab", { name: "Rules" }).click();
+
+  const rules = page.locator(".sb-rules");
+  await expect(rules).toContainText("3 rows");
+  await expect(rules).toContainText("of 3 rows");
+  await expect(rules).toContainText("plasma-queue");
+});
+
 test("closes a pane, persists the close, and reset restores it", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });

@@ -16,6 +16,7 @@ export default defineConfig({
       { find: /^sheetbase-schemaeditor$/, replacement: sibling("schema-editor") },
       { find: /^sheetbase-rulesengine$/, replacement: sibling("rules-engine") },
       { find: /^sheetbase-advanced-search$/, replacement: sibling("advanced-search") },
+      { find: /^sheetbase-shared$/, replacement: sibling("shared") },
     ],
   },
   server: {

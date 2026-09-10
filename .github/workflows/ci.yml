@@ -23,6 +23,10 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      - name: Build shared library
+        working-directory: packages/shared
+        run: bun run build:lib
+
       - name: Build table demo and library
         working-directory: packages/table
         run: bun run build && bun run build:lib && bun run budget && bun run bench

@@ -28,10 +28,9 @@ tab them together.
 ```
 
 Panes add no surface of their own — the component frame is the surface. A tabbed
-stack does render a lightweight tab row above the component, so a component that
-also draws its own topbar shows both; pass `frame={false}` where a component
-supports it (table surface, explorer) when you want the tab row to be the only
-chrome.
+stack renders a lightweight tab row; set `chrome="none"` on schema/rules/search
+and re-home their actions through `PaneSpec.actions` (backed by the components'
+imperative handles) so the pane bar is the only chrome.
 
 Pass `theme` when PaneLayout is not already inside a `.sheetbase-scope` so pane
 chrome — splitter, tabs, drag preview and drop zones — resolves its tokens.
@@ -59,6 +58,14 @@ Loading reconciles against the current `panes` — unknown panes are dropped and
 new ones appended — so stored layouts survive pane-set changes. The pure
 operations in `layout.ts` (`movePane`, `removePane`, `splitStack`, …) can be
 used without React.
+
+## Build
+
+`bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and
+`dist-types`. The `types` export resolves to `src` so type-checking the
+monorepo needs no prebuild; `import` resolves to the compiled lib. Consumers of
+the compiled lib must load the styles (`sheetbase-shared/theme.css`,
+`shell.css`, `panes.css`).
 
 See the repository README for the vocabulary (`text` not `string`, `isNull` not
 `isEmpty`, `relationship` not `relation`).
