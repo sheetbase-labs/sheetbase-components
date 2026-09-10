@@ -38,7 +38,7 @@ export type Menu = 'plot' | 'fields' | 'group' | 'filter' | 'error' | 'axes' | '
 const plotKinds: Array<{ kind: ChartKind; label: string }> = [
   { kind: 'scatter', label: 'Scatter' }, { kind: 'line', label: 'Line' }, { kind: 'bar', label: 'Bar' },
   { kind: 'horizontal-bar', label: 'Horizontal bar' }, { kind: 'area', label: 'Area' },
-  { kind: 'histogram', label: 'Histogram' }, { kind: 'box', label: 'Box plot' },
+  { kind: 'histogram', label: 'Histogram' }, { kind: 'box', label: 'Box plot' }, { kind: 'lollipop', label: 'Lollipop' },
 ]
 
 function RangeControl({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange(value: number): void }) {
@@ -103,7 +103,7 @@ function ErrorPopover({ spec, dataset, setSpec }: { spec: ChartSpec; dataset: Da
 
 function AxesPopover({ spec, setSpec }: { spec: ChartSpec; setSpec(action: SetStateAction<ChartSpec>): void }) {
   const scaleOptions = (
-    <><option value="auto">Auto</option><option value="linear">Linear</option><option value="log" disabled={['bar', 'horizontal-bar', 'histogram', 'area'].includes(spec.kind)}>Log</option><option value="sqrt">Square root</option><option value="symlog">Symlog</option></>
+    <><option value="auto">Auto</option><option value="linear">Linear</option><option value="log" disabled={['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop'].includes(spec.kind)}>Log</option><option value="sqrt">Square root</option><option value="symlog">Symlog</option></>
   )
   const refLines = spec.refLines ?? []
   const patchRef = (id: string, patch: Partial<ReferenceLine>) => setSpec((current) => ({ ...current, refLines: (current.refLines ?? []).map((line) => line.id === id ? { ...line, ...patch } : line) }))

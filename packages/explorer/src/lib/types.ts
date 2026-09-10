@@ -19,7 +19,7 @@ export interface Dataset {
   source: string
 }
 
-export type ChartKind = 'scatter' | 'line' | 'bar' | 'horizontal-bar' | 'area' | 'histogram' | 'box'
+export type ChartKind = 'scatter' | 'line' | 'bar' | 'horizontal-bar' | 'area' | 'histogram' | 'box' | 'lollipop'
 export type AggregateKind = 'none' | 'mean' | 'median' | 'sum' | 'count' | 'min' | 'max'
 export type BarLayout = 'grouped' | 'stacked' | 'normalized'
 export type ErrorMode = 'none' | 'explicit' | 'sd' | 'sem' | 'ci95'

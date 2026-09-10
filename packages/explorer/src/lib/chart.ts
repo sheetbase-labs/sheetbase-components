@@ -170,6 +170,10 @@ function chartSpec(
     marks.push(barX(rows, ({ id: 'horizontal-bars', y: spec.x, x: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
   } else if (spec.kind === 'bar') {
     marks.push(barY(rows, ({ id: 'bars', x: spec.x, y: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+  } else if (spec.kind === 'lollipop') {
+    // Thin stem plus a dot head; preparedRows has already summarised y.
+    marks.push(barY(rows, ({ id: 'lollipop-stem', x: spec.x, y: spec.y!, maxThickness: Math.max(2, Math.round(spec.lineWidth + 1)), radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+    marks.push(dot(rows, ({ id: 'lollipop-head', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, ...grouping }) as any))
   } else if (spec.kind === 'area') {
     marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
     marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
@@ -211,7 +215,7 @@ function chartSpec(
 
   const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
   const yValueNumeric = !horizontal && yMeta?.kind === 'number'
-  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area'].includes(spec.kind)
+  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop'].includes(spec.kind)
   const xDataExtent = xValueNumeric ? numericExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
   const yDataExtent = yValueNumeric && spec.y ? numericExtent(rawRows, spec.y) : undefined
   const xLogExtent = logAllowed && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
@@ -235,7 +239,7 @@ function chartSpec(
     ? (xValueNumeric ? numericScale(xKind) : () => scalePoint<string>().padding(0.5))
     : xMeta.kind === 'number'
       ? numericScale(xKind)
-      : ['bar', 'box'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
+      : ['bar', 'box', 'lollipop'].includes(spec.kind) ? () => scaleBand<string>().padding(0.18) : () => scalePoint<string>().padding(0.5)
   const yScale = horizontal
     ? () => scaleBand<string>().padding(0.18)
     : spec.kind === 'histogram' ? scaleLinear : yValueNumeric ? numericScale(yKind) : () => scalePoint<string>().padding(0.5)
