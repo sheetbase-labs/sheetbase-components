@@ -20,6 +20,34 @@ describe("parseNaturalLanguageRule", () => {
     expect(rule.conditions[0]).toMatchObject({ field: "email", operator: "isEmpty" });
     expect(rule.actions.some((a) => a.kind === "reject")).toBe(true);
   });
+
+  it("parses between bounds without splitting on the inner and", () => {
+    const rule = parseNaturalLanguageRule("when amount is between 5 and 10 then flag");
+    expect(rule.conditions).toEqual([{ field: "amount", operator: "between", value: { low: 5, high: 10 } }]);
+  });
+
+  it("keeps between intact alongside additional and clauses", () => {
+    const rule = parseNaturalLanguageRule("when amount is between 5 and 10 and status is ok then flag");
+    expect(rule.conditions).toHaveLength(2);
+    expect(rule.conditions[0]).toMatchObject({ operator: "between", value: { low: 5, high: 10 } });
+    expect(rule.conditions[1]).toMatchObject({ field: "status", operator: "eq", value: "ok" });
+  });
+
+  it("keeps between intact alongside an or clause", () => {
+    const rule = parseNaturalLanguageRule("when a is x or b is between 1 and 2 then flag");
+    expect(rule.when).toBe("any");
+    expect(rule.conditions).toHaveLength(2);
+    expect(rule.conditions[1]).toMatchObject({ field: "b", operator: "between", value: { low: 1, high: 2 } });
+  });
+
+  it("rejects non-numeric between bounds", () => {
+    expect(() => parseNaturalLanguageRule("when amount is between five and ten then flag")).toThrow(RuleParseError);
+  });
+
+  it("still splits plain and clauses", () => {
+    const rule = parseNaturalLanguageRule("when a is 1 and b is 2 then flag");
+    expect(rule.conditions).toHaveLength(2);
+  });
 });
 
 describe("evaluateRule", () => {
