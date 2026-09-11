@@ -30,6 +30,10 @@ bun run dev:api     # example HTTP adapter on :8787 (paged demo + explorer remot
 
 `packages/explorer` also has `bun run budget` and `bun run bench`.
 
+```bash
+bun run pack:smoke  # pack all six libs, install + typecheck as an external consumer
+```
+
 ## Conventions
 
 - **Shared contracts live in `packages/shared`** — field types, filter
@@ -80,3 +84,7 @@ packages/demo/            workbench composing the packages
   `build:lib` after changing shared/table contracts.
 - `sheetbase-shared` is externalized from the table library build; consumers
   must install both packages.
+- Packages publish to npm in lockstep (`docs/publishing.md`). `bun pm pack`
+  rewrites `workspace:*` to real versions; peers are `react`, `react-dom`,
+  and `@tanstack/react-virtual` (table only — it is externalized, never put
+  it back in `dependencies`).

@@ -5,15 +5,16 @@
   "type": "module",
   "main": "./dist-lib/sheetbase-shared.js",
   "module": "./dist-lib/sheetbase-shared.js",
-  "types": "./src/index.ts",
+  "types": "./dist-types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist-types/index.d.ts",
       "import": "./dist-lib/sheetbase-shared.js"
     },
     "./theme.css": "./src/theme.css",
     "./shell.css": "./src/shell.css",
     "./panes.css": "./src/panes/panes.css",
+    "./styles.css": "./dist-lib/style.css",
     "./style.css": "./dist-lib/style.css",
     "./package.json": "./package.json"
   },

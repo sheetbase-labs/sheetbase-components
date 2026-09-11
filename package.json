@@ -16,7 +16,8 @@
     "dev:schema": "bun run --filter sheetbase-schemaeditor dev",
     "dev:rules": "bun run --filter sheetbase-rulesengine dev",
     "dev:search": "bun run --filter sheetbase-advanced-search dev",
-    "dev:demo": "bun run --filter sheetbase-demo dev"
+    "dev:demo": "bun run --filter sheetbase-demo dev",
+    "pack:smoke": "node scripts/pack-smoke.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

@@ -151,7 +151,6 @@
       "name": "sheetbase-table",
       "version": "0.1.0",
       "dependencies": {
-        "@tanstack/react-virtual": "^3.14.10",
         "rbush": "^4.0.1",
         "sheetbase-shared": "workspace:*",
       },

@@ -1,4 +1,4 @@
-# Explorer server data path (plan 010 spike)
+# Explorer server data path (spike)
 
 The explorer charts whatever fits in memory: `DataAdapter.load()` returns a
 materialised `Dataset { rows }`, and the only built-in sources are the sample

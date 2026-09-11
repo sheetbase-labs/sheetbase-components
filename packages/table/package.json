@@ -30,7 +30,6 @@
     "bench": "vitest bench --run"
   },
   "dependencies": {
-    "@tanstack/react-virtual": "^3.14.10",
     "rbush": "^4.0.1",
     "sheetbase-shared": "workspace:*"
   },

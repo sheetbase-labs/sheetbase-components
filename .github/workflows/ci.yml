@@ -53,6 +53,9 @@ jobs:
         working-directory: packages/advanced-search
         run: bun run build && bun run build:lib
 
+      - name: Pack smoke — tarballs install + typecheck as a consumer
+        run: node scripts/pack-smoke.mjs --skip-build
+
   table-e2e:
     name: Table Playwright (${{ matrix.browser }})
     runs-on: ubuntu-latest
