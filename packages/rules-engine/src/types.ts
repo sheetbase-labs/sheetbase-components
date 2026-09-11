@@ -51,3 +51,35 @@ export interface PipelineRule {
 }
 
 export type Row = Record<string, unknown>;
+
+/**
+ * A field write proposed by a transform action. Structurally identical to the
+ * table's `RecordFieldWrite` minus `datasetId`, which the host supplies when it
+ * commits (rules-engine must not depend on sheetbase-table).
+ */
+export type RuleWrite = Readonly<{
+  recordId: string;
+  fieldId: string;
+  before?: string;
+  after?: string;
+}>;
+
+/** What an apply pass would do, before any host commit. */
+export type RuleApplyPlan = Readonly<{
+  /** One write per matched row per transformed field (final value, last-wins). */
+  writes: readonly RuleWrite[];
+  /** Rows that matched at least one enabled rule. */
+  matched: number;
+  /** Matched rows skipped because `recordIdOf` could not resolve them. */
+  skipped: number;
+  /** Matched rows a `reject` action excluded from writing. */
+  rejected: number;
+}>;
+
+/** Host-reported outcome of committing a plan's writes. */
+export type RuleApplyResult = Readonly<{
+  /** Writes the host accepted. Defaults to all proposed writes when omitted. */
+  applied?: number;
+  /** Writes the host rejected (e.g. revision conflicts). */
+  rejected?: number;
+}>;

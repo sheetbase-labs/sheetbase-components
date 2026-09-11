@@ -21,9 +21,10 @@ import {
   type PaneSpec,
   type SheetbaseField,
 } from "sheetbase-shared";
-import { RulesEngine, type PipelineRule, type RulesEngineHandle } from "sheetbase-rulesengine";
+import { RulesEngine, type PipelineRule, type RuleWrite, type RulesEngineHandle } from "sheetbase-rulesengine";
 import { SchemaEditor, type SchemaEditorHandle, type SchemaGraph } from "sheetbase-schemaeditor";
 import { AdvancedSearch, type AdvancedSearchHandle } from "sheetbase-advanced-search";
+import { createMemoryPagedAdapter, DataPageCache, type Scalar } from "sheetbase-table";
 import {
   Explorer,
   createExplorerDataset,
@@ -88,10 +89,43 @@ export function Workbench() {
   const [query, setQuery] = useState<DatasetQuery>({});
   const [searchPreview, setSearchPreview] = useState(false);
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
+  // The table's source of truth: a host-owned paged adapter keyed on the
+  // dataset's natural id (`sample_id`), plus a shared page cache the apply
+  // path can invalidate. The table re-reads this adapter after a rules apply.
+  const [tableAdapter] = useState(() => createMemoryPagedAdapter(sampleRows.map((row) => ({
+    recordId: row.sample_id,
+    values: row as Record<string, Scalar>,
+  }))));
+  const [tablePageCache] = useState(() => new DataPageCache(48));
+  // Bumping remounts the table pane so it re-reads committed adapter state.
+  const [applyTick, setApplyTick] = useState(0);
+  // Workspace rows: the snapshot search, explorer and rules evaluate. Rules
+  // write-back mirrors accepted commits into it so every pane stays coherent.
+  const [rows, setRows] = useState(sampleRows);
   const workspace = useMemo(
-    () => ({ fields: headerFields as readonly SheetbaseField[], rows: sampleRows, query }),
-    [headerFields, query],
+    () => ({ fields: headerFields as readonly SheetbaseField[], rows, query }),
+    [headerFields, rows, query],
   );
+  const recordIdOf = useCallback((row: Record<string, unknown>) =>
+    typeof row.sample_id === "string" ? row.sample_id : undefined, []);
+  const onApplyWrites = useCallback(async (writes: readonly RuleWrite[]) => {
+    const result = await tableAdapter.commit(writes.map((write) => ({ datasetId: "sample", ...write })));
+    if (result.accepted.length > 0) {
+      const patches = new Map<string, Record<string, unknown>>();
+      for (const write of result.accepted) {
+        const patch = patches.get(write.recordId) ?? {};
+        patch[write.fieldId] = write.after ?? "";
+        patches.set(write.recordId, patch);
+      }
+      setRows((current) => current.map((row) => {
+        const patch = patches.get(row.sample_id);
+        return patch ? { ...row, ...patch } : row;
+      }));
+      tablePageCache.invalidateDataset("sample");
+      setApplyTick((tick) => tick + 1);
+    }
+    return { applied: result.accepted.length, rejected: result.rejected.length };
+  }, [tableAdapter, tablePageCache]);
   // Pipeline: the schema's fields feed search, search filters the rows, rules
   // evaluate the filtered rows, the table shows the raw rows.
   // Field objects (not ids) so numeric/date fields offer >, <, between, etc.
@@ -101,10 +135,10 @@ export function Workbench() {
   );
   // The full view (filter + sort + limit) drives the explorer and rules; the
   // table's query has no limit, so the row counter tracks filter + sort only.
-  const viewRows = useMemo(() => applyView(sampleRows, view), [view]);
+  const viewRows = useMemo(() => applyView(rows, view), [rows, view]);
   const filteredRows = useMemo(
-    () => applySearch(sampleRows, searchSpecFromView({ ...view, limit: undefined })),
-    [view],
+    () => applySearch(rows, searchSpecFromView({ ...view, limit: undefined })),
+    [rows, view],
   );
   const explorerDataset = useMemo(
     () => createExplorerDataset(viewRows as readonly Record<string, unknown>[], headerFields),
@@ -133,7 +167,7 @@ export function Workbench() {
   }, []);
 
   const panes: PaneSpec[] = [
-    { id: "table", title: "Table", closable: true, content: <QueryTable theme={activeTheme} /> },
+    { id: "table", title: "Table", closable: true, content: <QueryTable key={applyTick} theme={activeTheme} adapter={tableAdapter} pageCache={tablePageCache} /> },
     { id: "explorer", title: "Explorer", closable: true, content: <Explorer dataset={explorerDataset} view={view} onViewChange={setView} theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> },
     {
       id: "schema",
@@ -166,7 +200,7 @@ export function Workbench() {
       title: "Rules",
       closable: true,
       actions: <button className="sb-btn primary" onClick={() => rulesRef.current?.addRule()}>+ Rule</button>,
-      content: ({ tabbed }: { tabbed: boolean }) => <RulesEngine ref={rulesRef} chrome={tabbed ? "none" : "full"} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={viewRows} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: ({ tabbed }: { tabbed: boolean }) => <RulesEngine ref={rulesRef} chrome={tabbed ? "none" : "full"} value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={viewRows} recordIdOf={recordIdOf} onApplyWrites={onApplyWrites} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
     },
     {
       id: "search",
@@ -188,7 +222,7 @@ export function Workbench() {
           onPreviewChange={setSearchPreview}
           onDatasetQueryChange={setQuery}
           fields={activeSearchFields}
-          rows={sampleRows}
+          rows={rows}
           persistKey={WORKBENCH_SEARCH_KEY}
           adapter={searchAdapter}
           theme={activeTheme}
@@ -205,6 +239,7 @@ export function Workbench() {
     setRules(rulesStarter);
     setView(emptyView("mean"));
     setHeaderFields(tableFields);
+    setRows(sampleRows);
   }
 
   // "New pane…" in a pane menu re-opens the first closed pane into that stack.
@@ -240,7 +275,7 @@ export function Workbench() {
         </SheetbaseShell>
       </WorkspaceProvider>
       <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
-        {filteredRows.length !== sampleRows.length && <span className="sb-muted">filtered {filteredRows.length} / {sampleRows.length} rows</span>}
+        {filteredRows.length !== rows.length && <span className="sb-muted">filtered {filteredRows.length} / {rows.length} rows</span>}
         <span className="sb-muted" title="demo build">{__BUILD__}</span>
         <button className="sb-btn" onClick={reset}>Reset layout</button>
         <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />

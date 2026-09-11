@@ -1,5 +1,5 @@
 import { filterRows, testCondition, toFilterClause, type FilterClause } from "sheetbase-shared";
-import type { PipelineRule, Row, RuleAction } from "./types";
+import type { PipelineRule, Row, RuleAction, RuleApplyPlan, RuleWrite } from "./types";
 
 /** Does a row satisfy a rule (disabled rules never match)?
  * Match behaviour: `when: "all"` is AND, `when: "any"` is OR. */
@@ -76,6 +76,44 @@ export function applyActions(row: Row, rules: PipelineRule[]): RuleEffects {
 /** Partition rows into matched / unmatched for a dry run, including applied effects. */
 export function dryRun(rules: PipelineRule[], rows: Row[]): Array<{ row: Row; matched: PipelineRule[]; effects: RuleEffects }> {
   return rows.map((row) => ({ row, matched: matchRules(rules, row), effects: applyActions(row, rules) }));
+}
+
+/**
+ * Build the write set an apply pass would commit. Only `transform` actions
+ * produce writes — flag/route/notify are host-semantic and only reported via
+ * the plan counts; `reject` excludes the row from writing entirely. When
+ * several matched rules transform the same field, the last write wins, so the
+ * emitted write carries the final value.
+ */
+export function ruleWritesForRows(
+  rules: PipelineRule[],
+  rows: readonly Row[],
+  recordIdOf: (row: Row, index: number) => string | undefined,
+): RuleApplyPlan {
+  const writes: RuleWrite[] = [];
+  let matched = 0;
+  let skipped = 0;
+  let rejected = 0;
+  rows.forEach((row, index) => {
+    const matchedRules = matchRules(rules, row);
+    if (matchedRules.length === 0) return;
+    matched += 1;
+    const effects = applyActions(row, matchedRules);
+    if (effects.rejected) { rejected += 1; return; }
+    const fields = Object.keys(effects.transforms);
+    if (fields.length === 0) return;
+    const recordId = recordIdOf(row, index);
+    if (!recordId) { skipped += 1; return; }
+    for (const field of fields) {
+      writes.push({
+        recordId,
+        fieldId: field,
+        before: row[field] === undefined ? undefined : String(row[field]),
+        after: String(effects.transforms[field]),
+      });
+    }
+  });
+  return { writes, matched, skipped, rejected };
 }
 
 /**

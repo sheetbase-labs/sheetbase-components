@@ -14,9 +14,9 @@ import {
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
-import type { PipelineRule, Row, RuleActionDef, RuleCondition, RuleOperator } from "./types";
+import type { PipelineRule, Row, RuleActionDef, RuleApplyResult, RuleCondition, RuleOperator, RuleWrite } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
-import { dryRun } from "./engine";
+import { dryRun, ruleWritesForRows } from "./engine";
 
 export interface RulesEngineHandle {
   /** Append a default rule, as the topbar button does. */
@@ -34,6 +34,21 @@ export interface RulesEngineProps {
    * these rows (match counts, rejected rows, routes) instead of the JSON probe.
    */
   rows?: readonly Row[];
+  /**
+   * Maps a dry-run row back to its host record id. Required for the apply
+   * affordance — matched rows it can't resolve are counted as skipped.
+   */
+  recordIdOf?: (row: Row, index: number) => string | undefined;
+  /**
+   * Commit boundary for transform writes. The component proposes the write
+   * set; the host commits it (e.g. `PagedDataAdapter.commit`) and may resolve
+   * to accepted/rejected counts for the result line. Applying is destructive:
+   * the component confirms before calling this.
+   */
+  onApplyWrites?: (
+    writes: readonly RuleWrite[],
+    context: Readonly<{ matched: number; skipped: number; rejected: number }>,
+  ) => Promise<RuleApplyResult | void>;
   /** Host-declared action vocabulary. Empty (default) keeps kinds as free text; the component wires no predefined actions. */
   actions?: readonly RuleActionDef[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
@@ -95,7 +110,7 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, recordIdOf, onApplyWrites, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -160,6 +175,33 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     }
     return { counts, rejected, routes: [...routes], matched: dataset.filter((entry) => entry.matched.length > 0).length, total: dataset.length };
   }, [dataset]);
+
+  const [applying, setApplying] = useState(false);
+  const [applyOutcome, setApplyOutcome] = useState<string | null>(null);
+  const applyPlan = useMemo(
+    () => (rows && recordIdOf && onApplyWrites ? ruleWritesForRows(rules, rows, recordIdOf) : null),
+    [rules, rows, recordIdOf, onApplyWrites],
+  );
+
+  async function applyWrites() {
+    if (!applyPlan || !onApplyWrites || applying) return;
+    if (applyPlan.writes.length === 0) { setApplyOutcome("No transform writes to apply."); return; }
+    const writeRows = new Set(applyPlan.writes.map((write) => write.recordId)).size;
+    if (!window.confirm(`Apply ${applyPlan.writes.length} transform writes to ${writeRows} rows?`)) return;
+    setApplying(true);
+    try {
+      const result = await onApplyWrites(applyPlan.writes, { matched: applyPlan.matched, skipped: applyPlan.skipped, rejected: applyPlan.rejected });
+      const parts = [`applied ${result?.applied ?? applyPlan.writes.length} writes`];
+      if (result?.rejected) parts.push(`${result.rejected} rejected by host`);
+      if (applyPlan.rejected) parts.push(`${applyPlan.rejected} rows rejected by rules`);
+      if (applyPlan.skipped) parts.push(`${applyPlan.skipped} rows skipped (no record id)`);
+      setApplyOutcome(parts.join(" · "));
+    } catch (error) {
+      setApplyOutcome(error instanceof Error ? error.message : "Apply failed.");
+    } finally {
+      setApplying(false);
+    }
+  }
 
   function onProbeChange(text: string) {
     setProbe(text);
@@ -320,6 +362,14 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                   )}
                   {datasetSummary.rejected > 0 && <p className="sb-error">{datasetSummary.rejected} rejected</p>}
                   {datasetSummary.routes.length > 0 && <p className="sb-muted">Route {datasetSummary.routes.join(", ")}</p>}
+                  {applyPlan && (
+                    <>
+                      <button type="button" className="sb-btn" disabled={applying} onClick={applyWrites}>
+                        {applying ? "Applying…" : `Apply ${applyPlan.writes.length} writes`}
+                      </button>
+                      {applyOutcome && <p className="sb-muted">{applyOutcome}</p>}
+                    </>
+                  )}
                 </>
               ) : (
                 <>

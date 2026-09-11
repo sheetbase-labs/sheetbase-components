@@ -3,30 +3,24 @@ import {
   PagedSpreadsheet,
   TableFormattingToolbar,
   TableSurface,
-  createMemoryPagedAdapter,
-  type Scalar,
+  type DataPageCache,
+  type PagedDataAdapter,
   type SpreadsheetHandle,
   type SpreadsheetSelection,
 } from "sheetbase-table";
 import { useWorkspace } from "sheetbase-shared";
 
 /**
- * A table pane driven by the shared workspace: it reads `fields`, `rows` and
- * `query`, so a search component editing the query filters this table live.
+ * A table pane driven by the shared workspace: it reads `fields` and `query`,
+ * so a search component editing the query filters this table live. The paged
+ * adapter is host-owned so other panes (e.g. rules write-back) can commit
+ * through the same boundary.
  */
-export function QueryTable({ theme }: { theme: "light" | "dark" }) {
+export function QueryTable({ theme, adapter, pageCache }: { theme: "light" | "dark"; adapter: PagedDataAdapter; pageCache?: DataPageCache }) {
   const workspace = useWorkspace();
   const fields = workspace?.fields ?? [];
-  const rows = workspace?.rows ?? [];
   const query = workspace?.query ?? {};
   const fieldIds = useMemo(() => fields.map((field) => field.id), [fields]);
-  const adapter = useMemo(
-    () => createMemoryPagedAdapter(rows.map((values, index) => ({
-      recordId: `record-${index + 1}`,
-      values: values as Record<string, Scalar>,
-    }))),
-    [rows],
-  );
   const datasetHeader = useMemo(
     () => ({ fields: fields.map((field, column) => ({ id: field.id, label: field.label, column, dataType: field.dataType === "datetime" ? "date" as const : field.dataType })) }),
     [fields],
@@ -49,6 +43,7 @@ export function QueryTable({ theme }: { theme: "light" | "dark" }) {
           <PagedSpreadsheet
             ref={tableRef}
             adapter={adapter}
+            pageCache={pageCache}
             datasetId="sample"
             fieldIds={fieldIds}
             query={query}
