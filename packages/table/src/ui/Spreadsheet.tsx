@@ -39,6 +39,7 @@ import {
   selectionAddresses,
   selectionToTsv,
   sortGridRows,
+  replaceAllText,
   validateTypedCell,
   type CellDataType,
   type GridPoint,
@@ -1104,9 +1105,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     let count = 0;
     const next = new Map(data);
     for (const [address, value] of data) {
-      if (!value.includes(query)) continue;
-      next.set(address, value.split(query).join(replacement));
-      count++;
+      // Find is case-insensitive; replace must match the same cells it selects.
+      const replaced = replaceAllText(value, query, replacement);
+      if (replaced.count) {
+        next.set(address, replaced.text);
+        count += replaced.count;
+      }
     }
     if (count) commit(next, "Replace all");
     return count;

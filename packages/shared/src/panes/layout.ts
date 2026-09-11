@@ -307,15 +307,38 @@ export function paneLayoutState(layout: Layout): PaneLayoutState {
   return { version: PANE_LAYOUT_VERSION, layout };
 }
 
+/**
+ * Structural check for a persisted layout node, recursive. Stacks require a
+ * `panes` string array; splits require a `direction` and `children` nodes
+ * (`sizes` tolerated when absent, but must be a number array matching
+ * `children` when present).
+ */
+export function isLayoutNode(value: unknown): value is LayoutNode {
+  if (!value || typeof value !== "object") return false;
+  const node = value as { kind?: unknown; panes?: unknown; direction?: unknown; children?: unknown; sizes?: unknown };
+  if (node.kind === "stack") return Array.isArray(node.panes) && node.panes.every((id) => typeof id === "string");
+  if (node.kind === "split") {
+    if (node.direction !== "row" && node.direction !== "column") return false;
+    if (!Array.isArray(node.children) || !node.children.every(isLayoutNode)) return false;
+    if (node.sizes !== undefined && (!Array.isArray(node.sizes) || node.sizes.length !== node.children.length || !node.sizes.every((size) => typeof size === "number"))) return false;
+    return true;
+  }
+  return false;
+}
+
 /** Tolerates a legacy bare layout as well as the versioned wrapper. */
 export function parsePaneLayoutState(value: unknown): PaneLayoutState | undefined {
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
   if (typeof record.version === "number") {
+    const layout = record.layout ?? null;
+    // A malformed persisted tree must fall back, not crash the mount.
+    if (layout !== null && !isLayoutNode(layout)) return undefined;
     // Future: migrate older versions onto PANE_LAYOUT_VERSION here.
-    return { version: PANE_LAYOUT_VERSION, layout: (record.layout ?? null) as Layout };
+    return { version: PANE_LAYOUT_VERSION, layout: layout as Layout };
   }
   if (record.kind === "stack" || record.kind === "split") {
+    if (!isLayoutNode(record)) return undefined;
     return { version: PANE_LAYOUT_VERSION, layout: value as Layout };
   }
   return undefined;

@@ -262,6 +262,30 @@ function tokenize(source: string): Token[] {
   return tokens;
 }
 
+/**
+ * Rewrite every cell reference in a formula through `adjust`; string literals,
+ * identifiers and function names pass through byte-for-byte. Unparseable
+ * formulas are returned unchanged.
+ */
+export function mapFormulaReferences(input: string, adjust: (reference: string) => string): string {
+  if (!input.startsWith("=")) return input;
+  const body = input.slice(1);
+  let tokens: Token[];
+  try {
+    tokens = tokenize(body);
+  } catch {
+    return input;
+  }
+  let result = "";
+  let cursor = 0;
+  for (const token of tokens) {
+    if (token.kind !== "reference") continue;
+    result += body.slice(cursor, token.position) + adjust(token.value);
+    cursor = token.position + token.value.length;
+  }
+  return `=${result}${body.slice(cursor)}`;
+}
+
 const comparisonOperators: ReadonlySet<string> = new Set(["=", "<>", "<", ">", "<=", ">="]);
 const concatenationOperators: ReadonlySet<string> = new Set(["&"]);
 const additiveOperators: ReadonlySet<string> = new Set(["+", "-"]);

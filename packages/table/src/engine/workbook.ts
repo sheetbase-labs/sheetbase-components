@@ -137,7 +137,13 @@ export class Worksheet {
   setFormulaMode(mode: FormulaMode): void {
     if (this.#formulaMode === mode) return;
     this.#formulaMode = mode;
-    for (const address of [...this.#cells.keys()]) this.setInput(address, this.input(address));
+    for (const address of [...this.#cells.keys()]) {
+      // record-field / query-result bindings carry no rewritable input —
+      // input() returns "" for them and re-inputting would delete them.
+      const kind = this.#cells.get(address)?.kind;
+      if (kind !== "literal" && kind !== "formula") continue;
+      this.setInput(address, this.input(address));
+    }
   }
 
   delete(address: string): void {

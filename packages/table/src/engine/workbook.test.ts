@@ -220,6 +220,20 @@ describe("Worksheet formula modes", () => {
     expect(sheet.value("A1")).toBe(2);
     expect(sheet.binding("A1")?.kind).toBe("formula");
   });
+
+  it("keeps record-field and query-result bindings when the mode changes", () => {
+    const sheet = new Worksheet();
+    sheet.set("A1", { kind: "record-field", datasetId: "d", recordId: "r1", fieldId: "status" });
+    sheet.set("A2", { kind: "query-result", queryId: "q", row: 0, fieldId: "status" });
+    sheet.setInput("B1", "=1+1");
+    sheet.setFormulaMode("literal");
+    expect(sheet.binding("A1")).toMatchObject({ kind: "record-field", recordId: "r1" });
+    expect(sheet.binding("A2")?.kind).toBe("query-result");
+    sheet.setFormulaMode("evaluate");
+    expect(sheet.binding("A1")).toMatchObject({ kind: "record-field", recordId: "r1" });
+    expect(sheet.binding("A2")?.kind).toBe("query-result");
+    expect(sheet.binding("B1")?.kind).toBe("formula");
+  });
 });
 
 describe("Worksheet defined names", () => {

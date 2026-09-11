@@ -86,6 +86,7 @@ export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onD
         onDoubleClick={() => {
           if (!onRename) return;
           const label = window.prompt("Rename sheet", sheet.label)?.trim();
+          if (label) onRename(sheet.id, label);
         }}
         onContextMenu={(event) => { event.preventDefault(); setMenuSheetId(sheet.id); }}
       >{sheet.kind === "dataset" ? "◆ " : ""}{sheet.label}</button>)}

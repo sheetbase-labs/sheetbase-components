@@ -94,8 +94,12 @@ export function validateGraph(graph: SchemaGraph): string[] {
       if (!field.key.trim()) errors.push(`${model.name || "<unnamed>"} has a field with an empty key.`);
       else if (keys.has(field.key)) errors.push(`${model.name}.${field.key} is defined twice.`);
       else keys.add(field.key);
-      if (field.references && !graph.models.some((m) => m.name === field.references!.model)) {
-        errors.push(`${model.name}.${field.key} references missing model "${field.references.model}".`);
+      if (field.references) {
+        const target = graph.models.find((m) => m.name === field.references!.model);
+        if (!target) errors.push(`${model.name}.${field.key} references missing model "${field.references.model}".`);
+        else if (field.references.field && !target.fields.some((f) => f.key === field.references!.field)) {
+          errors.push(`${model.name}.${field.key} references missing field "${field.references.field}" on "${field.references.model}".`);
+        }
       }
     }
   }

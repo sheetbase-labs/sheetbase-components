@@ -1,4 +1,5 @@
 import { addressKey, columnLabel, parseAddress } from "../engine/coordinates";
+import { mapFormulaReferences } from "../engine/formulas";
 import { Worksheet } from "../engine/workbook";
 import type { CellAddress } from "../engine/types";
 
@@ -144,20 +145,20 @@ export function clearSelection(
 }
 
 export function shiftFormulaReferences(formula: string, rowDelta: number, columnDelta: number): string {
-  return formula.replace(/(\$?)([A-Z]+)(\$?)([1-9]\d*)/gi, (
-    _reference,
-    absoluteColumn: string,
-    columnName: string,
-    absoluteRow: string,
-    rowName: string,
-  ) => {
+  return mapFormulaReferences(formula, (reference) => {
+    const bang = reference.lastIndexOf("!");
+    const sheet = bang >= 0 ? reference.slice(0, bang + 1) : "";
+    const cell = bang >= 0 ? reference.slice(bang + 1) : reference;
+    const match = /^(\$?)([A-Z]+)(\$?)([1-9]\d*)$/i.exec(cell);
+    if (!match) return reference;
+    const [, absoluteColumn, columnName, absoluteRow, rowName] = match;
     const source = parseAddress(`${columnName}${rowName}`);
     const row = source.row + (absoluteRow ? 0 : rowDelta);
     const column = source.column + (absoluteColumn ? 0 : columnDelta);
-    if (row < 0 || column < 0) return "#REF!";
+    if (row < 0 || column < 0) return `${sheet}#REF!`;
     const shifted = addressKey({ row, column });
     const parts = /^([A-Z]+)(\d+)$/.exec(shifted)!;
-    return `${absoluteColumn}${parts[1]}${absoluteRow}${parts[2]}`;
+    return `${sheet}${absoluteColumn}${parts[1]}${absoluteRow}${parts[2]}`;
   });
 }
 
@@ -332,18 +333,44 @@ export function sortGridRows(data: GridSnapshot, column: number, direction: "asc
 
 function adjustFormulaForStructure(input: string, change: GridStructureChange): string {
   if (!input.startsWith("=")) return input;
-  return input.replace(/(\$?)([A-Z]+)(\$?)([1-9]\d*)/gi, (reference, absoluteColumn: string, columnName: string, absoluteRow: string, rowName: string) => {
+  // Tokenize rather than regex: only `reference` tokens are rewritten, so
+  // function names (LOG10) and string literals ("see A1") stay intact.
+  return mapFormulaReferences(input, (reference) => {
+    const bang = reference.lastIndexOf("!");
+    const sheet = bang >= 0 ? reference.slice(0, bang + 1) : "";
+    const cell = bang >= 0 ? reference.slice(bang + 1) : reference;
+    const match = /^(\$?)([A-Z]+)(\$?)([1-9]\d*)$/i.exec(cell);
+    if (!match) return reference;
+    const [, absoluteColumn, columnName, absoluteRow, rowName] = match;
     const point = parseAddress(`${columnName}${rowName}`);
     const coordinate = change.axis === "row" ? point.row : point.column;
-    if (change.kind === "delete" && coordinate >= change.index && coordinate < change.index + change.count) return "#REF!";
+    if (change.kind === "delete" && coordinate >= change.index && coordinate < change.index + change.count) return `${sheet}#REF!`;
     const shift = change.kind === "insert"
       ? (coordinate >= change.index ? change.count : 0)
       : (coordinate >= change.index + change.count ? -change.count : 0);
     if (shift === 0) return reference;
     const moved = change.axis === "row" ? { ...point, row: point.row + shift } : { ...point, column: point.column + shift };
-    const match = /^([A-Z]+)(\d+)$/.exec(addressKey(moved))!;
-    return `${absoluteColumn}${match[1]}${absoluteRow}${match[2]}`;
+    const address = /^([A-Z]+)(\d+)$/.exec(addressKey(moved))!;
+    return `${sheet}${absoluteColumn}${address[1]}${absoluteRow}${address[2]}`;
   });
+}
+
+/** Case-insensitive replace-all preserving unmatched text (grid find is case-insensitive). */
+export function replaceAllText(value: string, query: string, replacement: string): Readonly<{ text: string; count: number }> {
+  if (!query) return { text: value, count: 0 };
+  const lower = value.toLocaleLowerCase();
+  const needle = query.toLocaleLowerCase();
+  let text = "";
+  let cursor = 0;
+  let count = 0;
+  for (;;) {
+    const index = lower.indexOf(needle, cursor);
+    if (index < 0) break;
+    text += value.slice(cursor, index) + replacement;
+    cursor = index + needle.length;
+    count += 1;
+  }
+  return { text: text + value.slice(cursor), count };
 }
 
 export function selectionLabel(selection: GridSelection): string {

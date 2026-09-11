@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveSelection, normaliseSelection, parseTsv, pasteTsv, populatedColumnSelection, renameSheetReferences, selectionToTsv, shiftFormulaReferences, sortGridRows, validateTypedCell } from "./model";
+import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveSelection, normaliseSelection, parseTsv, pasteTsv, populatedColumnSelection, renameSheetReferences, replaceAllText, selectionToTsv, shiftFormulaReferences, sortGridRows, validateTypedCell } from "./model";
 
 describe("grid model", () => {
   it("moves and extends a selection within bounds", () => {
@@ -55,6 +55,30 @@ describe("grid model", () => {
     expect([...inserted]).toEqual([["A1", "10"], ["A3", "20"], ["B4", "=SUM(A1:A3)"]]);
     const deleted = changeGridStructure(inserted, { axis: "row", index: 2, count: 1, kind: "delete" });
     expect(deleted.get("B3")).toBe("=SUM(A1:#REF!)");
+  });
+
+  it("leaves function names and string literals intact when adjusting formulas", () => {
+    // Insert at index 9 = above row 10: B10→B11, but LOG10 must not become LOG11.
+    const moved = changeGridStructure(new Map([
+      ["A1", "=LOG10(B10)"],
+      ["B1", '="see A1"'],
+      ["C1", "=$A$10+'Raw Data'!B10"],
+    ]), { axis: "row", index: 9, count: 1, kind: "insert" });
+    expect(moved.get("A1")).toBe("=LOG10(B11)");
+    expect(moved.get("B1")).toBe('="see A1"');
+    expect(moved.get("C1")).toBe("=$A$11+'Raw Data'!B11");
+  });
+
+  it("keeps function names intact when shifting formula references", () => {
+    expect(shiftFormulaReferences("=LOG10(A1)+ATAN2(A1,B1)", 1, 0)).toBe("=LOG10(A2)+ATAN2(A2,B2)");
+    expect(shiftFormulaReferences('="cell A1"&A1', 1, 0)).toBe('="cell A1"&A2');
+  });
+
+  it("replaces case-insensitively to match find", () => {
+    expect(replaceAllText("Foo foo FOO", "foo", "x")).toEqual({ text: "x x x", count: 3 });
+    expect(replaceAllText("keep FooBar whole", "foo", "x")).toEqual({ text: "keep xBar whole", count: 1 });
+    expect(replaceAllText("none", "foo", "x")).toEqual({ text: "none", count: 0 });
+    expect(replaceAllText("any", "", "x")).toEqual({ text: "any", count: 0 });
   });
 
   it("inserts columns while updating cell addresses and references", () => {

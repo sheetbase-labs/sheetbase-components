@@ -262,6 +262,22 @@ describe("pane layout persistence", () => {
     expect(parsePaneLayoutState({ hello: "world" })).toBeUndefined();
   });
 
+  it("rejects structurally malformed trees instead of crashing", () => {
+    expect(parsePaneLayoutState({ version: 1, layout: { kind: "split", children: "oops" } })).toBeUndefined();
+    expect(parsePaneLayoutState({ version: 1, layout: { kind: "stack", panes: "oops" } })).toBeUndefined();
+    expect(parsePaneLayoutState({ version: 1, layout: { kind: "split", direction: "row", children: [{ kind: "stack", id: "a", panes: ["p"] }] , sizes: [1, 2] } })).toBeUndefined();
+    expect(parsePaneLayoutState({ kind: "split", children: "oops" })).toBeUndefined();
+    // null layout is a legal persisted value.
+    expect(parsePaneLayoutState({ version: 1, layout: null })).toEqual({ version: 1, layout: null });
+  });
+
+  it("falls back on malformed persisted state without throwing", () => {
+    const adapter = createMemoryAdapter<PaneLayoutState>();
+    adapter.save("k", { version: 1, layout: { kind: "split", children: "oops" } } as unknown as PaneLayoutState);
+    const fallback: Layout = stack("f", ["one"]);
+    expect(loadPaneLayoutState(adapter, "k", ["one"], fallback)).toEqual(fallback);
+  });
+
   it("loads, reconciles and drops unknown panes", () => {
     const adapter = createMemoryAdapter<PaneLayoutState>();
     adapter.save("k", paneLayoutState(split("root", "row", [stack("a", ["one"]), stack("b", ["gone"])])));

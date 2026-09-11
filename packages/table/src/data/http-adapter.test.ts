@@ -62,4 +62,14 @@ describe("HttpPagedDataAdapter", () => {
     const adapter = new HttpPagedDataAdapter("/api/sheets", fetcher);
     await expect(adapter.createRecord("d", {}, "r3")).rejects.toBeInstanceOf(RevisionConflictError);
   });
+
+  it("treats a malformed 409 body as a failure, not a crash", async () => {
+    const fetcher = vi.fn(async () => ({ ok: false, status: 409, json: async () => ({ unexpected: true }) }));
+    const adapter = new HttpPagedDataAdapter("/api/sheets", fetcher);
+    const failure = await adapter.commit([], "r1").catch((error) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(TypeError);
+    expect(failure).not.toBeInstanceOf(RevisionConflictError);
+    expect((failure as Error).message).toBe("Commit failed (409)");
+  });
 });

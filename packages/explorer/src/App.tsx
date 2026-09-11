@@ -322,10 +322,17 @@ export function App(props: AppProps = {}) {
   }
 
   async function executeSql() {
-    if (!baseDatasetRef.current || sqlRunning) return
+    const base = baseDatasetRef.current
+    if (!base || sqlRunning) return
     setSqlRunning(true)
-    try { const result = await runSqlAsync(baseDatasetRef.current, sql); setInternalDataset(result); setSqlError(null); setTab('data'); setSelectedRow(undefined); setSpec((current) => ({ ...current, zoomX: undefined })) }
-    catch (error) { setSqlError(error instanceof Error ? error.message : String(error)) }
+    try {
+      const result = await runSqlAsync(base, sql)
+      // A dataset loaded mid-flight owns the pane now — the stale result and
+      // its error state must not overwrite it.
+      if (baseDatasetRef.current !== base) return
+      setInternalDataset(result); setSqlError(null); setTab('data'); setSelectedRow(undefined); setSpec((current) => ({ ...current, zoomX: undefined }))
+    }
+    catch (error) { if (baseDatasetRef.current === base) setSqlError(error instanceof Error ? error.message : String(error)) }
     finally { setSqlRunning(false) }
   }
   function resetSql() { setSql(initialSql); setInternalDataset(baseDatasetRef.current); setSqlError(null); setSpec((current) => ({ ...current, zoomX: undefined })) }

@@ -60,8 +60,11 @@ export class HttpPagedDataAdapter implements PagedDataAdapter {
       body: JSON.stringify({ writes, baseRevision }),
     });
     if (!response.ok && response.status === 409) {
-      const conflict = await response.json() as { currentRevision: string; conflicts: readonly RevisionConflict[] };
-      throw new RevisionConflictError(conflict.currentRevision, conflict.conflicts);
+      const conflict: unknown = await response.json();
+      if (isConflictBody(conflict)) throw new RevisionConflictError(conflict.currentRevision, conflict.conflicts);
+      // A conflict that can't be parsed surfaces as a failure, not a crash
+      // downstream in conflicts.map.
+      throw new Error("Commit failed (409)");
     }
     if (!response.ok) throw new Error(`Commit failed (${response.status})`);
     const result = await response.json() as CommitResult;
@@ -78,8 +81,9 @@ export class HttpPagedDataAdapter implements PagedDataAdapter {
       body: JSON.stringify({ datasetId, values, baseRevision }),
     });
     if (!response.ok && response.status === 409) {
-      const conflict = await response.json() as { currentRevision: string; conflicts: readonly RevisionConflict[] };
-      throw new RevisionConflictError(conflict.currentRevision, conflict.conflicts);
+      const conflict: unknown = await response.json();
+      if (isConflictBody(conflict)) throw new RevisionConflictError(conflict.currentRevision, conflict.conflicts);
+      throw new Error("Record creation failed (409)");
     }
     if (!response.ok) throw new Error(`Record creation failed (${response.status})`);
     return response.json() as Promise<Readonly<{ recordId: string; revision: string }>>;
@@ -89,4 +93,13 @@ function isDatasetPage(data: unknown): data is DatasetPage {
   if (!data || typeof data !== "object") return false;
   const page = data as { request?: { fieldIds?: unknown }; records?: unknown };
   return !!page.request && Array.isArray(page.request.fieldIds) && Array.isArray(page.records);
+}
+
+function isConflictBody(data: unknown): data is { currentRevision: string; conflicts: readonly RevisionConflict[] } {
+  if (!data || typeof data !== "object") return false;
+  const body = data as { currentRevision?: unknown; conflicts?: unknown };
+  return typeof body.currentRevision === "string" && Array.isArray(body.conflicts)
+    && body.conflicts.every((entry: unknown) => !!entry && typeof entry === "object"
+      && typeof (entry as { write?: { recordId?: unknown; fieldId?: unknown } }).write?.recordId === "string"
+      && typeof (entry as { write?: { recordId?: unknown; fieldId?: unknown } }).write?.fieldId === "string");
 }

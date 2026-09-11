@@ -36,6 +36,27 @@ describe("validateGraph", () => {
     expect(errors.some((e) => e.includes("Duplicate model"))).toBe(true);
     expect(errors.some((e) => e.includes("ghost"))).toBe(true);
   });
+
+  it("flags references to a missing field on an existing model", () => {
+    const danglingField: SchemaGraph = {
+      models: [
+        { name: "customer", fields: [{ key: "id", type: "text", primaryKey: true }] },
+        { name: "order", fields: [{ key: "customer_id", type: "relationship", references: { model: "customer", field: "uuid" } }] },
+      ],
+    };
+    expect(validateGraph(danglingField)).toEqual(['order.customer_id references missing field "uuid" on "customer".']);
+  });
+
+  it("accepts model-level references without a field target", () => {
+    expect(validateGraph(graph)).toEqual([]);
+    const toPk: SchemaGraph = {
+      models: [
+        { name: "customer", fields: [{ key: "id", type: "text", primaryKey: true }] },
+        { name: "order", fields: [{ key: "customer_id", type: "relationship", references: { model: "customer", field: "id" } }] },
+      ],
+    };
+    expect(validateGraph(toPk)).toEqual([]);
+  });
 });
 
 describe("withAutoLayout", () => {
