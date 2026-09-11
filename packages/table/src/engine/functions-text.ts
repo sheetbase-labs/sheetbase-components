@@ -4,7 +4,6 @@ import {
   boolean,
   dayFraction,
   flatten,
-  key,
   number,
   scalarOf,
   text,

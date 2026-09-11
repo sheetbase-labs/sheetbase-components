@@ -14,7 +14,6 @@ import {
 import { App as Explorer, type Dataset } from "sheetbase-explorer";
 import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
 import type { SchemaGraph } from "sheetbase-schemaeditor";
-import type { SearchRow } from "sheetbase-advanced-search";
 
 /** Shared demo fixtures + table factory used by both the workbench and the stacked page. */
 

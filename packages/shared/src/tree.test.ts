@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { queryKey } from "./query";
-import { canonicalFilterTree, emptyCondition, emptyGroup, toDatasetQuery, type GroupNode } from "./tree";
+import { canonicalFilterTree, toDatasetQuery, type GroupNode } from "./tree";
 
 const cond = (id: string, field: string, operator: "eq" | "contains" = "eq", value: unknown = "x") =>
   ({ type: "condition" as const, id, field, operator, value });

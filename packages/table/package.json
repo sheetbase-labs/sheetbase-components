@@ -22,6 +22,7 @@
     "build": "tsc -b && vite build",
     "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
     "test": "vitest run",
+    "typecheck": "tsc -b",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "budget": "node scripts/bundle-budget.mjs",

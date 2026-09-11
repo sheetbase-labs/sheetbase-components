@@ -325,6 +325,7 @@ class FormulaCompiler {
         return parseNameTarget(target);
       }
       this.#expect("operator", "("); const args: FormulaNode[] = [];
+      // biome-ignore lint/correctness/noConstantCondition: comma-separated arg loop; the break on non-"," is the exit.
       if (this.#peek().value !== ")") { do { args.push(this.#comparison()); if (this.#peek().value !== ",") break; this.#next(); } while (true); }
       this.#expect("operator", ")"); return { kind: "call", name: token.value, arguments: args };
     }

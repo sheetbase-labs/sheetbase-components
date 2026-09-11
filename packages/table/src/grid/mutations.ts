@@ -1,4 +1,4 @@
-import { RangeStore, Worksheet } from "../engine";
+import type { RangeStore, Worksheet } from "../engine";
 import type { CellFormat } from "../engine";
 import { CellStore } from "./cell-store";
 

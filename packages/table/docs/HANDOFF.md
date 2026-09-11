@@ -91,7 +91,7 @@ The design direction is compact, high-density and restrained:
 - Saved-view controls are no longer rendered. The legacy `views` and `activeViewId` fields remain in the serialised schema for backward compatibility; do not reintroduce their UI without an explicit product decision.
 - The demo uses local storage key `sheetbase-table:presentation:experiments`. Persistence is scheduled during browser idle time to avoid blocking interactions.
 - A production host should provide a database-backed `TablePresentationAdapter`; the component must not assume local storage.
-- `TableControls` is currently demo composition code inside `PagedDemo.tsx`. If Filters/Columns become part of the public package API, extract it into a reusable component with explicit controlled props rather than coupling it to the demo fields.
+- `TableControls` is public API (`src/ui/TableControls.tsx`, exported via `ui/index.ts`): controlled props for filters, column visibility/order, frozen columns and theme; `PagedDemo.tsx` composes it.
 - Conditional rules target semantic `fieldId` values where possible, so they survive column reordering.
 - Hiding or reordering visible fields remounts the paged spreadsheet with the new semantic projection; the adapter-scoped page cache keeps this bounded.
 - Column widths are stored by semantic field in `ColumnPresentation`, not by visible coordinate.

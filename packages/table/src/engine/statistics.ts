@@ -21,14 +21,18 @@ const LOG_SQRT_2PI = 0.9189385332046727; // log(sqrt(2 * PI))
 export function gammln(x: number): number {
   if (x <= 0) throw new Error("#NUM!");
   const cof = [
-    76.18009172947146, -86.50532032941677, 24.01409824083091,
+    76.18009172947146,
+    // biome-ignore lint/correctness/noPrecisionLoss: canonical Lanczos log-gamma coefficients — the excess digits are how the published constants are written.
+    -86.50532032941677, 24.01409824083091,
     -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5,
   ];
   let y = x;
   let tmp = x + 5.5;
   tmp -= (x + 0.5) * Math.log(tmp);
+  // biome-ignore lint/correctness/noPrecisionLoss: canonical Lanczos log-gamma coefficients — the excess digits are how the published constants are written.
   let series = 1.000000000190015;
   for (let j = 0; j < 6; j++) series += cof[j] / ++y;
+  // biome-ignore lint/correctness/noPrecisionLoss: same Lanczos series — published constant.
   return -tmp + Math.log(2.5066282746310005 * series / x);
 }
 

@@ -17,13 +17,20 @@ Private monorepo for Sheetbase UI packages. Shared field types, filter operators
 
 ```bash
 bun install
-bun test
+bun run test           # vitest, every package
+bun run typecheck      # tsc -b, every package
+bun run lint           # biome ci
+bun run build          # app/demo builds
+bun run build:lib      # library builds, in dependency order
 bun run dev:table      # Vite, proxies /api/table
 bun run dev:explorer   # :5199
 bun run dev:schema     # :5201
 bun run dev:rules      # :5202
 bun run dev:search     # :5203
 ```
+
+The million-row paged demo and the explorer's remote source need the
+example API running too: `cd packages/table && bun run dev:api` (:8787).
 
 GitHub Actions on this repo run unit tests for every package, table/explorer/schema/rules/search production and library builds, table bundle budget and benches, explorer benches, and table Playwright e2e on Chromium, Firefox and WebKit.
 
@@ -37,6 +44,6 @@ Import from `sheetbase-shared`:
 - `FilterOperator`, `operatorsForField`, `normaliseOperator` (`isEmpty` → `isNull`)
 - `FilterClause`, `DatasetQuery`, `queryKey`, `buildFilterValue`
 - `testCondition`, `toFilterClause`, `filterRows`
-- `buildPredicate`, `applySearch`, `compileToDatasetQuery` (flattens a single-level group onto `DatasetQuery`)
+- `buildPredicate`, `applySearch`, `compileToDatasetQuery`, `toDatasetQuery` (emits `filterTree` for nested/NOT trees; the tree is authoritative over flat `filters` for executors)
 - `ThemeToggleButton`, `theme.css`, `shell.css`, `panes.css`
 - `PaneLayout`, `SheetbaseShell`, layout tree helpers and `PaneLayoutState` persistence

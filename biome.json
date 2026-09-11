@@ -1,0 +1,54 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": true,
+		"includes": ["**", "!**/dist/**", "!**/dist-lib/**", "!**/dist-types/**", "!**/test-results/**", "!**/playwright-report/**", "!**/captures/**", "!bun.lock", "!plans/**"]
+	},
+	"formatter": {
+		"enabled": false
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"correctness": {
+				"noUnusedVariables": "warn",
+				"noUnusedImports": "error",
+				"useExhaustiveDependencies": "warn",
+				"noInvalidGridAreas": "warn"
+			},
+			"style": {
+				"noNonNullAssertion": "warn",
+				"useConst": "warn",
+				"noDescendingSpecificity": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn",
+				"noArrayIndexKey": "warn",
+				"useIterableCallbackReturn": "warn",
+				"noControlCharactersInRegex": "warn",
+				"noAssignInExpressions": "warn"
+			},
+			"complexity": {
+				"noImportantStyles": "off"
+			},
+			"a11y": "warn"
+		},
+		"domains": {
+			"react": "recommended"
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		}
+	},
+	"assist": {
+		"enabled": false
+	}
+}

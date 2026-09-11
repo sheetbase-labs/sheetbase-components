@@ -90,7 +90,6 @@ export class Workbook {
         try {
           this.#link(sheetName, `${sheetName}!${address}`, binding.expression);
         } catch {
-          continue;
         }
       }
     }

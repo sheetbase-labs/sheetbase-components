@@ -102,7 +102,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     setStatus((current) => ({ ...current, loadedRows: 0 }));
     // Re-run the current viewport for the new query without remounting the grid.
     if (queryChanged && lastViewportRef.current) void loadViewport(lastViewportRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: fires only on a stable query-key change; loadViewport reads latest refs.
   }, [stableQueryKey]);
   useEffect(() => () => {
     if (renderFrameRef.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(renderFrameRef.current);

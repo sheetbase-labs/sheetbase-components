@@ -323,7 +323,7 @@ function chartSpec(
   }
   const xKind = resolveKind(spec.xScale, xDataExtent, xLogExtent)
   const yKind = resolveKind(spec.yScale, yDataExtent, yLogExtent)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: union of differently-typed d3 scale factories; call sites cast to the charting library's scale type.
   const numericScale = (kind: ScaleKind): (() => any) =>
     kind === 'log' ? scaleLog : kind === 'sqrt' ? scaleSqrt : kind === 'symlog' ? scaleSymlog : scaleLinear
 

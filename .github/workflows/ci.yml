@@ -20,6 +20,12 @@ jobs:
       - name: Install
         run: bun install
 
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
       - name: Unit tests
         run: bun run test
 

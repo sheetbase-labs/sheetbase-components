@@ -12,7 +12,7 @@ export interface MemoryDatasetRow {
  * filters/sort, then paginates. Edits via `commit` mutate the in-memory rows.
  */
 export function createMemoryPagedAdapter(rows: readonly MemoryDatasetRow[], initialRevision = "1"): PagedDataAdapter {
-  let records = rows.map((row) => ({ recordId: row.recordId, values: { ...row.values } }));
+  const records = rows.map((row) => ({ recordId: row.recordId, values: { ...row.values } }));
   let revision = initialRevision;
 
   return {

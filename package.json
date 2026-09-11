@@ -7,6 +7,9 @@
   "scripts": {
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "biome ci .",
+    "build:lib": "bun run --filter sheetbase-shared build:lib && bun run --filter sheetbase-table build:lib && bun run --filter sheetbase-explorer build:lib && bun run --filter sheetbase-schemaeditor build:lib && bun run --filter sheetbase-rulesengine build:lib && bun run --filter sheetbase-advanced-search build:lib",
     "dev": "bun run dev:table & bun run dev:explorer & bun run dev:schema & bun run dev:rules & bun run dev:search & bun run dev:demo & wait",
     "dev:table": "bun run --filter sheetbase-table dev",
     "dev:explorer": "bun run --filter sheetbase-explorer dev",
@@ -16,6 +19,7 @@
     "dev:demo": "bun run --filter sheetbase-demo dev"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "react": "^19.1.0",

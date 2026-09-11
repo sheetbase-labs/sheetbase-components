@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
-import { Chart } from '@tanstack/charts/react/tooltip'
+import { useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
-import { DataTable } from './components/DataTable'
+import { FileUploadIcon } from '@hugeicons/core-free-icons'
 import { FieldSelect } from './components/FieldSelect'
 import { filterOperators } from './lib/filter-operators'
-import { datasetFromFile } from './lib/adapters/file'
-import { sampleAdapter } from './lib/adapters/sample'
-import { buildChart } from './lib/chart'
-import { filteredRows, ROW_ID } from './lib/explore'
-import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
-import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
-import { runSqlAsync } from './lib/sql'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, FilterOperator, FilterRule, PaletteKind, ReferenceLine, SavedExploration } from './lib/types'
 
 export const PALETTES: Record<Exclude<PaletteKind, 'custom'>, string[]> = {
@@ -147,7 +138,7 @@ function StylePopover({ spec, columns, setSpec }: { spec: ChartSpec; columns: Da
   }
   return (
     <><h4>Style</h4><label className="toggle-row"><span>Data labels</span><input type="checkbox" checked={spec.labels ?? false} onChange={(event) => setSpec((current) => ({ ...current, labels: event.target.checked }))}/></label>{spec.labels && <FieldSelect label="Label" value={spec.labelField} columns={columns} onChange={(value) => setSpec((current) => ({ ...current, labelField: value }))}/>}<label className="compact-control"><span>Palette</span><select value={spec.paletteKind ?? 'sheetbase'} onChange={(event) => setPalette(event.target.value as PaletteKind)}><option value="sheetbase">Sheetbase</option><option value="muted">Muted</option><option value="warm">Warm</option><option value="cool">Cool</option><option value="mono">Monochrome</option><option value="custom">Custom</option></select></label><label className="colour-control"><span>Mark colour</span><input type="color" value={spec.markColor ?? spec.primaryColor ?? spec.palette[0]} onChange={(event) => setSpec((current) => ({ ...current, markColor: event.target.value, primaryColor: event.target.value, paletteKind: 'custom' }))}/></label><div className="palette-editor"><span>Series colours</span><div className="palette-swatches">{spec.palette.slice(0, 6).map((color, index) => (
-      // react-doctor-disable-next-line react-doctor/no-array-index-as-key -- fixed six-slot editor: slots never reorder or filter, so the slot index is a stable key.
+      // Fixed six-slot editor: slots never reorder or filter, so the index is a stable key ingredient.
       <label key={`${index}-${color}`}>
         <input type="color" aria-label={`Series colour ${index + 1}`} value={color} onChange={(event) => setPaletteColor(index, event.target.value)} />
         <i style={{ background: color }} />

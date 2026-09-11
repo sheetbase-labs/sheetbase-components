@@ -21,6 +21,8 @@
   "sideEffects": ["**/*.css"],
   "scripts": {
     "test": "vitest run",
+    "typecheck": "tsc -b",
+    "build": "bun run build:lib",
     "test:watch": "vitest",
     "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts"
   },

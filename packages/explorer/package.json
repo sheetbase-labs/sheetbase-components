@@ -20,6 +20,7 @@
     "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
+    "typecheck": "tsc -b",
     "budget": "node scripts/bundle-budget.mjs",
     "bench": "vitest bench --run"
   },

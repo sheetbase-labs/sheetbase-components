@@ -20,7 +20,7 @@ export function usePortalPopover(open: boolean, onClose: () => void, refs: Porta
     if (!popover) return;
     const first = popover.querySelector<HTMLElement>(focusableSelector) ?? popover;
     first.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: focuses on open transitions only; popover contents shouldn't retrigger it.
   }, [open]);
 
   return {

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
+import { PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
 import { applyView, emptyRoot, type AnalysisView } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'
 import { sampleAdapter } from './lib/adapters/sample'
 import { buildChart } from './lib/chart'
-import { filteredRows, ROW_ID } from './lib/explore'
+import { filteredRows } from './lib/explore'
 import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
@@ -227,16 +227,18 @@ export function App(props: AppProps = {}) {
       ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
     }))
     // Reconcile only when the dataset's columns change, not on every spec edit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on datasetColumnsKey deliberately — spec edits must not retrigger reconciliation.
   }, [datasetColumnsKey])
 
-  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark, dataset])
+  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark])
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
     const stage = chartStageRef.current
     if (!stage) return
     const resize = () => setMeasuredHeight(Math.max(260, Math.floor(stage.clientHeight)))
     resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
+    // Re-measure when the dataset or panel chrome changes the stage's size.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: panelHeight/panelCollapsed/dataset drive layout, not effect inputs.
   }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
 
   // The shared analysis view, when the host provides one, overrides the
@@ -352,7 +354,7 @@ export function App(props: AppProps = {}) {
       values.push(value)
     }
     return values
-  }, [dataset, seriesField, visibleRows])
+  }, [seriesField, visibleRows, chartDataset])
 
   async function openFile(file?: File) {
     if (!file) return

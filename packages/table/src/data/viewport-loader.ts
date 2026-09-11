@@ -1,5 +1,5 @@
 import type { DatasetPage, PageRequest, PagedDataAdapter } from "./adapter";
-import { DataPageCache } from "./page-cache";
+import type { DataPageCache } from "./page-cache";
 import type { DatasetQuery } from "./query";
 import { queryKey } from "./query";
 

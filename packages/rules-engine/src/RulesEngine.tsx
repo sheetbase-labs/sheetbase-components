@@ -14,7 +14,7 @@ import {
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
-import type { PipelineRule, Row, RuleActionDef, RuleActionKind, RuleCondition, RuleOperator } from "./types";
+import type { PipelineRule, Row, RuleActionDef, RuleCondition, RuleOperator } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun } from "./engine";
 
