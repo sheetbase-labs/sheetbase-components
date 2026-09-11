@@ -59,34 +59,35 @@ export function decimatePoints(rows: DataRow[], max: number): DataRow[] {
   return sampled
 }
 
-function numericExtent(rows: DataRow[], field: string) {
+/** Both extents a numeric field can need, computed in a single scan. */
+type FieldExtents = Readonly<{
+  /** Full extent; `[min-0.5, max+0.5]` when all values coincide. */
+  numeric?: readonly [number, number];
+  /** Positive-only extent for log axes; undefined without two distinct positives. */
+  positive?: readonly [number, number];
+}>;
+
+function scanExtents(rows: DataRow[], field: string): FieldExtents {
   let min = Infinity
   let max = -Infinity
   let found = false
+  let positiveMin = Infinity
+  let positiveMax = -Infinity
   for (const row of rows) {
     const value = Number(row[field])
     if (!Number.isFinite(value)) continue
     found = true
     if (value < min) min = value
     if (value > max) max = value
+    if (value > 0) {
+      if (value < positiveMin) positiveMin = value
+      if (value > positiveMax) positiveMax = value
+    }
   }
-  if (!found) return undefined
-  if (min === max) return [min - 0.5, max + 0.5] as const
-  return [min, max] as const
-}
-
-/** Positive data extent for a log axis; undefined when no usable values exist. */
-function logExtent(rows: DataRow[], field: string): [number, number] | undefined {
-  let min = Infinity
-  let max = -Infinity
-  for (const row of rows) {
-    const value = Number(row[field])
-    if (!Number.isFinite(value) || value <= 0) continue
-    if (value < min) min = value
-    if (value > max) max = value
+  return {
+    numeric: !found ? undefined : min === max ? [min - 0.5, max + 0.5] as const : [min, max] as const,
+    positive: Number.isFinite(positiveMin) && Number.isFinite(positiveMax) && positiveMin !== positiveMax ? [positiveMin, positiveMax] as const : undefined,
   }
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return undefined
-  return [min, max]
 }
 
 function interactionOptions(spec: ChartSpec) {
@@ -284,18 +285,33 @@ function chartSpec(
   }
 
   const horizontal = spec.kind === 'horizontal-bar'
-  const extent = !horizontal && xMeta.kind === 'number' ? numericExtent(rawRows, spec.x) : undefined
+  const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
+  const yValueNumeric = !horizontal && yMeta?.kind === 'number'
+  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop', 'waterfall', 'heatmap'].includes(spec.kind)
+
+  // One pass per numeric field per build serves the numeric and log extents.
+  const fieldExtents = new Map<string, FieldExtents>()
+  const extentsFor = (field: string): FieldExtents => {
+    let found = fieldExtents.get(field)
+    if (!found) {
+      found = scanExtents(rawRows, field)
+      fieldExtents.set(field, found)
+    }
+    return found
+  }
+  const xField = horizontal ? spec.y! : spec.x
+  const xExtents = xValueNumeric && xField ? extentsFor(xField) : undefined
+  const yExtents = yValueNumeric && spec.y ? extentsFor(spec.y) : undefined
+
+  const extent = !horizontal && xMeta.kind === 'number' ? xExtents?.numeric : undefined
   const zoomDomain = spec.zoomX && extent
     ? [Math.max(extent[0], spec.zoomX.start), Math.min(extent[1], spec.zoomX.end)] as [number, number]
     : undefined
 
-  const xValueNumeric = horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number'
-  const yValueNumeric = !horizontal && yMeta?.kind === 'number'
-  const logAllowed = !['bar', 'horizontal-bar', 'histogram', 'area', 'lollipop', 'waterfall', 'heatmap'].includes(spec.kind)
-  const xDataExtent = xValueNumeric ? numericExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
-  const yDataExtent = yValueNumeric && spec.y ? numericExtent(rawRows, spec.y) : undefined
-  const xLogExtent = logAllowed && xValueNumeric ? logExtent(rawRows, horizontal ? spec.y! : spec.x) : undefined
-  const yLogExtent = logAllowed && yValueNumeric && spec.y ? logExtent(rawRows, spec.y) : undefined
+  const xDataExtent = xExtents?.numeric
+  const yDataExtent = yExtents?.numeric
+  const xLogExtent = logAllowed ? xExtents?.positive : undefined
+  const yLogExtent = logAllowed ? yExtents?.positive : undefined
 
   // Pick an effective scale, falling back to linear when the data can't support
   // the request (log needs positive values + a non-zero baseline; sqrt needs
@@ -371,7 +387,7 @@ function chartSpec(
       }
     : undefined
 
-  const xDomain: [number, number] | undefined = zoomDomain
+  const xDomain: readonly [number, number] | undefined = zoomDomain
     ? zoomDomain
     : xKind === 'log' && xLogExtent
       ? xLogExtent
@@ -380,7 +396,7 @@ function chartSpec(
         : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
           ? [spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1]
           : undefined
-  const yDomain: [number, number] | undefined = yKind === 'log' && yLogExtent
+  const yDomain: readonly [number, number] | undefined = yKind === 'log' && yLogExtent
     ? yLogExtent
     : yValueNumeric && spec.y && (spec.yMin !== undefined || spec.yMax !== undefined)
       ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))]

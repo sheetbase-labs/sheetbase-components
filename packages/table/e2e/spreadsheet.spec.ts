@@ -26,20 +26,24 @@ test("switches sheets while keeping a single spreadsheet renderer", async ({ pag
   await expect(page.getByRole("gridcell").first()).toContainText("EXP-1048");
 });
 
-test("sort control reorders local rows and clears back to the baseline", async ({ page }) => {
+test("sort control cycles the query sort without moving bound rows locally", async ({ page }) => {
   await page.goto("/default", { waitUntil: "domcontentloaded" });
   const statusCell = () => page.getByRole("gridcell").nth(6);
   await expect(statusCell()).toContainText(/Complete|Review|Flagged/);
+  const baseline = await statusCell().textContent();
   const sort = page.getByRole("button", { name: "Sort status" });
+  // The demo grid is bound (datasetHeader.recordIdForRow): row order is
+  // server-owned, so the control cycles query.sort via onQueryChange and the
+  // local rows stay put.
   await sort.click();
   await expect(sort).toHaveText(/▲/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText("Complete");
+  await expect(statusCell()).toContainText(baseline!);
   await sort.click();
   await expect(sort).toHaveText(/▼/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText("Review");
+  await expect(statusCell()).toContainText(baseline!);
   await sort.click();
   await expect(sort).toHaveText(/↕/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText("Complete");
+  await expect(statusCell()).toContainText(baseline!);
 });
 
 test("opens keyboard shortcut help from the grid", async ({ page }) => {

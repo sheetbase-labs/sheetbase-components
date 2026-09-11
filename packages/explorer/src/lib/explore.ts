@@ -12,13 +12,48 @@ function matchesRule(row: DataRow, rule: FilterRule) {
   return testCondition(row, clause)
 }
 
+// Tagging clones every row to inject ROW_ID, and the filter pass allocates a
+// second array — both run once per caller, so three consumers (visible rows,
+// chart raw + prepared, replicate summary) paid three passes per render.
+// Caching keyed on the source rows array shares them. Rows are treated as
+// immutable once loaded; the codebase convention is wholesale replacement.
+const taggedCache = new WeakMap<readonly DataRow[], DataRow[]>()
+const filteredCache = new WeakMap<readonly DataRow[], Map<string, DataRow[]>>()
+
+function taggedRows(rows: readonly DataRow[]): DataRow[] {
+  let tagged = taggedCache.get(rows)
+  if (!tagged) {
+    tagged = rows.map((row, index) => ({ ...row, [ROW_ID]: index }))
+    taggedCache.set(rows, tagged)
+  }
+  return tagged
+}
+
 export function filteredRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
-  const tagged = dataset.rows.map((row, index) => ({ ...row, [ROW_ID]: index }))
   const filters = spec.filters ?? []
+  const tagged = taggedRows(dataset.rows)
   if (!filters.length) return tagged
-  return tagged.filter((row) => (spec.filterLogic ?? 'and') === 'or'
+  const key = JSON.stringify({ filters, logic: spec.filterLogic ?? 'and' })
+  let bySpec = filteredCache.get(tagged)
+  if (!bySpec) {
+    bySpec = new Map()
+    filteredCache.set(tagged, bySpec)
+  }
+  const cached = bySpec.get(key)
+  if (cached) {
+    // Refresh recency: Map preserves insertion order for eviction.
+    bySpec.delete(key)
+    bySpec.set(key, cached)
+    return cached
+  }
+  const filtered = tagged.filter((row) => (spec.filterLogic ?? 'and') === 'or'
     ? filters.some((rule) => matchesRule(row, rule))
     : filters.every((rule) => matchesRule(row, rule)))
+  bySpec.set(key, filtered)
+  // Bound retention: a filtered array per spec is cheap, but an interactive
+  // session accumulates many specs against one dataset.
+  while (bySpec.size > 8) bySpec.delete(bySpec.keys().next().value!)
+  return filtered
 }
 
 function median(values: number[]) {

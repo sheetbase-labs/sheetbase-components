@@ -98,6 +98,11 @@ test("targets an entire row and persists presentation state", async ({ page }) =
   const cells = page.getByRole("gridcell");
   await cells.nth(0).click();
   await page.getByRole("toolbar", { name: "Format selection" }).getByRole("button", { name: "Bold" }).click();
+  // Presentation persists on idle: wait for the format to land in storage
+  // before reloading, or the reload races the write.
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("sheetbase-table:presentation:experiments") ?? ""), { timeout: 10_000 })
+    .toContain('"fontWeight":600');
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByLabel("Open conditional formatting")).toBeVisible();
   await expect(page.getByRole("gridcell").nth(0)).toHaveCSS("font-weight", "600");

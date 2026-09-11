@@ -62,7 +62,8 @@ import {
 import { CellStore } from "../grid/cell-store";
 import { resolveConditionalFormat, type ConditionalFormatRule } from "../grid/conditional-formatting";
 import { columnDisplayDefaults, formatCellDisplay } from "./column-display";
-import { annotationFor, removeAnnotation as removeFromAnnotations, setAnnotation as setAnnotationIn, type CellAnnotation } from "./annotations";
+import { removeAnnotation as removeFromAnnotations, setAnnotation as setAnnotationIn, type CellAnnotation } from "./annotations";
+import { GridCell, type GridCellHandlers } from "./GridCell";
 import {
   holdFieldWrite,
   type HeldFieldWrite,
@@ -471,7 +472,6 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
     ? [...initialState.rowHeights]
     : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? ROW_HEIGHT));
-  const [scroll, setScroll] = useState(() => initialState?.scroll ?? { top: 0, left: 0 });
   const [frozenRowCount, setFrozenRowCount] = useState(initialState?.frozenRows ?? initialFrozenRows);
   const [frozenColumnCount, setFrozenColumnCount] = useState(initialState?.frozenColumns ?? initialFrozenColumns);
   const [contextMenu, setContextMenu] = useState<{ axis: "row" | "column"; index: number; x: number; y: number }>();
@@ -604,7 +604,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     for (const height of rowHeights) offsets.push(offsets[offsets.length - 1] + height);
     return offsets;
   }, [rowHeights]);
-  const columnLeft = (column: number) => ROW_HEADER_WIDTH + columnOffsets[column] + (column < frozenColumnCount ? scroll.left : 0);
+  // Frozen columns ride the imperative --sheet-scroll-left custom property
+  // (set in onScroll), the same way frozen rows ride --sheet-scroll-top — so
+  // scroll never needs a React state update just to reposition them.
+  const columnLeft = (column: number, extra = 0): number | string => {
+    const base = ROW_HEADER_WIDTH + columnOffsets[column] + extra;
+    return column < frozenColumnCount ? `calc(var(--sheet-scroll-left, 0px) + ${base}px)` : base;
+  };
   const datasetHeaderHeight = 0;
   const contentWidth = ROW_HEADER_WIDTH + columnVirtualizer.getTotalSize();
   const contentHeight = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowVirtualizer.getTotalSize();
@@ -794,6 +800,21 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     [datasetHeader],
   );
 
+  // Lookups hoisted out of the per-cell render loop: field metadata,
+  // annotations, and field→column were all linear finds per cell per render.
+  const fieldByColumn = useMemo(
+    () => new Map((datasetHeader?.fields ?? []).map((field) => [field.column, field])),
+    [datasetHeader],
+  );
+  const annotationByAddress = useMemo(
+    () => new Map(annotations.map((annotation) => [annotation.address, annotation])),
+    [annotations],
+  );
+  const columnByFieldId = useMemo(
+    () => new Map(fieldIds.flatMap((fieldId, column) => fieldId === undefined ? [] : [[fieldId, column] as const])),
+    [fieldIds],
+  );
+
   // A bound grid owns no row identity: rows are server records, so structure
   // ops and local sort (which only move the data map) would desync
   // row→record mapping. `recordIdForRow` presence is the bound signal — a
@@ -803,9 +824,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const canEdit = useCallback((point: GridPoint) => {
     if (readOnly) return false;
     if (readOnlyRows.has(point.row)) return false;
-    const field = datasetHeader?.fields.find((item) => item.column === point.column);
+    const field = fieldByColumn.get(point.column);
     return field?.writable !== false;
-  }, [datasetHeader, readOnly, readOnlyRows]);
+  }, [fieldByColumn, readOnly, readOnlyRows]);
 
   const undo = useCallback(() => {
     const previous = past.current.pop();
@@ -1147,7 +1168,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     editActiveInput,
     commitEdit: () => finishEdit(true),
     cancelEdit: () => finishEdit(false),
-    snapshot: () => ({ data, formats: formats.clone(), columnWidths: [...columnWidths], rowHeights: [...rowHeights], selection, scroll, frozenRows: frozenRowCount, frozenColumns: frozenColumnCount, annotations: [...annotations] }),
+    snapshot: () => ({ data, formats: formats.clone(), columnWidths: [...columnWidths], rowHeights: [...rowHeights], selection, scroll: { top: viewportRef.current?.scrollTop ?? 0, left: viewportRef.current?.scrollLeft ?? 0 }, frozenRows: frozenRowCount, frozenColumns: frozenColumnCount, annotations: [...annotations] }),
     insertRows: (index, count) => changeRows("insert", index, count),
     deleteRows: (index, count) => changeRows("delete", index, count),
     insertColumns: (index, count) => changeColumns("insert", index, count),
@@ -1180,7 +1201,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       setHeldWrites(empty);
       onHeldFieldWritesChange?.([]);
     },
-  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, scroll, selection, setFilter, undo, writeActiveCell]);
+  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, selection, setFilter, undo, writeActiveCell]);
 
   useEffect(() => {
     if (editing) onEditChange?.(draft);
@@ -1380,6 +1401,70 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     window.addEventListener("pointerup", onUp);
   };
 
+  // Stable handler surface for the memoized GridCell: `current` is reassigned
+  // each render so cells always dispatch to closures over the latest state,
+  // while the ref's identity never changes (which would defeat the memo).
+  const cellHandlersRef = useRef<GridCellHandlers>({
+    pointerDown: () => {},
+    pointerEnter: () => {},
+    doubleClick: () => {},
+    badgeClick: () => {},
+  });
+  cellHandlersRef.current = {
+    pointerDown: (point, event) => {
+      if (event.button !== 0) return;
+      const clickStart = typeof performance !== "undefined" ? performance.now() : 0;
+      if (editing && draft.startsWith("=")) {
+        event.preventDefault();
+        dragSelecting.current = true;
+        const next = {
+          anchor: point,
+          focus: point,
+          tokenStart: formulaReference?.tokenStart ?? draft.length,
+        };
+        if (event.metaKey || event.ctrlKey) {
+          const separator = /[=(,+\-*/]\s*$/.test(draft) ? "" : ",";
+          const appended = { ...next, tokenStart: draft.length + separator.length };
+          setFormulaReference(appended);
+          setDraft((current) => current + separator + formulaReferenceLabel(appended));
+        } else updateFormulaReference(next);
+        return;
+      }
+      dragSelecting.current = true;
+      setSelection((current) => ({ anchor: event.shiftKey ? current.anchor : point, focus: point }));
+      // The pointer is already on the target: letting focus scroll would
+      // yank the page mid-gesture and stale the coordinates of a
+      // double-click or right-click follow-up.
+      viewportRef.current?.focus({ preventScroll: true });
+      if (onCellClickTiming && typeof requestAnimationFrame !== "undefined") {
+        if (clickTimingFrame.current !== undefined) cancelAnimationFrame(clickTimingFrame.current);
+        clickTimingFrame.current = requestAnimationFrame(() => {
+          clickTimingFrame.current = requestAnimationFrame(() => onCellClickTiming(performance.now() - clickStart));
+        });
+      }
+    },
+    pointerEnter: (point) => {
+      if (editing && formulaReference && dragSelecting.current) {
+        updateFormulaReference({ ...formulaReference, focus: point });
+        return;
+      }
+      if (fillOrigin.current) {
+        fillTargetRef.current = point;
+        setFillTarget(point);
+      } else if (dragSelecting.current) setSelection((current) => ({ ...current, focus: point }));
+    },
+    doubleClick: (point) => { if (!readOnly) beginEdit(point); },
+    badgeClick: (address, writeState, event) => {
+      event.stopPropagation();
+      if (event.shiftKey) {
+        // A badge revert is a local-only gesture — the failed/conflicted
+        // write never landed, so nothing should be re-persisted.
+        commitMutation(cellChangesMutation("Revert failed write", [{ address, before: data.get(address), after: writeState.before }]), { emitFieldWrites: false });
+        setWriteStates((current) => { const next = new Map(current); next.delete(address); return next; });
+      } else if (writeState.status === "failed" || writeState.status === "conflict") runFieldWrite(writeState.write, writeState.before);
+    },
+  };
+
   return <div
     className={`sheetbase-scope spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
     data-theme={theme}
@@ -1397,7 +1482,6 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     onScroll={(event) => {
       event.currentTarget.style.setProperty("--sheet-scroll-top", `${event.currentTarget.scrollTop}px`);
       event.currentTarget.style.setProperty("--sheet-scroll-left", `${event.currentTarget.scrollLeft}px`);
-      setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft });
     }}
   >
     <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight }}>
@@ -1412,90 +1496,42 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         const spilled = raw === "" ? worksheet.spills.value(key) : undefined;
         const loading = raw === "" && spilled === undefined && loadingRanges.some((loadingRange) => row >= loadingRange.rowStart && row <= loadingRange.rowEnd && column >= loadingRange.columnStart && column <= loadingRange.columnEnd);
         const writeState = writeStates.get(key);
-        const annotation = annotationFor(annotations, key);
+        const annotation = annotationByAddress.get(key);
         const baseFormat = formats.get(point);
         const calculated = raw.startsWith("=") || spilled !== undefined ? displayValue(worksheet, point) : raw;
-        const conditionalFormat = resolveConditionalFormat(point, calculated, fieldIds[column], conditionalFormats, (conditionFieldId) => {
-          const conditionColumn = fieldIds.indexOf(conditionFieldId);
-          if (conditionColumn < 0) return "";
-          const conditionRaw = data.get(cellKey({ row, column: conditionColumn })) ?? "";
-          return conditionRaw.startsWith("=") ? displayValue(worksheet, { row, column: conditionColumn }) : conditionRaw;
-        });
+        // Empty rules are the common case — skip the per-cell scan entirely.
+        const conditionalFormat = conditionalFormats.length
+          ? resolveConditionalFormat(point, calculated, fieldIds[column], conditionalFormats, (conditionFieldId) => {
+            const conditionColumn = columnByFieldId.get(conditionFieldId) ?? -1;
+            if (conditionColumn < 0) return "";
+            const conditionRaw = data.get(cellKey({ row, column: conditionColumn })) ?? "";
+            return conditionRaw.startsWith("=") ? displayValue(worksheet, { row, column: conditionColumn }) : conditionRaw;
+          })
+          : undefined;
         const format = conditionalFormat ? { ...baseFormat, ...conditionalFormat } : baseFormat;
         const value = formatCellDisplay(calculated, format, columnDisplay[column]);
-        const cellContext: SpreadsheetCellRenderContext = { address: key, point, display: value, field: datasetHeader?.fields.find((field) => field.column === column), selected, active, loading };
-        return <div
-          role="gridcell"
-          aria-selected={selected}
-          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}`}
+        return <GridCell
           key={key}
+          address={key}
+          row={row}
+          column={column}
+          display={value}
+          isFormula={raw.startsWith("=")}
+          selected={selected}
+          active={active}
+          loading={loading}
+          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}`}
           title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
-          style={{
-            left: columnLeft(column),
-            top: row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}px)` : COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row],
-            width: columnWidths[column],
-            height: rowHeights[row] ?? ROW_HEIGHT,
-            fontWeight: format?.fontWeight,
-            textAlign: format?.horizontalAlign,
-            justifyContent: format?.horizontalAlign === "right" ? "flex-end" : format?.horizontalAlign === "center" ? "center" : undefined,
-            color: format?.foreground,
-            backgroundColor: format?.background,
-          }}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            const clickStart = typeof performance !== "undefined" ? performance.now() : 0;
-            if (editing && draft.startsWith("=")) {
-              event.preventDefault();
-              dragSelecting.current = true;
-              const next = {
-                anchor: point,
-                focus: point,
-                tokenStart: formulaReference?.tokenStart ?? draft.length,
-              };
-              if (event.metaKey || event.ctrlKey) {
-                const separator = /[=(,+\-*/]\s*$/.test(draft) ? "" : ",";
-                const appended = { ...next, tokenStart: draft.length + separator.length };
-                setFormulaReference(appended);
-                setDraft((current) => current + separator + formulaReferenceLabel(appended));
-              } else updateFormulaReference(next);
-              return;
-            }
-            dragSelecting.current = true;
-            setSelection((current) => ({ anchor: event.shiftKey ? current.anchor : point, focus: point }));
-            // The pointer is already on the target: letting focus scroll would
-            // yank the page mid-gesture and stale the coordinates of a
-            // double-click or right-click follow-up.
-            viewportRef.current?.focus({ preventScroll: true });
-            if (onCellClickTiming && typeof requestAnimationFrame !== "undefined") {
-              if (clickTimingFrame.current !== undefined) cancelAnimationFrame(clickTimingFrame.current);
-              clickTimingFrame.current = requestAnimationFrame(() => {
-                clickTimingFrame.current = requestAnimationFrame(() => onCellClickTiming(performance.now() - clickStart));
-              });
-            }
-          }}
-          onPointerEnter={() => {
-            if (editing && formulaReference && dragSelecting.current) {
-              updateFormulaReference({ ...formulaReference, focus: point });
-              return;
-            }
-            if (fillOrigin.current) {
-              fillTargetRef.current = point;
-              setFillTarget(point);
-            } else if (dragSelecting.current) setSelection((current) => ({ ...current, focus: point }));
-          }}
-          onDoubleClick={() => { if (!readOnly) beginEdit(point); }}
-        >
-          {loading ? <span className="loading-placeholder" /> : renderCell?.(cellContext) ?? <span className={`${raw.startsWith("=") ? "formula-value" : ""}${value.includes("\n") ? " multiline" : ""}`}>{value}</span>}
-          {writeState && <button className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
-            event.stopPropagation();
-            if (event.shiftKey) {
-              // A badge revert is a local-only gesture — the failed/conflicted
-              // write never landed, so nothing should be re-persisted.
-              commitMutation(cellChangesMutation("Revert failed write", [{ address: key, before: data.get(key), after: writeState.before }]), { emitFieldWrites: false });
-              setWriteStates((current) => { const next = new Map(current); next.delete(key); return next; });
-            } else if (writeState.status === "failed" || writeState.status === "conflict") runFieldWrite(writeState.write, writeState.before);
-          }} />}
-        </div>;
+          format={format}
+          field={fieldByColumn.get(column)}
+          writeState={writeState}
+          renderCell={renderCell}
+          handlers={cellHandlersRef}
+          left={columnLeft(column)}
+          top={row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}px)` : COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}
+          width={columnWidths[column]}
+          height={rowHeights[row] ?? ROW_HEIGHT}
+        />;
       }))}
 
       {visibleRows.map((row) => <div
@@ -1642,7 +1678,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       />;
       })}
       {editing && draft.startsWith("=") && <FormulaTokens value={draft} className="cell-formula-tokens" style={{
-        left: columnLeft(editing.column) + 1,
+        left: columnLeft(editing.column, 1),
         top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
         width: columnWidths[editing.column] - 2,
         height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
@@ -1656,7 +1692,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         value={draft}
         aria-label={`Edit ${cellKey(editing)}`}
         style={{
-          left: columnLeft(editing.column) + 1,
+          left: columnLeft(editing.column, 1),
           top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
           height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
@@ -1719,7 +1755,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && activeCustomEditor && <div
         className="cell-editor custom-editor-host"
         style={{
-          left: columnLeft(editing.column) + 1,
+          left: columnLeft(editing.column, 1),
           top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
           height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
