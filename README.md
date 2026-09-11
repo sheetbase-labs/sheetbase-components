@@ -34,7 +34,7 @@ example API running too: `cd packages/table && bun run dev:api` (:8787).
 
 GitHub Actions on this repo run unit tests for every package, table/explorer/schema/rules/search production and library builds, table bundle budget and benches, explorer benches, a pack smoke test (tarballs install + typecheck as an external consumer), and table Playwright e2e on Chromium, Firefox and WebKit.
 
-The six libraries are publish-shaped npm packages — see `docs/publishing.md` for the consumption model and release flow.
+The six libraries are publish-shaped npm packages — see `docs/publishing.md` for the consumption model and release flow. The shared accessibility contract (grid, panes, schema canvas, charts, forms) is documented in `docs/accessibility.md`.
 
 Table `PORT` / `SHEETBASE_API_PORT` / `E2E_PORT` overrides from `sheetbase-table` #23 are honoured by Vite, the Herdr helper and Playwright.
 

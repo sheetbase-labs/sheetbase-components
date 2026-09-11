@@ -60,6 +60,19 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Keyboard nudge for a node in canvas coordinates. Plain arrows move 8 canvas
+ * units; Shift widens the step to 32. Returns null for non-arrow keys.
+ */
+export function nudgeNodePosition(position: { x: number; y: number }, key: string, shiftKey = false): { x: number; y: number } | null {
+  const step = shiftKey ? 32 : 8;
+  if (key === "ArrowLeft") return { x: position.x - step, y: position.y };
+  if (key === "ArrowRight") return { x: position.x + step, y: position.y };
+  if (key === "ArrowUp") return { x: position.x, y: position.y - step };
+  if (key === "ArrowDown") return { x: position.x, y: position.y + step };
+  return null;
+}
+
 export function SchemaEditor({ value, initialGraph, onChange, theme, defaultTheme = "light", onThemeChange, onHeaderFieldsChange, persistKey, adapter, chrome = "full", ref }: SchemaEditorProps) {
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
@@ -72,6 +85,9 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const canvasRef = useRef<HTMLDivElement>(null);
   const nodeDragRef = useRef<{ name: string; x: number; y: number } | null>(null);
   const [nodeDrag, setNodeDrag] = useState<{ name: string; x: number; y: number } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const nodeRefs = useRef(new Map<string, HTMLDivElement>());
 
   const relations = useMemo(() => getRelations(graph), [graph]);
   const [exportNote, setExportNote] = useState<string | null>(null);
@@ -264,6 +280,23 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                 <div
                   ref={canvasRef}
                   className="sb-schema-canvas sb-plate"
+                  role="group"
+                  tabIndex={0}
+                  aria-label="Schema canvas. Tab to a model, press Enter to move it. Plus and minus zoom, arrow keys pan, 0 resets the view."
+                  onKeyDown={(e) => {
+                    if (e.key === "+" || e.key === "=") { e.preventDefault(); setZoom((z) => Math.min(2, z + 0.1)); }
+                    else if (e.key === "-" || e.key === "_") { e.preventDefault(); setZoom((z) => Math.max(0.4, z - 0.1)); }
+                    else if (e.key === "0") { e.preventDefault(); setZoom(1); setPan({ x: 0, y: 0 }); }
+                    else {
+                      const step = e.shiftKey ? 120 : 40;
+                      const dp = e.key === "ArrowRight" ? { x: -step, y: 0 }
+                        : e.key === "ArrowLeft" ? { x: step, y: 0 }
+                        : e.key === "ArrowDown" ? { x: 0, y: -step }
+                        : e.key === "ArrowUp" ? { x: 0, y: step }
+                        : null;
+                      if (dp) { e.preventDefault(); setPan((p) => ({ x: p.x + dp.x, y: p.y + dp.y })); }
+                    }
+                  }}
                   onWheel={(e) => { if (e.ctrlKey || e.metaKey) setZoom((z) => Math.min(2, Math.max(0.4, z - Math.sign(e.deltaY) * 0.08))); }}
                   onMouseDown={(e) => { if ((e.target as HTMLElement).dataset.pane === "1") dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y }; }}
                   onMouseMove={(e) => { const d = dragRef.current; if (d) setPan({ x: d.px + (e.clientX - d.sx), y: d.py + (e.clientY - d.sy) }); }}
@@ -286,11 +319,57 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                     </svg>
                     {graph.models.map((m) => {
                       const p = posByModel[m.name]!;
+                      const moving = moveTarget === m.name;
                       return (
                         <div
                           key={m.name}
-                          className={m.name === selected ? "sb-node active" : "sb-node"}
+                          ref={(el) => { if (el) nodeRefs.current.set(m.name, el); else nodeRefs.current.delete(m.name); }}
+                          role="group"
+                          tabIndex={0}
+                          aria-label={`${m.label || m.name}, ${m.fields.length} field${m.fields.length === 1 ? "" : "s"}${moving ? ", moving" : ""}`}
+                          className={`sb-node${m.name === selected ? " active" : ""}${moving ? " moving" : ""}`}
                           style={{ left: p.x, top: p.y, width: NODE_WIDTH }}
+                          onFocus={() => selectModel(m.name)}
+                          onBlur={() => {
+                            if (moveTarget === m.name) {
+                              setMoveTarget(null);
+                              setAnnouncement(`${m.label || m.name} placed at ${Math.round(p.x)}, ${Math.round(p.y)}.`);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (moving) {
+                              if (e.key === "Enter" || e.key === "Escape" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setMoveTarget(null);
+                                setAnnouncement(`${m.label || m.name} placed at ${Math.round(p.x)}, ${Math.round(p.y)}.`);
+                                return;
+                              }
+                              const next = nudgeNodePosition(p, e.key, e.shiftKey);
+                              if (next) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                patchModel(m.name, { position: next });
+                              }
+                              return;
+                            }
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setMoveTarget(m.name);
+                              setAnnouncement(`Moving ${m.label || m.name}. Arrow keys nudge the model, Enter or Escape finishes.`);
+                              return;
+                            }
+                            const delta = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+                            if (delta !== 0 && graph.models.length > 1) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const index = graph.models.findIndex((x) => x.name === m.name);
+                              const next = graph.models[(index + delta + graph.models.length) % graph.models.length]!;
+                              selectModel(next.name);
+                              nodeRefs.current.get(next.name)?.focus();
+                            }
+                          }}
                           onMouseDown={(e) => {
                             e.stopPropagation();
                             setSelected(m.name);
@@ -330,6 +409,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                       );
                     })}
                   </div>
+                  <div className="sb-schema-live" aria-live="polite" aria-atomic="true">{announcement}</div>
                 </div>
               ),
             },

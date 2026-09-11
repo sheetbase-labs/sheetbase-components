@@ -347,7 +347,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
             <div className="sb-rules-editor">
               {datasetSummary ? (
                 <>
-                  <p className="sb-muted">{datasetSummary.total} rows · {datasetSummary.matched} matched</p>
+                  <p className="sb-muted" aria-live="polite" aria-atomic="true">{datasetSummary.total} rows · {datasetSummary.matched} matched</p>
                   {rules.length === 0 ? (
                     <p className="sb-muted">No rules to evaluate.</p>
                   ) : (
@@ -367,7 +367,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                       <button type="button" className="sb-btn" disabled={applying} onClick={applyWrites}>
                         {applying ? "Applying…" : `Apply ${applyPlan.writes.length} writes`}
                       </button>
-                      {applyOutcome && <p className="sb-muted">{applyOutcome}</p>}
+                      {applyOutcome && <p className="sb-muted" role="status">{applyOutcome}</p>}
                     </>
                   )}
                 </>

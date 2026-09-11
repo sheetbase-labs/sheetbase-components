@@ -218,7 +218,7 @@ function MenuButton({ id, label, detail, active, onToggle }: {
   active: boolean
   onToggle(id: Exclude<Menu, null>): void
 }) {
-  return <button className={`explorer-tool ${active ? 'active' : ''}`} onClick={() => onToggle(id)}><span>{label}</span>{detail && <small>{detail}</small>}<b>⌄</b></button>
+  return <button className={`explorer-tool ${active ? 'active' : ''}`} aria-haspopup="true" aria-expanded={active} onClick={() => onToggle(id)}><span>{label}</span>{detail && <small>{detail}</small>}<b>⌄</b></button>
 }
 
 export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalysisSpec, viewFilterLocked, onField, onAutoKind, onChoosePlot }: {

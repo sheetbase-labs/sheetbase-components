@@ -493,3 +493,20 @@ export function buildChart(
   const specification = chartSpec(prepared, raw, dataset, spec, selectedRowId, onZoom)
   return specification ? defineChart(specification as any, interactionOptions(spec) as any) : null
 }
+
+/**
+ * Screen-reader description for a chart. Names the kind, the mapped fields and
+ * aggregate, grouping/facet fields, and how many plotted rows it shows — the
+ * same facts a sighted reader gets from the canvas at a glance.
+ */
+export function describeChart(spec: ChartSpec, rowCount: number): string {
+  const aggregate = spec.aggregate && spec.aggregate !== 'none' ? `${spec.aggregate} of ` : ''
+  const head = `${spec.kind[0]!.toUpperCase()}${spec.kind.slice(1)} chart`
+  const mapping = spec.x && spec.y ? ` of ${aggregate}${spec.y} by ${spec.x}` : spec.x ? ` of ${aggregate}${spec.x}` : ''
+  const parts = [`${head}${mapping}`]
+  const series = spec.group ?? spec.color
+  if (series) parts.push(`grouped by ${series}`)
+  if (spec.facet) parts.push(`faceted by ${spec.facet}`)
+  parts.push(`${rowCount} ${rowCount === 1 ? 'row' : 'rows'}`)
+  return parts.join(', ')
+}
