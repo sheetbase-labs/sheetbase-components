@@ -1,4 +1,4 @@
-import { testCondition } from "sheetbase-shared";
+import { buildPredicate, testCondition } from "sheetbase-shared";
 import type { CellBinding, Scalar } from "../engine";
 import type { CommitResult, DatasetPage, PageRequest, PagedDataAdapter, RecordFieldWrite } from "./adapter";
 
@@ -23,11 +23,15 @@ export function createMemoryPagedAdapter(rows: readonly MemoryDatasetRow[], init
 
     async fetchPage(request: PageRequest): Promise<DatasetPage> {
       const filters = request.filters ?? [];
-      let filtered = filters.length === 0
-        ? [...records]
-        : records.filter((record) => (request.filterLogic ?? "and") === "or"
-          ? filters.some((clause) => testCondition(record.values, clause))
-          : filters.every((clause) => testCondition(record.values, clause)));
+      // A filter tree is authoritative over the flat clauses when present.
+      const treePredicate = request.filterTree ? buildPredicate(request.filterTree) : null;
+      let filtered = treePredicate
+        ? records.filter((record) => treePredicate(record.values))
+        : filters.length === 0
+          ? [...records]
+          : records.filter((record) => (request.filterLogic ?? "and") === "or"
+            ? filters.some((clause) => testCondition(record.values, clause))
+            : filters.every((clause) => testCondition(record.values, clause)));
 
       const sort = request.sort ?? [];
       if (sort.length > 0) {

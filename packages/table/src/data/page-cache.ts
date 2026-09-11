@@ -1,4 +1,5 @@
 import type { DatasetPage, PageRequest } from "./adapter";
+import { canonicalFilterTree } from "./query";
 
 function pageKey(request: PageRequest): string {
   return [
@@ -10,6 +11,8 @@ function pageKey(request: PageRequest): string {
     (request.fieldIds ?? []).join(","),
     JSON.stringify(request.sort ?? []),
     JSON.stringify(request.filters ?? []),
+    // Canonicalised: raw ids are session-random and would never dedupe.
+    JSON.stringify(request.filterTree ? canonicalFilterTree(request.filterTree) : null),
   ].join("|");
 }
 

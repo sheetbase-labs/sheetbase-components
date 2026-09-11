@@ -39,6 +39,19 @@ describe("DataPageCache", () => {
     expect(first).toBe(second);
     expect(loads).toBe(1);
   });
+  it("keys pages by canonical filter tree, not session-random node ids", () => {
+    const cache = new DataPageCache();
+    const tree = (groupId: string, condId: string) => ({
+      type: "group" as const, id: groupId, combinator: "NOT" as const,
+      children: [{ type: "condition" as const, id: condId, field: "status", operator: "eq" as const, value: "Complete" }],
+    });
+    const requestA = { ...request(0), filterTree: tree("grp_1", "cnd_1") };
+    const requestB = { ...request(0), filterTree: tree("grp_2", "cnd_2") };
+    const other = { ...request(0), filterTree: { ...tree("grp_3", "cnd_3"), combinator: "OR" as const } };
+    cache.set({ ...page(0), request: requestA });
+    expect(cache.get(requestB)).toBeDefined();
+    expect(cache.get(other)).toBeUndefined();
+  });
   it("tolerates pages whose request lacks fieldIds", () => {
     const cache = new DataPageCache();
     const shapeless = { request: { datasetId: "experiments", rowStart: 0, rowCount: 100, queryKey: "all" }, totalRows: 0, revision: "r1", records: [] } as unknown as DatasetPage;

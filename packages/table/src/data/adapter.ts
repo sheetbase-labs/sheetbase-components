@@ -1,7 +1,7 @@
 import type { CellBinding, Scalar } from "../engine";
 import { parseAddress } from "../engine/coordinates";
 import type { GridMutation } from "../grid/mutations";
-import type { FilterClause, SortClause } from "./query";
+import type { FilterClause, GroupNode, SortClause } from "./query";
 
 export type RecordFieldBinding = Extract<CellBinding, { kind: "record-field" }>;
 
@@ -36,6 +36,8 @@ export type PageRequest = Readonly<{
   sort?: readonly SortClause[];
   filters?: readonly FilterClause[];
   filterLogic?: "and" | "or";
+  /** Authoritative over `filters`/`filterLogic` when present. */
+  filterTree?: GroupNode;
 }>;
 
 export type DatasetPage = Readonly<{

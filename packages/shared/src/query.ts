@@ -1,6 +1,8 @@
 import type { FieldDataType, SheetbaseField } from "./fields";
 import type { FilterOperator } from "./operators";
 import { ensureOperator } from "./operators";
+import type { GroupNode } from "./tree";
+import { canonicalFilterTree } from "./tree";
 
 export type SortDirection = "asc" | "desc";
 export type SortClause = Readonly<{ fieldId: string; direction: SortDirection; nulls?: "first" | "last" }>;
@@ -9,6 +11,12 @@ export type DatasetQuery = Readonly<{
   sort?: readonly SortClause[];
   filters?: readonly FilterClause[];
   filterLogic?: "and" | "or";
+  /**
+   * Nested filter tree (AND/OR/NOT). When present it is authoritative over
+   * `filters`/`filterLogic`; executors that cannot evaluate it must say so
+   * rather than silently falling back to the flat clauses.
+   */
+  filterTree?: GroupNode;
 }>;
 
 function canonical(value: unknown): unknown {
@@ -27,6 +35,7 @@ export function queryKey(query: DatasetQuery): string {
   return JSON.stringify(canonical({
     filters: query.filters ?? [],
     filterLogic: query.filterLogic ?? "and",
+    filterTree: query.filterTree ? canonicalFilterTree(query.filterTree) : undefined,
     sort: query.sort ?? [],
   }));
 }

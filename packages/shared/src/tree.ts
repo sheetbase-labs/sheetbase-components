@@ -147,4 +147,33 @@ export function compileToDatasetQuery(node: FilterNode, sort?: SortClause[]): Da
   return { filters, filterLogic: node.combinator === "OR" ? "or" : "and", sort };
 }
 
+/**
+ * Compile any filter tree to a DatasetQuery: flat `filters`/`filterLogic` when
+ * the tree flattens losslessly, `filterTree` otherwise. Never returns undefined,
+ * so a nested or NOT search can no longer silently clear a downstream filter.
+ */
+export function toDatasetQuery(node: FilterNode, sort?: SortClause[]): DatasetQuery {
+  const flat = compileToDatasetQuery(node, sort);
+  if (flat) return flat;
+  if (node.type === "group") return { filterTree: node, sort };
+  return { filters: [], filterLogic: "and", sort };
+}
+
+/**
+ * Structural canonical form of a filter tree: node ids are session-random
+ * (`uid`), so they are stripped and children order is preserved. Equivalent
+ * trees built in different sessions produce identical JSON — this is what
+ * `queryKey` folds into cache identity.
+ */
+export function canonicalFilterTree(node: FilterNode): unknown {
+  if (node.type === "condition") {
+    return { type: "condition", field: node.field, operator: node.operator, value: node.value ?? null };
+  }
+  return {
+    type: "group",
+    combinator: node.combinator,
+    children: node.children.map(canonicalFilterTree),
+  };
+}
+
 export { filterRows, matchClauses };

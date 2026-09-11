@@ -13,6 +13,7 @@ import {
   operatorShortLabel,
   operatorsForField,
   queryKey,
+  toDatasetQuery,
   usePersistedTheme,
   type Combinator,
   type ConditionNode,
@@ -52,8 +53,8 @@ export interface AdvancedSearchProps {
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
   onThemeChange?: (next: ThemeMode) => void;
-  /** Fired whenever the tree flattens onto DatasetQuery (undefined when nested/NOT). */
-  onDatasetQueryChange?: (query: DatasetQuery | undefined) => void;
+  /** Fired with the compiled query: flat filters when the tree flattens losslessly, `filterTree` otherwise. Always a DatasetQuery — a nested spec never means "clear". */
+  onDatasetQueryChange?: (query: DatasetQuery) => void;
   persistKey?: string;
   adapter?: PersistenceAdapter<SearchSpec>;
   /** Omit the component topbar so a host can own pane chrome. Default `"full"`. */
@@ -286,18 +287,17 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
 
   const matches = useMemo(() => (rows.length > 0 ? applySearch(rows, spec) : null), [rows, spec]);
   const nodes = countNodes(spec.filter);
-  const flattened = compileToDatasetQuery(
-    spec.filter,
-    spec.sort ? [{ fieldId: spec.sort.field, direction: spec.sort.direction }] : undefined,
-  );
+  const sortClauses = spec.sort ? [{ fieldId: spec.sort.field, direction: spec.sort.direction }] : undefined;
+  const flattened = compileToDatasetQuery(spec.filter, sortClauses);
+  const compiled = flattened ?? toDatasetQuery(spec.filter, sortClauses);
   const ids = fieldIds(fields);
-  const flattenedKey = flattened ? queryKey(flattened) : "";
+  const compiledKey = queryKey(compiled);
 
   useEffect(() => {
-    onDatasetQueryChange?.(flattened);
-    // flattened is a fresh object each render; key on its stable content.
+    onDatasetQueryChange?.(compiled);
+    // compiled is a fresh object each render; key on its stable content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flattenedKey, onDatasetQueryChange]);
+  }, [compiledKey, onDatasetQueryChange]);
 
   return (
     <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
@@ -306,7 +306,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
           <div className="sb-topbar">
             <div className="sb-toolbar-group">
               {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
-              <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : ""}</span>
+              <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : " · tree query"}</span>
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}

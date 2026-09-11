@@ -97,6 +97,41 @@ new ones appended — so stored layouts survive pane-set changes. The pure
 operations in `layout.ts` (`movePane`, `removePane`, `splitStack`, …) can be
 used without React.
 
+## Filter trees in `DatasetQuery`
+
+`DatasetQuery` carries an optional `filterTree?: GroupNode` alongside the flat
+`filters`/`filterLogic`/`sort` fields. The flat fields remain the fast path;
+when `filterTree` is present it is **authoritative** — it exists precisely
+because the flat shape cannot express nested groups or `NOT`.
+
+```ts
+type ConditionNode = { type: "condition"; id: string; field: string; operator: FilterOperator; value?: unknown };
+type GroupNode     = { type: "group"; id: string; combinator: "AND" | "OR" | "NOT"; children: FilterNode[] };
+type FilterNode    = ConditionNode | GroupNode;
+```
+
+Semantics follow `buildPredicate`: `AND` = every child, `OR` = some child,
+`NOT` = *no* child matches (NOR). `toDatasetQuery(node, sort?)` is the emission
+helper: it returns the flat query when the tree flattens losslessly and a
+`{ filterTree, sort }` query otherwise — never `undefined`, so a nested search
+can no longer be mistaken for "clear the filter".
+
+Transport: `PageRequest.filterTree` mirrors the field; `HttpPagedDataAdapter`
+serialises it as a `?filterTree=<json>` query param (the flat fields keep their
+existing params). `createMemoryPagedAdapter` and `examples/million-row-api.ts`
+evaluate it via `buildPredicate`.
+
+Cache identity: `queryKey` folds the tree in through `canonicalFilterTree`,
+which strips node `id`s — they are session-random, so canonicalisation is by
+structure (combinator, fields, operators, values, child order), not identity.
+
+**Executor obligations**: if you receive a `filterTree` you cannot evaluate,
+say so — echo it in `DatasetPage.request` and/or surface an error — never
+silently ignore it and return unfiltered rows. Do not evaluate the flat
+`filters` as a fallback: the tree is the filter, the flat clauses are not a
+partial equivalent. Host executors in other languages reimplement the
+`buildPredicate` walk; the node schema above is plain JSON.
+
 ## Workspace
 
 `WorkspaceProvider` shares host-owned state (`fields`, `rows`, `query`) so

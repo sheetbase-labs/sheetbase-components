@@ -40,6 +40,7 @@ export class HttpPagedDataAdapter implements PagedDataAdapter {
     if (request.sort?.length) query.set("sort", JSON.stringify(request.sort));
     if (request.filters?.length) query.set("filters", JSON.stringify(request.filters));
     if (request.filterLogic) query.set("filterLogic", request.filterLogic);
+    if (request.filterTree) query.set("filterTree", JSON.stringify(request.filterTree));
     const response = await this.fetcher(`${this.baseUrl}/pages?${query}`, { signal });
     if (!response.ok) throw new Error(`Page request failed (${response.status})`);
     const data: unknown = await response.json();

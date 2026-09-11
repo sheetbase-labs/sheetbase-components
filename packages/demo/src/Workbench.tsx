@@ -186,7 +186,7 @@ export function Workbench() {
           onChange={(next) => setView((current) => ({ ...current, ...next }))}
           preview={searchPreview}
           onPreviewChange={setSearchPreview}
-          onDatasetQueryChange={(next) => setQuery(next ?? {})}
+          onDatasetQueryChange={setQuery}
           fields={activeSearchFields}
           rows={sampleRows}
           persistKey={WORKBENCH_SEARCH_KEY}

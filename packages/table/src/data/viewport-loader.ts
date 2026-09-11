@@ -54,6 +54,7 @@ export class ViewportPageLoader {
       sort: this.options.query?.sort,
       filters: this.options.query?.filters,
       filterLogic: this.options.query?.filterLogic,
+      filterTree: this.options.query?.filterTree,
     }));
   }
 

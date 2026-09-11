@@ -38,6 +38,23 @@ describe("HttpPagedDataAdapter", () => {
     await expect(adapter.commit([], "r1")).rejects.toBeInstanceOf(RevisionConflictError);
   });
 
+  it("serialises filterTree onto the page request URL", async () => {
+    const fetcher = vi.fn(async (_input: string, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({
+      request: { datasetId: "d", rowStart: 0, rowCount: 10, fieldIds: ["status"], queryKey: "tree" },
+      totalRows: 0, revision: "r1", records: [],
+    }) }));
+    const adapter = new HttpPagedDataAdapter("/api/sheets", fetcher);
+    const filterTree = {
+      type: "group" as const, id: "g1", combinator: "NOT" as const,
+      children: [{ type: "condition" as const, id: "c1", field: "status", operator: "eq" as const, value: "Complete" }],
+    };
+    await adapter.fetchPage({
+      datasetId: "d", rowStart: 0, rowCount: 10, fieldIds: ["status"], queryKey: "tree", filterTree,
+    });
+    const url = new URL(fetcher.mock.calls[0][0], "http://test");
+    expect(JSON.parse(url.searchParams.get("filterTree") ?? "null")).toEqual(filterTree);
+  });
+
   it("creates records with values and an optimistic base revision", async () => {
     const fetcher = vi.fn(async (_input: string, _init?: RequestInit) => ({
       ok: true,

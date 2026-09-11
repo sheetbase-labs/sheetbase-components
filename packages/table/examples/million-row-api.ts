@@ -1,4 +1,8 @@
 import { Database } from "bun:sqlite";
+// Filter trees are evaluated with the shared predicate so example semantics
+// can't drift from the contract. Requires `bun run build:lib` in packages/shared
+// first (the workspace import resolves to dist-lib).
+import { buildPredicate, type FilterNode } from "sheetbase-shared";
 type Scalar = string | number | boolean | null;
 type RecordRow = { recordId: string; values: Record<string, Scalar> };
 type Write = { datasetId: string; recordId: string; fieldId: string; before?: string; after?: string };
@@ -90,11 +94,14 @@ const server = Bun.serve({
       const fieldIds = (url.searchParams.get("fieldIds") ?? "").split(",").filter(Boolean);
       const filters = JSON.parse(url.searchParams.get("filters") ?? "[]") as { fieldId: string; operator: string; value?: unknown }[];
       const filterLogic = url.searchParams.get("filterLogic") === "or" ? "or" : "and";
+      const filterTreeParam = url.searchParams.get("filterTree");
+      // A filter tree is authoritative over the flat clauses when present.
+      const treePredicate = filterTreeParam ? buildPredicate(JSON.parse(filterTreeParam) as FilterNode) : null;
       const sort = JSON.parse(url.searchParams.get("sort") ?? "[]") as { fieldId: string; direction: "asc" | "desc" }[];
       const candidateCount = TOTAL_ROWS + created.length;
       let totalRows = candidateCount;
       let records: RecordRow[];
-      if (!filters.length && !sort.length) {
+      if (!treePredicate && !filters.length && !sort.length) {
         records = Array.from({ length: Math.min(rowCount, Math.max(0, candidateCount - rowStart)) }, (_, offset) => {
           const index = rowStart + offset;
           return index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
@@ -103,7 +110,10 @@ const server = Bun.serve({
         const candidates: RecordRow[] = [];
         for (let index = 0; index < candidateCount; index++) {
           const row = index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
-          if ((filterLogic === "or" ? filters.some((filter) => matches(row.values[filter.fieldId] ?? null, filter)) : filters.every((filter) => matches(row.values[filter.fieldId] ?? null, filter)))) candidates.push(row);
+          const keep = treePredicate
+            ? treePredicate(row.values)
+            : (filterLogic === "or" ? filters.some((filter) => matches(row.values[filter.fieldId] ?? null, filter)) : filters.every((filter) => matches(row.values[filter.fieldId] ?? null, filter)));
+          if (keep) candidates.push(row);
         }
         if (sort.length) candidates.sort((left, right) => {
         for (const clause of sort) {
@@ -116,7 +126,7 @@ const server = Bun.serve({
         records = candidates.slice(rowStart, rowStart + rowCount);
       }
       const projected = records.map((row) => ({ recordId: row.recordId, values: Object.fromEntries(fieldIds.map((fieldId) => [fieldId, row.values[fieldId] ?? null])) }));
-      return json({ request: { datasetId: "experiments", rowStart, rowCount, fieldIds, queryKey: url.searchParams.get("queryKey") ?? "", sort, filters, filterLogic }, totalRows, revision: `r${revision}`, records: projected });
+      return json({ request: { datasetId: "experiments", rowStart, rowCount, fieldIds, queryKey: url.searchParams.get("queryKey") ?? "", sort, filters, filterLogic, ...(filterTreeParam ? { filterTree: JSON.parse(filterTreeParam) } : {}) }, totalRows, revision: `r${revision}`, records: projected });
     }
     if (request.method === "POST" && url.pathname === "/api/table/commits") {
       const body = await request.json() as { writes: Write[]; baseRevision?: string };
