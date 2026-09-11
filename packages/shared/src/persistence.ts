@@ -22,6 +22,28 @@ export function createMemoryAdapter<T>(store: Map<string, T> = new Map()): Persi
   };
 }
 
+export type PersistenceFetchLike = (input: string, init?: RequestInit) => Promise<Pick<Response, "ok" | "status" | "json">>;
+
+/**
+ * `GET {baseUrl}?key=` (404 = nothing saved) / `PUT {baseUrl}` with
+ * `{ key, state }` — the host-endpoint protocol the table and explorer HTTP
+ * adapters already speak. `label` customises the error text.
+ */
+export function createHttpAdapter<T>(baseUrl: string, fetcher: PersistenceFetchLike = globalThis.fetch.bind(globalThis), label = "Persistence"): PersistenceAdapter<T> {
+  return {
+    async load(key) {
+      const response = await fetcher(`${baseUrl}?key=${encodeURIComponent(key)}`);
+      if (response.status === 404) return undefined;
+      if (!response.ok) throw new Error(`${label} load failed (${response.status})`);
+      return (await response.json()) as T;
+    },
+    async save(key, state) {
+      const response = await fetcher(baseUrl, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ key, state }) });
+      if (!response.ok) throw new Error(`${label} save failed (${response.status})`);
+    },
+  };
+}
+
 export function createLocalStorageAdapter<T>(storage?: Storage): PersistenceAdapter<T> {
   const target = storage ?? (typeof localStorage === "undefined" ? undefined : localStorage);
   return {

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createHttpAdapter } from 'sheetbase-shared'
 import type { ChartSpec, SavedExploration } from './types'
 
 /**
@@ -117,22 +118,7 @@ export type PersistenceFetchLike = (input: string, init?: RequestInit) => Promis
 
 /** Database-backed host adapter: `GET {baseUrl}?key=` (404 = none saved), `PUT {baseUrl}` with `{ key, state }`. */
 export function createHttpExplorerAdapter(baseUrl: string, fetcher: PersistenceFetchLike = globalThis.fetch.bind(globalThis)): ExplorerPersistenceAdapter {
-  return {
-    async load(key) {
-      const response = await fetcher(`${baseUrl}?key=${encodeURIComponent(key)}`)
-      if (response.status === 404) return undefined
-      if (!response.ok) throw new Error(`Exploration load failed (${response.status})`)
-      return (await response.json()) as unknown
-    },
-    async save(key, state) {
-      const response = await fetcher(baseUrl, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key, state }),
-      })
-      if (!response.ok) throw new Error(`Exploration save failed (${response.status})`)
-    },
-  }
+  return createHttpAdapter<unknown>(baseUrl, fetcher, 'Exploration')
 }
 
 /** Shared default host adapter so lazy state initialisers stay above hooks. */

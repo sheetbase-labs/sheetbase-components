@@ -308,20 +308,22 @@ test("search and explorer share one analysis view", async ({ page }) => {
   await condition.getByLabel("Operator").selectOption("eq");
   await condition.getByLabel("Value").fill("failed");
 
-  // The chart follows the search filter: only the failed group remains.
-  const chart = page.locator(".sheetbase-explorer");
+  // The chart follows the search filter: only the failed group remains. (The
+  // stage scope excludes the data-table disclosure, which holds the same rows.)
+  const chart = page.locator(".sheetbase-explorer .chart-stage");
   await expect(chart.getByText("failed", { exact: true })).toBeVisible();
   await expect(chart.getByText("pending", { exact: true })).toHaveCount(0);
 
   // Grouping chosen in the explorer flows back into the search's Group by.
-  await chart.getByRole("button", { name: "Group" }).click();
+  const explorer = page.locator(".sheetbase-explorer");
+  await explorer.getByRole("button", { name: "Group" }).click();
   await page.locator(".explorer-commandbar .tool-popover select").first().selectOption("material");
   await expect(page.locator(".sb-search-controls select").first()).toHaveValue("material");
 
   // Explorer Reset clears the shared view, including the search filter.
   await page.locator(".menu-backdrop").click();
   await expect(page.locator(".sb-filter-rule")).toHaveCount(1);
-  await chart.getByRole("button", { name: "Reset" }).click();
+  await explorer.getByRole("button", { name: "Reset" }).click();
   await expect(page.locator(".sb-filter-rule")).toHaveCount(0);
 });
 

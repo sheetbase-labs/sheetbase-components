@@ -4,17 +4,14 @@ import {
   SheetbaseShell,
   ThemeToggleButton,
   WorkspaceProvider,
-  applySearch,
-  applyView,
   createLocalStorageAdapter,
   emptyView,
-  searchSpecFromView,
   loadInitialState,
   loadPaneLayoutState,
   useIdleSave,
   usePersistedTheme,
+  useWorkbench,
   type AnalysisView,
-  type DatasetQuery,
   type Layout,
   type PaneLayoutHandle,
   type PaneLayoutState,
@@ -80,13 +77,6 @@ export function Workbench() {
   const searchAdapter = useMemo(() => createLocalStorageAdapter<AnalysisView>(), []);
   const [graph, setGraph] = useState<SchemaGraph>(() => loadInitialState(WORKBENCH_SCHEMA_KEY, graphAdapter, schemaStarter));
   const [rules, setRules] = useState<PipelineRule[]>(() => loadInitialState(WORKBENCH_RULES_KEY, rulesAdapter, rulesStarter));
-  // One shared analysis view: search edits it and the explorer charts through it.
-  const [view, setView] = useState<AnalysisView>(() => {
-    const fallback = emptyView("mean");
-    const loaded = loadInitialState(WORKBENCH_SEARCH_KEY, searchAdapter, fallback);
-    return { ...fallback, ...loaded, summary: loaded.summary ?? "mean" };
-  });
-  const [query, setQuery] = useState<DatasetQuery>({});
   const [searchPreview, setSearchPreview] = useState(false);
   const [headerFields, setHeaderFields] = useState<PaneField[]>(tableFields);
   // The table's source of truth: a host-owned paged adapter keyed on the
@@ -102,10 +92,16 @@ export function Workbench() {
   // Workspace rows: the snapshot search, explorer and rules evaluate. Rules
   // write-back mirrors accepted commits into it so every pane stays coherent.
   const [rows, setRows] = useState(sampleRows);
-  const workspace = useMemo(
-    () => ({ fields: headerFields as readonly SheetbaseField[], rows, query }),
-    [headerFields, rows, query],
-  );
+  // One shared analysis view: search edits it and the explorer charts through
+  // it; the compiled query feeds the table. `useWorkbench` owns that dataflow.
+  const wb = useWorkbench({
+    fields: headerFields as readonly SheetbaseField[],
+    rows,
+    initialView: emptyView("mean"),
+    persistKey: WORKBENCH_SEARCH_KEY,
+    adapter: searchAdapter,
+  });
+  const { view, setView, patchView, setQuery, viewRows, filteredRows } = wb;
   const recordIdOf = useCallback((row: Record<string, unknown>) =>
     typeof row.sample_id === "string" ? row.sample_id : undefined, []);
   const onApplyWrites = useCallback(async (writes: readonly RuleWrite[]) => {
@@ -132,13 +128,6 @@ export function Workbench() {
   const activeSearchFields = useMemo(
     () => headerFields.map((field) => ({ id: field.id, label: field.label, dataType: field.dataType })),
     [headerFields],
-  );
-  // The full view (filter + sort + limit) drives the explorer and rules; the
-  // table's query has no limit, so the row counter tracks filter + sort only.
-  const viewRows = useMemo(() => applyView(rows, view), [rows, view]);
-  const filteredRows = useMemo(
-    () => applySearch(rows, searchSpecFromView({ ...view, limit: undefined })),
-    [rows, view],
   );
   const explorerDataset = useMemo(
     () => createExplorerDataset(viewRows as readonly Record<string, unknown>[], headerFields),
@@ -216,7 +205,7 @@ export function Workbench() {
           ref={searchRef}
           chrome={tabbed ? "none" : "full"}
           value={view}
-          onChange={(next) => setView((current) => ({ ...current, ...next }))}
+          onChange={patchView}
           preview={searchPreview}
           onPreviewChange={setSearchPreview}
           onDatasetQueryChange={setQuery}
@@ -255,7 +244,7 @@ export function Workbench() {
 
   return (
     <div className="sb-demo-stage">
-      <WorkspaceProvider value={workspace}>
+      <WorkspaceProvider value={wb.workspace}>
         <SheetbaseShell theme={activeTheme} header={false} className="sb-demo-workbench">
           <PaneLayout
           ref={panesRef}

@@ -1,4 +1,5 @@
 import { useEffect, useState, type SetStateAction } from "react";
+import { createHttpAdapter } from "sheetbase-shared";
 import type { ConditionalFormatRule } from "../grid/conditional-formatting";
 import type { SpreadsheetFormatEntry } from "./Spreadsheet";
 import { normaliseCellAnnotations, type CellAnnotation } from "./annotations";
@@ -158,18 +159,7 @@ export type PresentationFetchLike = (input: string, init?: RequestInit) => Promi
 
 /** Adapter that persists presentation state through a host-provided HTTP endpoint. */
 export function createHttpPresentationAdapter(baseUrl: string, fetcher: PresentationFetchLike = globalThis.fetch.bind(globalThis)): TablePresentationAdapter {
-  return {
-    async load(key) {
-      const response = await fetcher(`${baseUrl}?key=${encodeURIComponent(key)}`);
-      if (response.status === 404) return undefined;
-      if (!response.ok) throw new Error(`Presentation load failed (${response.status})`);
-      return await response.json();
-    },
-    async save(key, state) {
-      const response = await fetcher(baseUrl, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ key, state }) });
-      if (!response.ok) throw new Error(`Presentation save failed (${response.status})`);
-    },
-  };
+  return createHttpAdapter<TablePresentationState>(baseUrl, fetcher, "Presentation");
 }
 
 export function useTablePresentationState(
