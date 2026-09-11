@@ -27,6 +27,29 @@ function asNum(value: unknown): number | null {
   return null;
 }
 
+// Only strings that look like dates are parsed — Date.parse is lenient enough
+// to reinterpret product codes ("5-10") and ranges. Hosts supplying non-ISO
+// date strings still get no match.
+function asDate(value: unknown): number | null {
+  if (value instanceof Date) {
+    const stamp = value.getTime();
+    return Number.isNaN(stamp) ? null : stamp;
+  }
+  const text = asText(value).trim();
+  if (!/[-/:]/.test(text) || !/\d{4}/.test(text)) return null;
+  const stamp = Date.parse(text);
+  return Number.isNaN(stamp) ? null : stamp;
+}
+
+type Comparable = { kind: "num" | "date"; value: number };
+
+function asComparable(value: unknown): Comparable | null {
+  const n = asNum(value);
+  if (n !== null) return { kind: "num", value: n };
+  const d = asDate(value);
+  return d === null ? null : { kind: "date", value: d };
+}
+
 function looseEqual(actual: unknown, expected: unknown): boolean {
   if (typeof expected === "boolean") {
     if (typeof actual === "boolean") return actual === expected;
@@ -36,23 +59,27 @@ function looseEqual(actual: unknown, expected: unknown): boolean {
   const aNum = asNum(actual);
   const bNum = asNum(expected as string | number);
   if (aNum !== null && bNum !== null && asText(expected).trim() !== "") return aNum === bNum;
+  const aDate = asDate(actual);
+  const bDate = asDate(expected);
+  if (aDate !== null && bDate !== null) return aDate === bDate;
   return asText(actual).toLowerCase() === asText(expected).toLowerCase();
 }
 
-function betweenBounds(value: unknown): { low: number; high: number } | null {
+function betweenBounds(value: unknown): { low: Comparable; high: Comparable } | null {
+  let lowRaw: unknown;
+  let highRaw: unknown;
   if (Array.isArray(value) && value.length >= 2) {
-    const low = asNum(value[0]);
-    const high = asNum(value[1]);
-    if (low === null || high === null) return null;
-    return { low, high };
+    [lowRaw, highRaw] = value;
+  } else if (value && typeof value === "object" && "low" in value && "high" in value) {
+    lowRaw = (value as { low: unknown }).low;
+    highRaw = (value as { high: unknown }).high;
+  } else {
+    return null;
   }
-  if (value && typeof value === "object" && "low" in value && "high" in value) {
-    const low = asNum((value as { low: unknown }).low);
-    const high = asNum((value as { high: unknown }).high);
-    if (low === null || high === null) return null;
-    return { low, high };
-  }
-  return null;
+  const low = asComparable(lowRaw);
+  const high = asComparable(highRaw);
+  if (low === null || high === null || low.kind !== high.kind) return null;
+  return { low, high };
 }
 
 export type LooseClause = Readonly<{
@@ -100,30 +127,35 @@ export function testCondition(row: Row, clause: FilterClause): boolean {
     case "in":
       return Array.isArray(clause.value) && clause.value.some((v) => looseEqual(actual, v));
     case "between": {
-      const n = asNum(actual);
+      const a = asComparable(actual);
       const bounds = betweenBounds(clause.value);
-      if (n === null || !bounds) return false;
-      return n >= Math.min(bounds.low, bounds.high) && n <= Math.max(bounds.low, bounds.high);
+      if (a === null || !bounds || a.kind !== bounds.low.kind) return false;
+      return a.value >= Math.min(bounds.low.value, bounds.high.value)
+        && a.value <= Math.max(bounds.low.value, bounds.high.value);
     }
     case "withinLastDays": {
       const days = asNum(clause.value);
       if (days === null || days <= 0) return false;
-      const stamp = Date.parse(asText(actual));
-      if (Number.isNaN(stamp)) return false;
-      const age = Date.now() - stamp;
-      return age >= 0 && age <= days * 86_400_000;
+      const stamp = asDate(actual);
+      if (stamp === null) return false;
+      // Calendar days inclusive of today (UTC), matching the reference server:
+      // withinLastDays(1) means "today".
+      const day = new Date(stamp).toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const start = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+      return day >= start && day <= today;
     }
     case "gt":
     case "gte":
     case "lt":
     case "lte": {
-      const a = asNum(actual);
-      const b = asNum(clause.value as string | number);
-      if (a === null || b === null) return false;
-      if (clause.operator === "gt") return a > b;
-      if (clause.operator === "gte") return a >= b;
-      if (clause.operator === "lt") return a < b;
-      return a <= b;
+      const a = asComparable(actual);
+      const b = asComparable(clause.value);
+      if (a === null || b === null || a.kind !== b.kind) return false;
+      if (clause.operator === "gt") return a.value > b.value;
+      if (clause.operator === "gte") return a.value >= b.value;
+      if (clause.operator === "lt") return a.value < b.value;
+      return a.value <= b.value;
     }
   }
 }

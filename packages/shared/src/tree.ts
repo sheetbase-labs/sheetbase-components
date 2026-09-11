@@ -48,12 +48,12 @@ function conditionClause(node: ConditionNode): FilterClause {
   return { fieldId: node.field, operator: node.operator, value: node.value };
 }
 
-/** Compile a filter tree to a row predicate. NOT negates the AND of its children. */
+/** Compile a filter tree to a row predicate. NOT matches when none of its children match. */
 export function buildPredicate(node: FilterNode): (row: Row) => boolean {
   if (node.type === "condition") return (row) => testCondition(row, conditionClause(node));
   const compiled = node.children.map(buildPredicate);
   if (node.combinator === "OR") return (row) => compiled.some((fn) => fn(row));
-  if (node.combinator === "NOT") return (row) => !compiled.every((fn) => fn(row));
+  if (node.combinator === "NOT") return (row) => !compiled.some((fn) => fn(row));
   return (row) => compiled.every((fn) => fn(row));
 }
 

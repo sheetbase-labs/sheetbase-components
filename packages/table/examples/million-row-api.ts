@@ -52,6 +52,7 @@ function matches(value: Scalar, filter: { operator: string; value?: unknown }): 
     return orderMin >= 0 && orderMax <= 0;
   }
   if (filter.operator === "withinLastDays") {
+    // Calendar days inclusive of today; the shared predicate mirrors this definition.
     const days = Number(filter.value);
     if (!Number.isFinite(days) || days <= 0) return false;
     const today = new Date().toISOString().slice(0, 10);

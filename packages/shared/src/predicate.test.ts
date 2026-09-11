@@ -30,6 +30,56 @@ describe("testCondition", () => {
   });
 });
 
+describe("date comparisons", () => {
+  const dated = [
+    { id: "a", run_date: "2026-01-15" },
+    { id: "b", run_date: "2026-03-01" },
+    { id: "c", run_date: "2026-03-01T14:30:00Z" },
+  ];
+
+  it("compares ISO date strings with gt/lt/gte/lte", () => {
+    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
+    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "lt", value: "2026-01-01" })).toBe(false);
+    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gte", value: "2026-01-15" })).toBe(true);
+    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "lte", value: "2026-01-14" })).toBe(false);
+    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
+  });
+
+  it("matches dates between array and object bounds", () => {
+    expect(filterRows(dated, [{ fieldId: "run_date", operator: "between", value: ["2026-01-01", "2026-02-01"] }])).toHaveLength(1);
+    expect(filterRows(dated, [{ fieldId: "run_date", operator: "between", value: { low: "2026-02-01", high: "2026-04-01" } }])).toHaveLength(2);
+  });
+
+  it("treats a date cell as equal across representations", () => {
+    expect(testCondition({ d: "2026-01-15" }, { fieldId: "d", operator: "eq", value: "2026-01-15T00:00:00.000Z" })).toBe(true);
+    expect(testCondition({ d: new Date(Date.UTC(2026, 0, 15)) }, { fieldId: "d", operator: "eq", value: "2026-01-15" })).toBe(true);
+    expect(testCondition({ d: "2026-01-15" }, { fieldId: "d", operator: "neq", value: "2026-01-16" })).toBe(true);
+    expect(testCondition({ d: "2026-01-15" }, { fieldId: "d", operator: "eq", value: "2026-01-16" })).toBe(false);
+  });
+
+  it("keeps numeric comparisons numeric", () => {
+    expect(testCondition({ n: 10 }, { fieldId: "n", operator: "gt", value: "5" })).toBe(true);
+    expect(testCondition({ n: 10 }, { fieldId: "n", operator: "gt", value: "hello" })).toBe(false);
+    expect(testCondition({ n: "10" }, { fieldId: "n", operator: "between", value: [5, 20] })).toBe(true);
+    expect(testCondition({ n: 10 }, { fieldId: "n", operator: "lt", value: "2026-01-15" })).toBe(false);
+    expect(testCondition({ n: "2026-01-15" }, { fieldId: "n", operator: "gt", value: 10 })).toBe(false);
+  });
+
+  it("does not reinterpret product codes as dates", () => {
+    expect(testCondition({ code: "5-10" }, { fieldId: "code", operator: "gt", value: "5-2" })).toBe(false);
+    expect(testCondition({ code: "5-10" }, { fieldId: "code", operator: "between", value: ["5-1", "5-20"] })).toBe(false);
+  });
+
+  it("withinLastDays uses calendar days inclusive of today", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10);
+    expect(testCondition({ d: today }, { fieldId: "d", operator: "withinLastDays", value: 1 })).toBe(true);
+    expect(testCondition({ d: threeDaysAgo }, { fieldId: "d", operator: "withinLastDays", value: 1 })).toBe(false);
+    expect(testCondition({ d: threeDaysAgo }, { fieldId: "d", operator: "withinLastDays", value: 4 })).toBe(true);
+    expect(testCondition({ d: "not a date" }, { fieldId: "d", operator: "withinLastDays", value: 7 })).toBe(false);
+  });
+});
+
 describe("queryKey", () => {
   it("creates stable identities while preserving clause priority", () => {
     const first = queryKey({ sort: [{ fieldId: "date", direction: "desc" }], filters: [{ fieldId: "status", operator: "eq", value: "Complete" }] });
@@ -52,6 +102,23 @@ describe("filter tree", () => {
       ],
     });
     expect(rows.filter(fn)).toHaveLength(2);
+  });
+
+  it("NOT excludes rows matching any child (NOR)", () => {
+    const fn = buildPredicate({
+      type: "group", id: "g", combinator: "NOT", children: [
+        { type: "condition", id: "a", field: "status", operator: "eq", value: "ok" },
+        { type: "condition", id: "b", field: "region", operator: "eq", value: "eu" },
+      ],
+    });
+    expect(fn({ status: "ok", region: "us" })).toBe(false);
+    expect(fn({ status: "failed", region: "eu" })).toBe(false);
+    expect(fn({ status: "pending", region: "apac" })).toBe(true);
+  });
+
+  it("an empty NOT group matches everything", () => {
+    const fn = buildPredicate({ type: "group", id: "g", combinator: "NOT", children: [] });
+    expect(rows.filter(fn)).toHaveLength(3);
   });
 
   it("sorts and limits after filtering", () => {
