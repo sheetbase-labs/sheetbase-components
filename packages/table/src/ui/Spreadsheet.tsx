@@ -793,6 +793,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     [datasetHeader],
   );
 
+  // A bound grid owns no row identity: rows are server records, so structure
+  // ops and local sort (which only move the data map) would desync
+  // row→record mapping. `recordIdForRow` presence is the bound signal — a
+  // header passed for display metadata alone leaves the grid unbound.
+  const bound = datasetHeader?.recordIdForRow !== undefined;
+
   const canEdit = useCallback((point: GridPoint) => {
     if (readOnly) return false;
     if (readOnlyRows.has(point.row)) return false;
@@ -1039,17 +1045,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const next = [...rowHeights]; next[row] = after; setRowHeights(next); onRowHeightsChange?.(next);
   }, [data, onRowHeightsChange, rowHeights, selection.focus.row]);
   const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
-    if (readOnly) return;
-    // Structure moves values between addresses, so the mutation's cells no
-    // longer line up with record identity — emitting writes here would target
-    // the wrong records.
+    // Structure moves values between addresses; in a bound grid that desyncs
+    // row→record identity (writes would target the wrong records).
+    if (readOnly || bound) return;
     commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
-  }, [commit, data, range.bottom, range.top, readOnly]);
+  }, [bound, commit, data, range.bottom, range.top, readOnly]);
 
   const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
-    if (readOnly) return;
+    if (readOnly || bound) return;
     commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
-  }, [commit, data, range.left, range.right, readOnly]);
+  }, [bound, commit, data, range.left, range.right, readOnly]);
 
   const autoFitColumn = useCallback((column = selection.focus.column) => {
     let characters = datasetHeader?.fields.find((field) => field.column === column)?.label.length ?? 1;
@@ -1542,9 +1547,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             const fieldId = fieldIds[column]!;
             const current = query.sort?.find((sort) => sort.fieldId === fieldId)?.direction;
             const next = current === undefined ? "asc" : current === "asc" ? "desc" : undefined;
-            if (sortMode === "local") {
+            if (sortMode === "local" && !bound) {
               // Reordering rows moves values between addresses; the mutation
-              // must not emit field writes against the wrong records.
+              // must not emit field writes against the wrong records. Bound
+              // grids sort server-side via the query change below.
               if (next) {
                 if (!sortBaselineRef.current) sortBaselineRef.current = data;
                 commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`, undefined, { emitFieldWrites: false });
@@ -1570,9 +1576,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       </search>}
       {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={onQueryChange} actions={contextMenuActions} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { onColumnVisibilityChange(fieldIds[contextMenu.index]!, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
       {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} autoFocus onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
-        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
-        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
-        {!readOnly && <button onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
+        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
+        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
+        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
         {contextMenu.axis === "row" && <button onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
         {contextMenu.axis === "row" && <button onClick={() => { const next = [...rowHeights]; next[contextMenu.index] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
         {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = ROW_HEIGHT; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
