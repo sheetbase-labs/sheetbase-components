@@ -22,7 +22,7 @@ export function QueryTable({ theme, adapter, pageCache }: { theme: "light" | "da
   const query = workspace?.query ?? {};
   const fieldIds = useMemo(() => fields.map((field) => field.id), [fields]);
   const datasetHeader = useMemo(
-    () => ({ fields: fields.map((field, column) => ({ id: field.id, label: field.label, column, dataType: field.dataType === "datetime" ? "date" as const : field.dataType })) }),
+    () => ({ fields: fields.map((field, column) => ({ id: field.id, label: field.label, column, dataType: field.dataType })) }),
     [fields],
   );
   const tableRef = useRef<SpreadsheetHandle>(null);

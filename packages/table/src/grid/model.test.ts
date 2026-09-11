@@ -43,6 +43,10 @@ describe("grid model", () => {
     expect(validateTypedCell("abc", "number")).toBe("Enter a valid number.");
     expect(validateTypedCell("2026-09-02", "date")).toBeUndefined();
     expect(validateTypedCell("=A1*2", "number", true)).toBeUndefined();
+    expect(validateTypedCell("2026-09-02 14:30", "datetime")).toBeUndefined();
+    expect(validateTypedCell("2026-09-02T14:30:45", "datetime")).toBeUndefined();
+    expect(validateTypedCell("2026-09-02", "datetime")).toBe("Enter a datetime as YYYY-MM-DD HH:MM.");
+    expect(validateTypedCell("2026-13-40 25:99", "datetime")).toBe("Enter a datetime as YYYY-MM-DD HH:MM.");
   });
 
   it("rewrites quoted and unquoted sheet references on rename", () => {

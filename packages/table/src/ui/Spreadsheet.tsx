@@ -356,13 +356,13 @@ function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFi
         {(operator === "isNull" || operator === "notNull") ? null
           : operator === "in" && field.options ? <select multiple aria-label="Filter values" size={Math.min(4, field.options.length)} value={[...values]} onChange={(event) => setValues(Array.from(event.target.selectedOptions, (option) => option.value))}>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
           : operator === "between" ? <div className="column-menu-between">
-            <input aria-label="Minimum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value} onChange={(event) => setValue(event.target.value)} />
-            <input aria-label="Maximum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value2} onChange={(event) => setValue2(event.target.value)} />
+            <input aria-label="Minimum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text"} value={value} onChange={(event) => setValue(event.target.value)} />
+            <input aria-label="Maximum value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text"} value={value2} onChange={(event) => setValue2(event.target.value)} />
           </div>
           : operator === "withinLastDays" ? <input aria-label="Number of days" type="number" min={1} value={value} onChange={(event) => setValue(event.target.value)} />
           : field.options && (operator === "eq" || operator === "neq") ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="">Choose…</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
           : field.dataType === "boolean" ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="true">True</option><option value="false">False</option></select>
-          : <input aria-label="Filter value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text"} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && applyFilter()} />}
+          : <input aria-label="Filter value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text"} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && applyFilter()} />}
         <div className="column-menu-actions"><button className="primary" onClick={applyFilter}>Apply</button>{existing && <button onClick={clearFilter}>Remove</button>}</div>
       </section>
     </>}
@@ -1686,7 +1686,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && !activeCustomEditor && <input
         className={`cell-editor${draft.startsWith("=") ? " tokenised-input" : ""}`}
         autoFocus
-        type={!draft.startsWith("=") && editingField?.dataType === "number" ? "number" : !draft.startsWith("=") && editingField?.dataType === "date" ? "date" : "text"}
+        type={!draft.startsWith("=") && editingField?.dataType === "number" ? "number" : !draft.startsWith("=") && editingField?.dataType === "date" ? "date" : editingField?.dataType === "datetime" ? "datetime-local" : "text"}
         aria-invalid={validationError ? true : undefined}
         aria-activedescendant={suggestions.length > 0 ? `formula-suggestion-${suggestionIndex}` : undefined}
         value={draft}

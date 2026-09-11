@@ -45,7 +45,7 @@ const WORKBENCH_RULES_KEY = "sheetbase-demo:rules";
 const WORKBENCH_SEARCH_KEY = "sheetbase-demo:search";
 const WORKBENCH_PANE_IDS = ["table", "explorer", "schema", "rules", "search"];
 
-type PaneField = { id: string; label: string; column: number; dataType: "text" | "number" | "boolean" | "date" | "relationship" };
+type PaneField = { id: string; label: string; column: number; dataType: "text" | "number" | "boolean" | "date" | "datetime" | "relationship" };
 
 /** Start with the table large on the left, explorer top-right, analysis tabs bottom-right. */
 const workbenchLayout: Layout = {
@@ -160,9 +160,8 @@ export function Workbench() {
   const searchRef = useRef<AdvancedSearchHandle>(null);
   const panesRef = useRef<PaneLayoutHandle>(null);
   const onHeaderFieldsChange = useCallback((fields: ReadonlyArray<SheetbaseField & { column: number }>) => {
-    // The table has no datetime column type; land it on date.
     setHeaderFields(fields.length > 0
-      ? fields.map((field) => ({ id: field.id, label: field.label, column: field.column, dataType: field.dataType === "datetime" ? "date" : field.dataType }))
+      ? fields.map((field) => ({ id: field.id, label: field.label, column: field.column, dataType: field.dataType }))
       : tableFields);
   }, []);
 

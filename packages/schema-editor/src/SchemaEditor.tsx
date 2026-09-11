@@ -11,6 +11,7 @@ import {
   validateGraph,
   withAutoLayout,
 } from "./graph";
+import { graphToDdl, graphToProvision } from "./ddl";
 
 export interface SchemaEditorHandle {
   /** Add a model, as the topbar button does. */
@@ -73,6 +74,23 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const [nodeDrag, setNodeDrag] = useState<{ name: string; x: number; y: number } | null>(null);
 
   const relations = useMemo(() => getRelations(graph), [graph]);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+
+  function copyExport(text: string, label: string) {
+    navigator.clipboard?.writeText(text)
+      .then(() => setExportNote(label))
+      .catch(() => setExportNote("Clipboard unavailable — copy from the console payload instead."));
+  }
+
+  function exportDdl() {
+    try { copyExport(graphToDdl(graph), "DDL copied."); }
+    catch { setExportNote("Fix validation errors before exporting."); }
+  }
+
+  function exportPayload() {
+    try { copyExport(JSON.stringify(graphToProvision(graph), null, 2), "Payload copied."); }
+    catch { setExportNote("Fix validation errors before exporting."); }
+  }
   const errors = useMemo(() => validateGraph(graph), [graph]);
   const selectedModel = graph.models.find((m) => m.name === selected) ?? null;
 
@@ -191,6 +209,19 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
               <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
             </div>
             <div className="sb-topbar-actions">
+              {exportNote && <span className="sb-stat">{exportNote}</span>}
+              <button
+                className="sb-btn"
+                disabled={errors.length > 0}
+                title={errors.length > 0 ? `Fix validation first: ${errors.join("; ")}` : "Copy create-table DDL (Postgres-flavoured)"}
+                onClick={exportDdl}
+              >Export SQL</button>
+              <button
+                className="sb-btn"
+                disabled={errors.length > 0}
+                title={errors.length > 0 ? `Fix validation first: ${errors.join("; ")}` : "Copy the provisioning payload as JSON"}
+                onClick={exportPayload}
+              >Export payload</button>
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
               <button className="sb-btn primary" onClick={addModel}>+ Model</button>
             </div>

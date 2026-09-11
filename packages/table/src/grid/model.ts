@@ -259,7 +259,7 @@ export function formulaErrorMessage(value: string): string | undefined {
   return messages[value];
 }
 
-export type CellDataType = "text" | "number" | "date" | "boolean" | "relationship";
+export type CellDataType = "text" | "number" | "date" | "datetime" | "boolean" | "relationship";
 
 export function validateTypedCell(value: string, dataType: CellDataType = "text", required = false, options?: readonly string[]): string | undefined {
   if (value.startsWith("=")) return undefined;
@@ -267,6 +267,10 @@ export function validateTypedCell(value: string, dataType: CellDataType = "text"
   if (value.trim() === "") return undefined;
   if (dataType === "number" && !Number.isFinite(Number(value))) return "Enter a valid number.";
   if (dataType === "date" && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)))) return "Enter a date as YYYY-MM-DD.";
+  if (dataType === "datetime") {
+    const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(:\d{2}(\.\d+)?)?$/.exec(value);
+    if (!match || Number.isNaN(Date.parse(`${match[1]}T${match[2]}${match[3] ?? ""}`))) return "Enter a datetime as YYYY-MM-DD HH:MM.";
+  }
   if (dataType === "boolean" && !/^(true|false)$/i.test(value)) return "Enter true or false.";
   if (options?.length) {
     const allowed = new Set(options);

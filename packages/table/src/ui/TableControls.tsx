@@ -228,7 +228,7 @@ function FilterValueControls({ field, operator, builder, onBuilder }: Readonly<{
     </fieldset>;
   }
   if (operator === "between") {
-    const type = field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text";
+    const type = field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text";
     return <div className="filter-between">
       <input aria-label="Minimum value" type={type} value={builder.value} onChange={(event) => onBuilder({ ...builder, value: event.target.value })} />
       <input aria-label="Maximum value" type={type} value={builder.value2} onChange={(event) => onBuilder({ ...builder, value2: event.target.value })} />
@@ -249,7 +249,7 @@ function FilterValueControls({ field, operator, builder, onBuilder }: Readonly<{
       <option value="false">False</option>
     </select>;
   }
-  const type = field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : "text";
+  const type = field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text";
   return <input aria-label="Filter value" type={type} value={builder.value} onChange={(event) => onBuilder({ ...builder, value: event.target.value })} />;
 }
 
