@@ -3,8 +3,10 @@ import type { FilterRule } from './types'
 
 /**
  * Convert between the shared analysis filter tree and the explorer's flat rule
- * list. Nested groups are flattened leaf-by-leaf: the explorer edits a single
- * AND/OR level, so a tree built elsewhere collapses to its conditions here.
+ * list. The explorer edits a single AND/OR level, so only trees that survive
+ * flattening unchanged may flatten: NOT groups and nested groups whose
+ * combinator differs from the root's return undefined rather than produce
+ * rules that silently invert or drop the tree's logic.
  */
 function ruleFromCondition(node: ConditionNode): FilterRule {
   const base = { id: node.id, field: node.field, operator: node.operator }
@@ -18,8 +20,16 @@ function ruleFromCondition(node: ConditionNode): FilterRule {
   return { ...base, value: node.value === undefined || node.value === null ? '' : String(node.value) }
 }
 
-export function filtersFromTree(node: FilterNode): { rules: FilterRule[]; logic: 'and' | 'or' } {
+export function filtersFromTree(node: FilterNode): { rules: FilterRule[]; logic: 'and' | 'or' } | undefined {
   if (node.type === 'condition') return { rules: [ruleFromCondition(node)], logic: 'and' }
+  if (node.combinator === 'NOT') return undefined
+  // A nested group flattens faithfully only when every descendant group shares
+  // the root's combinator (AND(AND(a,b),c) is a AND b AND c).
+  const flattenable = (child: FilterNode): boolean =>
+    child.type === 'condition'
+      ? true
+      : child.combinator !== 'NOT' && child.combinator === node.combinator && child.children.every(flattenable)
+  if (!node.children.every(flattenable)) return undefined
   const rules: FilterRule[] = []
   const walk = (child: FilterNode) => {
     if (child.type === 'condition') rules.push(ruleFromCondition(child))

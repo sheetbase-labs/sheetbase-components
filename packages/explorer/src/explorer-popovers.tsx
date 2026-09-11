@@ -83,7 +83,7 @@ function GroupPopover({ spec, columns, setSpec }: { spec: ChartSpec; columns: Da
   )
 }
 
-function FilterPopover({ spec, dataset, setSpec }: { spec: ChartSpec; dataset: Dataset; setSpec(action: SetStateAction<ChartSpec>): void }) {
+function FilterPopover({ spec, dataset, setSpec, viewFilterLocked }: { spec: ChartSpec; dataset: Dataset; setSpec(action: SetStateAction<ChartSpec>): void; viewFilterLocked?: boolean }) {
   const filters = spec.filters ?? []
   function addFilter() {
     const field = dataset?.columns[0]?.key
@@ -92,6 +92,11 @@ function FilterPopover({ spec, dataset, setSpec }: { spec: ChartSpec; dataset: D
   }
   function patchFilter(id: string, patch: Partial<FilterRule>) { setSpec((current) => ({ ...current, filters: (current.filters ?? []).map((rule) => rule.id === id ? { ...rule, ...patch } : rule) })) }
   function removeFilter(id: string) { setSpec((current) => ({ ...current, filters: (current.filters ?? []).filter((rule) => rule.id !== id) })) }
+  if (viewFilterLocked) {
+    // The host's view filter tree (NOT / nested groups) can't be shown as flat
+    // rules; adding one replaces it deliberately via onAnalysisSpec.
+    return <><div className="popover-title-row"><h4>Filters</h4><button onClick={addFilter}>+ Add</button></div><p className="muted">A shared view filter is applied to this chart — adding a filter replaces it with a flat rule list.</p></>
+  }
   return (
     <><div className="popover-title-row"><h4>Filters</h4><button onClick={addFilter}>+ Add</button></div><label className="compact-control"><span>Match</span><select value={spec.filterLogic ?? 'and'} onChange={(event) => setSpec((current) => ({ ...current, filterLogic: event.target.value as ChartSpec['filterLogic'] }))}><option value="and">All filters</option><option value="or">Any filter</option></select></label>{filters.map((rule, ruleIndex) => { const meta = dataset.columns.find((column) => column.key === rule.field) ?? dataset.columns[0]!; const values = meta.kind === 'string' || meta.kind === 'boolean' ? distinctFieldValues(dataset.rows, rule.field, 100) : []; return <div className="filter-rule" key={rule.id}><select aria-label="Filter field" value={rule.field} onChange={(event) => patchFilter(rule.id, { field: event.target.value, operator: 'eq', value: '', value2: undefined, values: undefined })}>{dataset.columns.map((column) => <option key={column.key} value={column.key}>{column.key}</option>)}</select><select aria-label="Filter operator" value={rule.operator} onChange={(event) => patchFilter(rule.id, { operator: event.target.value as FilterOperator })}>{filterOperators(meta.kind).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>{rule.operator === 'in' ? <select aria-label="Filter values" multiple value={rule.values ?? []} onChange={(event) => patchFilter(rule.id, { values: Array.from(event.currentTarget.selectedOptions, (option) => option.value) })}>{values.map((value) => <option value={value} key={value}>{value}</option>)}</select> : <input aria-label="Filter value" type={meta.kind === 'date' ? 'date' : meta.kind === 'number' ? 'number' : 'text'} value={rule.value ?? ''} onChange={(event) => patchFilter(rule.id, { value: event.target.value })}/>} {rule.operator === 'between' && <input aria-label="Filter upper value" type={meta.kind === 'date' ? 'date' : 'number'} value={rule.value2 ?? ''} onChange={(event) => patchFilter(rule.id, { value2: event.target.value })}/>}<button aria-label={`Remove filter ${ruleIndex + 1}`} className="filter-remove" onClick={() => removeFilter(rule.id)}>×</button></div>})}{filters.length > 0 && <button className="popover-clear" onClick={() => setSpec((current) => ({ ...current, filters: [] }))}>Clear all</button>}</>
   )
@@ -225,13 +230,15 @@ function MenuButton({ id, label, detail, active, onToggle }: {
   return <button className={`explorer-tool ${active ? 'active' : ''}`} onClick={() => onToggle(id)}><span>{label}</span>{detail && <small>{detail}</small>}<b>⌄</b></button>
 }
 
-export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalysisSpec, onField, onAutoKind, onChoosePlot }: {
+export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalysisSpec, viewFilterLocked, onField, onAutoKind, onChoosePlot }: {
   menu: Menu
   onMenuToggle(id: Exclude<Menu, null>): void
   spec: ChartSpec
   dataset: Dataset
   setSpec(action: SetStateAction<ChartSpec>): void
   onAnalysisSpec(action: SetStateAction<ChartSpec>): void
+  /** The host's view filter tree can't be edited as flat rules — show a note instead. */
+  viewFilterLocked?: boolean
   onField(role: 'x' | 'y' | 'color' | 'facet', value?: string): void
   onAutoKind(): void
   onChoosePlot(kind: ChartKind): void
@@ -241,7 +248,7 @@ export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalys
       <div className="tool-anchor"><MenuButton id="plot" label="Plot" detail={plotKinds.find((item) => item.kind === spec.kind)?.label} active={menu === 'plot'} onToggle={onMenuToggle} />{menu === 'plot' && <div className="tool-popover plot-popover"><PlotPopover activeKind={spec.kind} onChoose={onChoosePlot} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="fields" label="Fields" detail={[spec.x && `X ${spec.x}`, spec.y && `Y ${spec.y}`].filter(Boolean).join(' · ')} active={menu === 'fields'} onToggle={onMenuToggle} />{menu === 'fields' && <div className="tool-popover inspector-popover"><FieldsPopover spec={spec} columns={dataset.columns} setSpec={setSpec} onField={onField} onAutoKind={() => { const inferred = smartKindFor(dataset, spec.x, spec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="group" label="Group" detail={spec.group ?? (spec.aggregate === 'none' ? undefined : spec.aggregate)} active={menu === 'group'} onToggle={onMenuToggle} />{menu === 'group' && <div className="tool-popover inspector-popover"><GroupPopover spec={spec} columns={dataset.columns} setSpec={onAnalysisSpec} /></div>}</div>
-      <div className="tool-anchor"><MenuButton id="filter" label="Filter" detail={spec.filters?.length ? String(spec.filters.length) : undefined} active={menu === 'filter'} onToggle={onMenuToggle} />{menu === 'filter' && <div className="tool-popover inspector-popover filter-popover"><FilterPopover spec={spec} dataset={dataset} setSpec={onAnalysisSpec} /></div>}</div>
+      <div className="tool-anchor"><MenuButton id="filter" label="Filter" detail={spec.filters?.length ? String(spec.filters.length) : undefined} active={menu === 'filter'} onToggle={onMenuToggle} />{menu === 'filter' && <div className="tool-popover inspector-popover filter-popover"><FilterPopover spec={spec} dataset={dataset} setSpec={onAnalysisSpec} viewFilterLocked={viewFilterLocked} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="error" label="Error" detail={(spec.errorMode ?? 'none') === 'none' ? undefined : String(spec.errorMode).toUpperCase()} active={menu === 'error'} onToggle={onMenuToggle} />{menu === 'error' && <div className="tool-popover inspector-popover"><ErrorPopover spec={spec} dataset={dataset} setSpec={setSpec} /></div>}</div>
     </>
   )

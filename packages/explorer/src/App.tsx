@@ -242,8 +242,11 @@ export function App(props: AppProps = {}) {
   // spec's filters/group/summary and adds sort/limit to the row pipeline.
   const view = props.view
   const viewFilters = useMemo(() => (view ? filtersFromTree(view.filter) : null), [view])
-  const chartSpec = useMemo<ChartSpec>(() => (view && viewFilters
-    ? { ...spec, filters: viewFilters.rules, filterLogic: viewFilters.logic, group: view.groupBy, aggregate: view.summary }
+  // A view whose tree can't flatten (NOT / mixed nesting) is still applied to
+  // the rows through viewRows below — chartSpec then carries no flat rules so
+  // the rows are not filtered a second time by a corrupted list.
+  const chartSpec = useMemo<ChartSpec>(() => (view
+    ? { ...spec, filters: viewFilters?.rules ?? [], filterLogic: viewFilters?.logic ?? 'and', group: view.groupBy, aggregate: view.summary }
     : spec), [spec, view, viewFilters])
   const chartSpecRef = useRef(chartSpec)
   useEffect(() => { chartSpecRef.current = chartSpec }, [chartSpec])
@@ -256,6 +259,9 @@ export function App(props: AppProps = {}) {
     if (next.showRawPoints !== current.showRawPoints) stylePatch.showRawPoints = next.showRawPoints
     if (next.hiddenSeries !== current.hiddenSeries) stylePatch.hiddenSeries = next.hiddenSeries
     if (Object.keys(stylePatch).length) setSpec((prev) => ({ ...prev, ...stylePatch }))
+    // Editing filters in the explorer deliberately replaces the view's filter
+    // tree — including any nested/NOT structure the flat list cannot express —
+    // with the flat rules just edited.
     onViewChangeRef.current?.({
       ...viewRef.current,
       filter: treeFromFilters(next.filters ?? [], next.filterLogic ?? 'and'),
@@ -403,7 +409,7 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
     <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${chartSpec.kind} chart of ${chartSpec.y} by ${chartSpec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
   </section></main>
   {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
