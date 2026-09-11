@@ -16,6 +16,26 @@ describe("RevisionedCommitCoordinator", () => {
     expect(await coordinator.commit([write])).toMatchObject({ status: "conflict", baseRevision: "r1", currentRevision: "r2" });
     expect(coordinator.revision).toBe("r1");
   });
+
+  it("does not rewind to an older numeric-suffixed revision", () => {
+    const adapter = { resolve: () => null, commit: async () => ({ revision: "r1", accepted: [], rejected: [] }) } as DataAdapter;
+    const coordinator = new RevisionedCommitCoordinator(adapter, "r5");
+    coordinator.acceptRevision("r3");
+    expect(coordinator.revision).toBe("r5");
+    coordinator.acceptRevision("r9");
+    expect(coordinator.revision).toBe("r9");
+  });
+
+  it("accepts the first revision and still overwrites for unparseable formats", () => {
+    const adapter = { resolve: () => null, commit: async () => ({ revision: "1", accepted: [], rejected: [] }) } as DataAdapter;
+    const coordinator = new RevisionedCommitCoordinator(adapter);
+    coordinator.acceptRevision("r3");
+    expect(coordinator.revision).toBe("r3");
+    coordinator.acceptRevision("abc");
+    expect(coordinator.revision).toBe("abc");
+    coordinator.acceptRevision("r1");
+    expect(coordinator.revision).toBe("r1");
+  });
 });
 
 describe("conflict presentation model", () => {

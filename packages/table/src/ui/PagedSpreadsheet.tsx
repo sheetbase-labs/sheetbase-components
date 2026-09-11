@@ -205,6 +205,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       throw Object.assign(new Error("Revision conflict"), { status: 409, conflict: result });
     }
     if (result.result.rejected.length) throw new Error(result.result.rejected[0]!.reason);
+    // Drop cached pages so the next viewport load can't serve pre-edit values
+    // (and can't rewind the coordinator revision with a stale page).
+    cacheRef.current.invalidateDataset(recordWrite.datasetId);
   };
 
   const keepMine = useCallback(async (entry: ConflictPanelEntry) => {
@@ -216,6 +219,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     }
     if (result.result.rejected.length) return;
     dropConflict(entry);
+    cacheRef.current.invalidateDataset(entry.write.datasetId);
     const address = addressFor(entry.write);
     if (address) {
       tableRef.current?.clearWriteState(address);
@@ -242,6 +246,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       }]), entry.currentRevision);
     }
     dropConflict(entry);
+    // The server value now wins; cached pages may still hold the pre-conflict
+    // value, so the next fetch must not serve them.
+    cacheRef.current.invalidateDataset(entry.write.datasetId);
   }, [addressFor, dropConflict]);
 
   const keepAllMine = useCallback(async () => {

@@ -927,13 +927,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       const invalid = field ? validateTypedCell(completedDraft, field.dataType, field.required, field.options) : undefined;
       if (invalid) { setValidationError(invalid); return; }
       const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editing.row, column: item.column })) ?? "").trim()) : false;
+      const before = data.get(key);
       commitMutation(cellChangesMutation("Edit cell", [{
         address: key,
-        before: data.get(key),
+        before,
         after: completedDraft === "" ? undefined : completedDraft,
       }]));
       const recordId = datasetHeader?.recordIdForRow?.(editing.row);
-      if (field && (!rowWasBlank || recordId)) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: completedDraft }, data.get(key));
+      // Skip the write entirely when the edit changed nothing — an unchanged
+      // commit still bumps the server revision and pollutes held writes.
+      if (field && (!rowWasBlank || recordId) && (before ?? "") !== completedDraft) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: completedDraft }, before);
       if (rowWasBlank && datasetHeader && completedDraft !== "") {
         const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? completedDraft : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
         if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editing.row, values })).catch(() => undefined);

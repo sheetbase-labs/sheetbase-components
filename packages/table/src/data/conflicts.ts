@@ -62,5 +62,18 @@ export class RevisionedCommitCoordinator {
       return { status: "conflict", baseRevision, currentRevision: error.currentRevision, conflicts: error.conflicts, writes };
     }
   }
-  acceptRevision(revision: string): void { this.#revision = revision; }
+  acceptRevision(revision: string): void {
+    // A stale cached page must not rewind the commit baseline: only advance
+    // when the incoming revision's numeric suffix is greater (both real
+    // producers use one, e.g. "r7" / "8"). Unparseable formats keep the
+    // previous overwrite behaviour so unusual hosts aren't broken.
+    const suffix = (rev: string) => {
+      const digits = String(rev).replace(/^\D+/, "");
+      return digits === "" ? NaN : Number(digits);
+    };
+    const current = this.#revision;
+    const prev = current === undefined ? NaN : suffix(current);
+    const next = suffix(revision);
+    if (current === undefined || Number.isNaN(prev) || Number.isNaN(next) || next > prev) this.#revision = revision;
+  }
 }
