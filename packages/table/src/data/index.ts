@@ -4,5 +4,6 @@ export * from "./http-adapter";
 export * from "./memory-adapter";
 export * from "./page-cache";
 export * from "./projection";
+export * from "./query-records";
 export * from "./query";
 export * from "./viewport-loader";

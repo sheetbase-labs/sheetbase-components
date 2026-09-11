@@ -1,6 +1,15 @@
 import type { Scalar } from "./types";
-import type { FunctionArg, FunctionContext } from "./functions";
+import { callFunction, type FunctionArg, type FunctionContext } from "./functions";
 import type { SpillMatrix } from "./spill-store";
+import { evaluateBytecodeAsync, type FormulaOutput } from "./bytecode";
+import {
+  localFormulaExecutor,
+  resolveTaskProgram,
+  type FormulaBatchExecutor,
+  type FormulaResult,
+  type FormulaTask,
+  type ProgramCache,
+} from "./calculation";
 
 /**
  * Host-gated async functions.
@@ -95,4 +104,57 @@ export class AsyncFunctionRegistry {
     }
     return entry.fn(args, ctx);
   }
+}
+
+export interface AsyncFormulaExecutor {
+  /** Drop-in executor for `Worksheet.recalculateAsync`. */
+  execute: FormulaBatchExecutor;
+  /**
+   * Addresses whose programs contain at least one registered async call —
+   * the set a host invalidates when the underlying data revision advances.
+   */
+  asyncAddresses(): readonly string[];
+}
+
+/**
+ * The dispatch point between sync bytecode evaluation and the registry: a
+ * `FormulaBatchExecutor` that routes programs containing a registered async
+ * call through `evaluateBytecodeAsync` (registry-gated, host-side) and lets
+ * every other task fall through to `fallback` (worker or local).
+ *
+ * Because `call` ops inside an async program dispatch by name, sync and async
+ * functions compose freely: `=SUM(QUERYRECORDS("d","f"))` awaits the fetch
+ * then sums the spill.
+ */
+export function createAsyncFormulaExecutor(
+  registry: AsyncFunctionRegistry,
+  fallback: FormulaBatchExecutor = localFormulaExecutor,
+): AsyncFormulaExecutor {
+  const programs: ProgramCache = new Map();
+  const seen = new Set<string>();
+  const callAsync = async (name: string, args: FunctionArg[], resolve: FunctionContext["resolve"]): Promise<FormulaOutput> =>
+    registry.has(name)
+      ? registry.call(name, args, { resolve })
+      : callFunction(name, args, { resolve });
+  return {
+    execute: async (tasks) => {
+      const syncTasks: FormulaTask[] = [];
+      const results: FormulaResult[] = [];
+      for (const task of tasks) {
+        const program = resolveTaskProgram(task, programs);
+        if (!program.instructions.some((instruction) => instruction.op === "call" && registry.has(instruction.name))) {
+          syncTasks.push(task);
+          continue;
+        }
+        seen.add(task.address);
+        results.push({
+          address: task.address,
+          value: await evaluateBytecodeAsync(program, (address) => task.inputs[address] ?? null, callAsync),
+        });
+      }
+      if (syncTasks.length) results.push(...(await fallback(syncTasks)));
+      return results;
+    },
+    asyncAddresses: () => [...seen],
+  };
 }

@@ -176,6 +176,65 @@ export function evaluateBytecode(program: BytecodeProgram, resolve: ValueResolve
   return isSpill(stack[0]) ? stack[0] : scalar(stack[0]);
 }
 
+/**
+ * Host-side async twin of `evaluateBytecode`: identical semantics, but `call`
+ * ops dispatch through `callAsync`, which may await (capability-gated work in
+ * `async-functions.ts`). Never runs in a worker — workers keep the sync path.
+ */
+export async function evaluateBytecodeAsync(
+  program: BytecodeProgram,
+  resolve: ValueResolver,
+  callAsync: (name: string, args: FunctionArg[], resolve: ValueResolver) => Promise<FormulaOutput>,
+): Promise<FormulaOutput> {
+  const stack: Operand[] = [];
+  const handlers: CatchHandler[] = [];
+  let pointer = 0;
+  while (pointer < program.instructions.length) {
+    const instruction = program.instructions[pointer];
+    try {
+      if (instruction.op === "push") stack.push(instruction.value);
+      else if (instruction.op === "reference") stack.push(resolve(key(instruction.reference)));
+      else if (instruction.op === "range") stack.push({ kind: "range", start: instruction.start, end: instruction.end });
+      else if (instruction.op === "unary") {
+        const value = number(scalar(stack.pop()));
+        stack.push(instruction.operator === "-" ? -value : value);
+      } else if (instruction.op === "binary") {
+        const right = scalar(stack.pop());
+        const left = scalar(stack.pop());
+        stack.push(binary(instruction.operator, left, right));
+      } else if (instruction.op === "jump-if-false") {
+        if (!scalar(stack.pop())) pointer = instruction.target - 1;
+      } else if (instruction.op === "jump") pointer = instruction.target - 1;
+      else if (instruction.op === "drop") stack.pop();
+      else if (instruction.op === "catch") {
+        handlers.push({ from: pointer + 1, target: instruction.target, depth: instruction.depth });
+      } else if (instruction.op === "uncatch") {
+        handlers.pop();
+      } else {
+        const args = stack.splice(stack.length - instruction.argumentCount, instruction.argumentCount);
+        stack.push(await callAsync(instruction.name, args as FunctionArg[], resolve));
+      }
+    } catch (error) {
+      let handlerIndex = -1;
+      for (let index = handlers.length - 1; index >= 0; index--) {
+        if (handlers[index].from <= pointer) {
+          handlerIndex = index;
+          break;
+        }
+      }
+      if (handlerIndex < 0) throw error;
+      const handler = handlers[handlerIndex];
+      handlers.length = handlerIndex;
+      stack.length = handler.depth;
+      pointer = handler.target - 1;
+    }
+    pointer += 1;
+  }
+  if (stack.length !== 1) throw new Error("#VALUE!");
+  if (isRange(stack[0])) return expandMatrix(stack[0], resolve);
+  return isSpill(stack[0]) ? stack[0] : scalar(stack[0]);
+}
+
 function key(reference: FormulaReference): string { return reference.sheet ? `${reference.sheet}!${reference.address}` : reference.address; }
 function scalar(value: Operand | undefined): Scalar {
   if (value === undefined || isRange(value) || isSpill(value)) throw new Error("#VALUE!");

@@ -84,7 +84,7 @@ export function evaluateFormulaTasks(
   }));
 }
 
-function resolveTaskProgram(task: FormulaTask, cache: ProgramCache): BytecodeProgram {
+export function resolveTaskProgram(task: FormulaTask, cache: ProgramCache): BytecodeProgram {
   if (task.program) {
     cache.set(task.programId ?? programIdFor(task.program), task.program);
     return task.program;

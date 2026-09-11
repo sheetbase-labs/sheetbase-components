@@ -100,6 +100,8 @@ Planned order:
 4. incremental worker program transfer for very large formula populations;
 5. asynchronous query and agent functions only behind explicit capability boundaries.
 
+Item 5 is partially delivered: `AsyncFunctionRegistry` (`engine/async-functions.ts`) gates async names behind host-granted capabilities — `QUERYRECORDS` ships under `query:records`. The dispatch point is `createAsyncFormulaExecutor`, a `FormulaBatchExecutor` that routes programs containing a registered async call through the host-side `evaluateBytecodeAsync` and delegates everything else to the normal executor, so sync and async functions compose (`=SUM(QUERYRECORDS("d","f"))`) while workers never see gated names. `createQueryRecordsTransport(adapter, cache)` (`data/query-records.ts`) is the reference transport: `QUERYRECORDS(datasetId, fieldId, [limit])` fetches one page through the host's `PagedDataAdapter` and returns a single-column spill, `#N/A` on an empty result. Requests omit `revision` so identical formulas share one `DataPageCache` entry; when the adapter's revision advances the host calls `cache.invalidateDataset(datasetId)` and `worksheet.invalidate` on every `executor.asyncAddresses()` entry, then re-runs `recalculateAsync`. Invalidation is coarse — whole dataset, all query cells — by design; per-query invalidation is follow-up work.
+
 ## Current boundaries
 
 - complete Excel semantics;
