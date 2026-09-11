@@ -4,6 +4,7 @@ import { FileUploadIcon, PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons
 import { applyView, emptyRoot, type AnalysisView } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
+import { bucketsToRows } from './lib/adapters/http'
 import { sampleAdapter } from './lib/adapters/sample'
 import { buildChart } from './lib/chart'
 import { filteredRows, ROW_ID } from './lib/explore'
@@ -11,7 +12,7 @@ import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 import { runSqlAsync } from './lib/sql'
-import type { ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, SavedExploration } from './lib/types'
+import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, SavedExploration } from './lib/types'
 import {
   ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
 } from './explorer-chrome'
@@ -270,10 +271,74 @@ export function App(props: AppProps = {}) {
     })
   }, [setSpec])
   const viewRows = useMemo<DataRow[] | null>(() => (view && dataset ? applyView(dataset.rows, view) : null), [view, dataset])
-  const chartDataset = useMemo<Dataset | null>(() => (dataset && viewRows ? { ...dataset, rows: viewRows } : dataset), [dataset, viewRows])
 
-  const definition = useMemo(() => chartDataset ? buildChart(chartDataset, chartSpec, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window }))) : null, [chartDataset, chartSpec, selectedRow, setSpec])
-  const visibleRows = useMemo(() => chartDataset ? filteredRows(chartDataset, chartSpec) : [], [chartDataset, chartSpec])
+  // Remote datasets keep their rows server-side: `dataset.remote.aggregate`
+  // groups+sums on the server and the chart draws the returned buckets. Only
+  // specs whose preparedRows step would aggregate go remote — histogram,
+  // box, violin and heatmap always draw raw rows, and an aggregate of
+  // 'none' needs them too.
+  const remote = dataset?.remote
+  const remoteQuery = useMemo<AggregateQuery | null>(() => {
+    if (!remote || !chartSpec.x || chartSpec.aggregate === 'none') return null
+    if (chartSpec.kind === 'histogram' || chartSpec.kind === 'box' || chartSpec.kind === 'violin' || chartSpec.kind === 'heatmap') return null
+    if (chartSpec.aggregate !== 'count' && !chartSpec.y) return null
+    return {
+      // The shared view's tree goes over the wire intact; flat spec filters
+      // are rebuilt into one. Either way the server applies it once.
+      filter: view?.filter ?? treeFromFilters(chartSpec.filters ?? [], chartSpec.filterLogic ?? 'and'),
+      groupBy: chartSpec.x,
+      summary: chartSpec.aggregate,
+      valueField: chartSpec.aggregate === 'count' ? undefined : chartSpec.y,
+      limit: view?.limit,
+    }
+  }, [remote, chartSpec.x, chartSpec.y, chartSpec.aggregate, chartSpec.kind, chartSpec.filters, chartSpec.filterLogic, view])
+  const [remoteResult, setRemoteResult] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
+  const [remoteError, setRemoteError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!remote || !remoteQuery || !dataset) return
+    const controller = new AbortController()
+    remote.aggregate(remoteQuery, controller.signal).then(
+      (response) => {
+        if (controller.signal.aborted) return
+        setRemoteResult({ dataset, rows: bucketsToRows(response.buckets, remoteQuery), totalRows: response.totalRows })
+        setRemoteError(null)
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted || error instanceof DOMException && error.name === 'AbortError') return
+        setRemoteError(error instanceof Error ? error.message : String(error))
+      },
+    )
+    return () => controller.abort()
+  }, [remote, remoteQuery, dataset])
+  const remoteRows = remoteResult?.dataset === dataset ? remoteResult.rows : null
+
+  const chartDataset = useMemo<Dataset | null>(() => {
+    if (!dataset) return null
+    if (remote) return { ...dataset, rows: remoteRows ?? [] }
+    return viewRows ? { ...dataset, rows: viewRows } : dataset
+  }, [dataset, remote, remoteRows, viewRows])
+
+  // Bucket rows are already filtered and aggregated: build the chart with a
+  // pass-through spec so preparedRows/filteredRows don't re-apply either.
+  const chartSpecForBuild = useMemo<ChartSpec>(() => (remote
+    ? { ...chartSpec, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
+    : chartSpec), [remote, chartSpec])
+
+  const definition = useMemo(() => {
+    if (!chartDataset) return null
+    if (remote && (remoteQuery === null || remoteRows === null)) return null
+    return buildChart(chartDataset, chartSpecForBuild, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window })))
+  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec])
+  const visibleRows = useMemo(() => {
+    if (!chartDataset) return []
+    if (remote) return remoteRows ?? []
+    return filteredRows(chartDataset, chartSpec)
+  }, [chartDataset, chartSpec, remote, remoteRows])
+  const remoteNote = !remote ? null
+    : remoteError ? `Aggregation failed: ${remoteError}`
+    : !remoteQuery ? 'Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.'
+    : remoteRows === null ? 'Aggregating on the server…'
+    : null
   const seriesField = chartSpec.color ?? chartSpec.group
   const hiddenSeries = useMemo(() => new Set(chartSpec.hiddenSeries ?? []), [chartSpec.hiddenSeries])
   const seriesValues = useMemo(() => {
@@ -417,9 +482,11 @@ export function App(props: AppProps = {}) {
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
     <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
-    <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${chartSpec.kind} chart of ${chartSpec.y} by ${chartSpec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />
+    {remoteNote
+      ? <div className="chart-stage chart-stage-v3"><div className="empty-state"><strong>Remote source</strong><span>{remoteNote}</span></div></div>
+      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={`${chartSpec.kind} chart of ${chartSpec.y} by ${chartSpec.x}`} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />}
   </section></main>
-  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
+  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={remote ? remoteResult?.totalRows ?? 0 : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? <div className="remote-note">{tab === 'data' ? 'Rows live on the server for this source — the chart above shows aggregated buckets.' : 'SQL runs against rows in the browser; remote datasets stay on the server.'}</div> : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)
   return <ExplorerFrame framed={props.frame} rootRef={rootRef} panel={showPanel} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }

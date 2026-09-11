@@ -144,6 +144,49 @@ const server = Bun.serve({
       return json({ recordId, revision: `r${revision}` }, 201);
     }
     if (request.method === "POST" && url.pathname === "/api/table/conflict") { revision++; return json({ revision: `r${revision}` }); }
+    if (request.method === "POST" && url.pathname === "/api/explorer/aggregate") {
+      // Explorer spike endpoint: server-side group+aggregate so charts work
+      // without materialising rows. Filter payload is the plan-008 tree.
+      const body = await request.json() as { datasetId?: string; filter?: FilterNode; groupBy?: string; summary?: string; valueField?: string; limit?: number };
+      if (!body.groupBy || !body.summary) return json({ error: "groupBy and summary are required" }, 400);
+      if (body.summary !== "count" && body.valueField === undefined) return json({ error: "valueField is required for this summary" }, 400);
+      const predicate = body.filter ? buildPredicate(body.filter) : () => true;
+      const buckets = new Map<string, { count: number; values: number[] }>();
+      let matched = 0;
+      const candidateCount = TOTAL_ROWS + created.length;
+      for (let index = 0; index < candidateCount; index++) {
+        const row = index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
+        if (!predicate(row.values)) continue;
+        matched++;
+        const key = String(row.values[body.groupBy] ?? "");
+        let bucket = buckets.get(key);
+        if (!bucket) buckets.set(key, bucket = { count: 0, values: [] });
+        bucket.count++;
+        if (body.valueField !== undefined) {
+          const value = Number(row.values[body.valueField]);
+          if (Number.isFinite(value)) bucket.values.push(value);
+        }
+      }
+      const summarized = [...buckets.entries()].map(([key, bucket]) => {
+        let value: number | null = null;
+        if (body.summary === "count") value = bucket.count;
+        else if (bucket.values.length) {
+          if (body.summary === "sum") value = bucket.values.reduce((sum, item) => sum + item, 0);
+          else if (body.summary === "mean") value = bucket.values.reduce((sum, item) => sum + item, 0) / bucket.values.length;
+          else if (body.summary === "min") value = Math.min(...bucket.values);
+          else if (body.summary === "max") value = Math.max(...bucket.values);
+          else if (body.summary === "median") {
+            const sorted = [...bucket.values].sort((a, b) => a - b);
+            const middle = Math.floor(sorted.length / 2);
+            value = sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
+          }
+        }
+        return { key, count: bucket.count, value };
+      });
+      summarized.sort((left, right) => left.key.localeCompare(right.key));
+      const limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : undefined;
+      return json({ buckets: limit ? summarized.slice(0, limit) : summarized, totalRows: matched, revision: `r${revision}` });
+    }
     if (request.method === "GET" && url.pathname === "/api/presentation") {
       const key = url.searchParams.get("key") ?? "";
       const row = loadPresentation.get(key) as { state: string } | null;

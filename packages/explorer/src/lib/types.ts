@@ -1,4 +1,4 @@
-import type { FilterOperator } from 'sheetbase-shared'
+import type { FilterOperator, GroupNode, SummaryKind } from 'sheetbase-shared'
 
 export type { FilterOperator }
 
@@ -12,11 +12,48 @@ export interface ColumnMeta {
   uniqueCount: number
 }
 
+/** A group-by/aggregate query against a dataset whose rows live server-side. */
+export interface AggregateQuery {
+  /** Filter tree (plan-008 semantics); authoritative over any flat list. */
+  filter?: GroupNode
+  /** Field whose distinct values become the buckets — the chart's x channel. */
+  groupBy: string
+  summary: Exclude<SummaryKind, 'none'>
+  /** Measure field; required for every summary except `count`. */
+  valueField?: string
+  limit?: number
+}
+
+export interface AggregateBucket {
+  key: string
+  count: number
+  value: number | null
+}
+
+export interface AggregateResponse {
+  buckets: AggregateBucket[]
+  /** Rows that matched the filter before bucketing. */
+  totalRows: number
+  revision?: string
+}
+
+/** Capability a remote dataset exposes: server-side group+aggregate. */
+export interface RemoteDatasetSource {
+  aggregate(query: AggregateQuery, signal?: AbortSignal): Promise<AggregateResponse>
+}
+
 export interface Dataset {
   name: string
   rows: DataRow[]
   columns: ColumnMeta[]
   source: string
+  /**
+   * Set when the dataset's rows live server-side: `rows` stays empty and
+   * aggregated chart data is fetched through this capability instead of
+   * computed in-browser. Row-level features (data table, SQL, export-all)
+   * don't apply to remote datasets.
+   */
+  remote?: RemoteDatasetSource
 }
 
 export type ChartKind = 'scatter' | 'line' | 'bar' | 'horizontal-bar' | 'area' | 'histogram' | 'box' | 'lollipop' | 'violin' | 'waterfall' | 'heatmap' | 'pie' | 'donut'
