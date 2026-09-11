@@ -20,6 +20,7 @@
     "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
+    "budget": "node scripts/bundle-budget.mjs",
     "bench": "vitest bench --run"
   },
   "dependencies": {
@@ -27,6 +28,8 @@
     "@hugeicons/react": "^1.1.10",
     "@tanstack/charts": "0.16.0",
     "alasql": "^4.6.6",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0",
     "papaparse": "^5.5.3",
     "sheetbase-shared": "workspace:*",
     "sheetbase-table": "workspace:*"
@@ -36,6 +39,8 @@
     "react-dom": ">=18"
   },
   "devDependencies": {
+    "@types/d3-scale": "^4.0.0",
+    "@types/d3-shape": "^3.1.0",
     "@types/papaparse": "^5.3.16",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

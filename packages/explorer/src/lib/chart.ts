@@ -1,4 +1,3 @@
-/// <reference path="../d3-scale.d.ts" />
 import {
   areaY,
   barX,
@@ -324,7 +323,8 @@ function chartSpec(
   }
   const xKind = resolveKind(spec.xScale, xDataExtent, xLogExtent)
   const yKind = resolveKind(spec.yScale, yDataExtent, yLogExtent)
-  const numericScale = (kind: ScaleKind) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const numericScale = (kind: ScaleKind): (() => any) =>
     kind === 'log' ? scaleLog : kind === 'sqrt' ? scaleSqrt : kind === 'symlog' ? scaleSymlog : scaleLinear
 
   // Optional ordering of categorical x (or y for horizontal bars), ranked by
@@ -380,7 +380,7 @@ function chartSpec(
     : spec.palette
   const color = semanticColour || heatmap
     ? {
-        scale: () => (gradient ? d3ScaleLinear().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
+        scale: () => (gradient ? d3ScaleLinear<string>().range(colourStops) : scaleOrdinal<string, string>().range(spec.palette)),
         ...(gradient
           ? { legend: heatmap ? colorGradientLegend({ label: spec.size ?? 'count' }) : colorLegend({ label: spec.color }) }
           : {}),
