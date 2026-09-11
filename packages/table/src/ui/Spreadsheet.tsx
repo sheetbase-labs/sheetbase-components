@@ -67,6 +67,7 @@ import {
   type HeldFieldWrite,
 } from "./held-field-writes";
 import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
+import { conflictWriteKeys, fieldWritesForMutation, type MutationFieldWrite } from "../data";
 import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
 
 const ROW_HEIGHT = 31;
@@ -145,6 +146,18 @@ export type DatasetHeaderConfig = Readonly<{
 export type FieldWrite = Readonly<{ address: string; row: number; datasetId?: string; recordId?: string; fieldId: string; value: string }>;
 export type WriteStatus = "pending" | "saved" | "conflict" | "failed";
 
+/**
+ * Maps a write-path failure to a per-write badge: conflicted records get
+ * "conflict" (matched by record+field when the error lists them), anything
+ * else is "failed". A bare 409 marks the write conflicted.
+ */
+function writeFailureStatus(error: unknown, write: FieldWrite): WriteStatus {
+  const keys = conflictWriteKeys(error);
+  if (keys === undefined) return "failed";
+  if (keys === "all") return "conflict";
+  return keys.has(JSON.stringify([write.recordId, write.fieldId])) ? "conflict" : "failed";
+}
+
 /** Checkbox editor for option fields marked `multiple`; commits a comma-joined value. */
 function MultiOptionPicker({ options, current, onCommit, onCancel }: Readonly<{
   options: readonly string[];
@@ -205,6 +218,13 @@ export type SpreadsheetProps = {
   sortMode?: "local" | "server";
   datasetHeader?: DatasetHeaderConfig;
   onFieldWrite?(write: FieldWrite): void | Promise<void>;
+  /**
+   * Batch variant of `onFieldWrite`: one call per committed grid mutation
+   * (paste, clear, fill, replace-all, …) carrying every bound-cell write, so
+   * the host can persist them in a single adapter commit. When absent, bulk
+   * writes fall back to one `onFieldWrite` call each.
+   */
+  onFieldWrites?(writes: readonly FieldWrite[]): void | Promise<void>;
   /**
    * Intercepts the automatic authoritative field-write commit. Return "hold"
    * to keep the write local (visible, undoable) without committing — the host
@@ -379,6 +399,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   sortMode = "local",
   datasetHeader,
   onFieldWrite,
+  onFieldWrites,
   fieldWritePolicy,
   onHeldFieldWritesChange,
   onRecordCreate,
@@ -654,16 +675,114 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return true;
   }, [onMutation]);
 
-  const commitMutation = useCallback((mutation: GridMutation) => {
-    if (pushHistory(mutation)) {
-      applyWorksheetMutation(worksheet, mutation);
-      setData((current) => applyCellMutation(current, mutation));
+  const [heldWrites, setHeldWrites] = useState<ReadonlyMap<string, HeldFieldWrite>>(() => new Map());
+  const heldWritesRef = useRef(heldWrites);
+  useEffect(() => { heldWritesRef.current = heldWrites; }, [heldWrites]);
+  /** Authoritative write pipeline: write-state badge tracking per address. */
+  const updateWriteState = useCallback((entry: Readonly<{ write: FieldWrite; before?: string }>, status: WriteStatus) => {
+    const { write, before } = entry;
+    const existingTimer = writeStateTimers.current.get(write.address);
+    if (existingTimer) clearTimeout(existingTimer);
+    writeStateTimers.current.delete(write.address);
+    setWriteStates((current) => new Map(current).set(write.address, { status, write, before }));
+    onWriteStateChange?.(write.address, status);
+    if (status === "saved") {
+      writeStateTimers.current.set(write.address, setTimeout(() => {
+        writeStateTimers.current.delete(write.address);
+        setWriteStates((current) => {
+          if (current.get(write.address)?.status !== "saved") return current;
+          const next = new Map(current);
+          next.delete(write.address);
+          return next;
+        });
+      }, 1400));
     }
-  }, [pushHistory, worksheet]);
+  }, [onWriteStateChange]);
 
-  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>) => {
+  const emitFieldWrite = useCallback((write: FieldWrite, before?: string) => {
+    if (!onFieldWrite) return;
+    const entry = { write, before };
+    updateWriteState(entry, "pending");
+    Promise.resolve(onFieldWrite(write)).then(
+      () => updateWriteState(entry, "saved"),
+      (error: unknown) => updateWriteState(entry, writeFailureStatus(error, write)),
+    );
+  }, [onFieldWrite, updateWriteState]);
+
+  /**
+   * Bulk write dispatch for grid mutations (paste, clear, fill, replace-all):
+   * held-policy writes enqueue exactly like the single-edit path, and the rest
+   * reach the host in one `onFieldWrites` call (one adapter commit) or one
+   * `onFieldWrite` call each when the host only implements the single form.
+   */
+  const emitFieldWrites = useCallback((entries: readonly MutationFieldWrite[]) => {
+    if (!entries.length || (!onFieldWrite && !onFieldWrites)) return;
+    let held = heldWritesRef.current;
+    let heldChanged = false;
+    const immediate: MutationFieldWrite[] = [];
+    for (const entry of entries) {
+      if (fieldWritePolicy?.(entry.write) === "hold") {
+        held = holdFieldWrite(held, entry.write, entry.before);
+        heldChanged = true;
+      } else {
+        immediate.push(entry);
+      }
+    }
+    if (heldChanged) {
+      heldWritesRef.current = held;
+      setHeldWrites(held);
+      onHeldFieldWritesChange?.([...held.values()].map((entry) => entry.write));
+    }
+    if (!immediate.length) return;
+    const settle = (entry: MutationFieldWrite, error: unknown) => updateWriteState(entry, error === undefined ? "saved" : writeFailureStatus(error, entry.write));
+    for (const entry of immediate) updateWriteState(entry, "pending");
+    if (onFieldWrites) {
+      Promise.resolve(onFieldWrites(immediate.map((entry) => entry.write))).then(
+        () => { for (const entry of immediate) settle(entry, undefined); },
+        (error) => { for (const entry of immediate) settle(entry, error); },
+      );
+      return;
+    }
+    for (const entry of immediate) {
+      Promise.resolve(onFieldWrite!(entry.write)).then(
+        () => settle(entry, undefined),
+        (error) => settle(entry, error),
+      );
+    }
+  }, [fieldWritePolicy, onFieldWrite, onFieldWrites, onHeldFieldWritesChange, updateWriteState]);
+
+  const runFieldWrite = useCallback((write: FieldWrite, before?: string) => {
+    if (!onFieldWrite) return;
+    if (fieldWritePolicy?.(write) === "hold") {
+      // Field-write policy: the write stays local (visible, undoable) and the
+      // host owns persistence. A re-edit of the same cell replaces its held
+      // write; the host flushes or discards through the handle.
+      const next = holdFieldWrite(heldWritesRef.current, write, before);
+      heldWritesRef.current = next;
+      setHeldWrites(next);
+      onHeldFieldWritesChange?.([...next.values()].map((entry) => entry.write));
+      return;
+    }
+    emitFieldWrite(write, before);
+  }, [emitFieldWrite, fieldWritePolicy, onFieldWrite, onHeldFieldWritesChange]);
+
+  /**
+   * Applies a grid mutation locally and emits its bound-cell field writes.
+   * `emitFieldWrites: false` is for mutations that must not persist — the
+   * single-edit path dispatches its own write, and structure/sort mutations
+   * move values between addresses so row→record identity no longer holds.
+   */
+  const commitMutation = useCallback((mutation: GridMutation, options?: { emitFieldWrites?: boolean }) => {
+    if (!pushHistory(mutation)) return;
+    const writes = options?.emitFieldWrites === false ? [] : fieldWritesForMutation(mutation, datasetHeader);
+    applyWorksheetMutation(worksheet, mutation);
+    setData((current) => applyCellMutation(current, mutation));
+    emitFieldWrites(writes);
+  }, [datasetHeader, emitFieldWrites, pushHistory, worksheet]);
+
+  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>, options?: { emitFieldWrites?: boolean }) => {
     const mutation = cellMutation(label, data, next, affectedAddresses);
-    commitMutation(mutation);
+    commitMutation(mutation, options);
   }, [commitMutation, data]);
 
 
@@ -871,52 +990,6 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setValidationError(undefined);
   }, [canEdit, data]);
 
-  const [heldWrites, setHeldWrites] = useState<ReadonlyMap<string, HeldFieldWrite>>(() => new Map());
-  const heldWritesRef = useRef(heldWrites);
-  useEffect(() => { heldWritesRef.current = heldWrites; }, [heldWrites]);
-  /** Authoritative write pipeline: write-state tracking + onFieldWrite. */
-  const emitFieldWrite = useCallback((write: FieldWrite, before?: string) => {
-    if (!onFieldWrite) return;
-    const update = (status: WriteStatus) => {
-      const existingTimer = writeStateTimers.current.get(write.address);
-      if (existingTimer) clearTimeout(existingTimer);
-      writeStateTimers.current.delete(write.address);
-      setWriteStates((current) => new Map(current).set(write.address, { status, write, before }));
-      onWriteStateChange?.(write.address, status);
-      if (status === "saved") {
-        writeStateTimers.current.set(write.address, setTimeout(() => {
-          writeStateTimers.current.delete(write.address);
-          setWriteStates((current) => {
-            if (current.get(write.address)?.status !== "saved") return current;
-            const next = new Map(current);
-            next.delete(write.address);
-            return next;
-          });
-        }, 1400));
-      }
-    };
-    update("pending");
-    Promise.resolve(onFieldWrite(write)).then(() => update("saved")).catch((error: unknown) => {
-      const status = typeof error === "object" && error !== null && "status" in error && error.status === 409 ? "conflict" : "failed";
-      update(status);
-    });
-  }, [onFieldWrite, onWriteStateChange]);
-
-  const runFieldWrite = useCallback((write: FieldWrite, before?: string) => {
-    if (!onFieldWrite) return;
-    if (fieldWritePolicy?.(write) === "hold") {
-      // Field-write policy: the write stays local (visible, undoable) and the
-      // host owns persistence. A re-edit of the same cell replaces its held
-      // write; the host flushes or discards through the handle.
-      const next = holdFieldWrite(heldWritesRef.current, write, before);
-      heldWritesRef.current = next;
-      setHeldWrites(next);
-      onHeldFieldWritesChange?.([...next.values()].map((entry) => entry.write));
-      return;
-    }
-    emitFieldWrite(write, before);
-  }, [emitFieldWrite, fieldWritePolicy, onFieldWrite, onHeldFieldWritesChange]);
-
   const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
     if (!editing) return;
     if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
@@ -928,11 +1001,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       if (invalid) { setValidationError(invalid); return; }
       const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editing.row, column: item.column })) ?? "").trim()) : false;
       const before = data.get(key);
+      // The single-edit write goes through runFieldWrite below, which carries
+      // the blank-row record-create semantics — commitMutation must not also
+      // dispatch a bulk write for this mutation.
       commitMutation(cellChangesMutation("Edit cell", [{
         address: key,
         before,
         after: completedDraft === "" ? undefined : completedDraft,
-      }]));
+      }]), { emitFieldWrites: false });
       const recordId = datasetHeader?.recordIdForRow?.(editing.row);
       // Skip the write entirely when the edit changed nothing — an unchanged
       // commit still bumps the server revision and pollutes held writes.
@@ -964,12 +1040,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   }, [data, onRowHeightsChange, rowHeights, selection.focus.row]);
   const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
     if (readOnly) return;
-    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`);
+    // Structure moves values between addresses, so the mutation's cells no
+    // longer line up with record identity — emitting writes here would target
+    // the wrong records.
+    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
   }, [commit, data, range.bottom, range.top, readOnly]);
 
   const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
     if (readOnly) return;
-    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`);
+    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
   }, [commit, data, range.left, range.right, readOnly]);
 
   const autoFitColumn = useCallback((column = selection.focus.column) => {
@@ -1401,7 +1480,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           {writeState && <button className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
             event.stopPropagation();
             if (event.shiftKey) {
-              commitMutation(cellChangesMutation("Revert failed write", [{ address: key, before: data.get(key), after: writeState.before }]));
+              // A badge revert is a local-only gesture — the failed/conflicted
+              // write never landed, so nothing should be re-persisted.
+              commitMutation(cellChangesMutation("Revert failed write", [{ address: key, before: data.get(key), after: writeState.before }]), { emitFieldWrites: false });
               setWriteStates((current) => { const next = new Map(current); next.delete(key); return next; });
             } else if (writeState.status === "failed" || writeState.status === "conflict") runFieldWrite(writeState.write, writeState.before);
           }} />}
@@ -1462,11 +1543,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             const current = query.sort?.find((sort) => sort.fieldId === fieldId)?.direction;
             const next = current === undefined ? "asc" : current === "asc" ? "desc" : undefined;
             if (sortMode === "local") {
+              // Reordering rows moves values between addresses; the mutation
+              // must not emit field writes against the wrong records.
               if (next) {
                 if (!sortBaselineRef.current) sortBaselineRef.current = data;
-                commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`);
+                commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`, undefined, { emitFieldWrites: false });
               } else if (sortBaselineRef.current) {
-                commit(sortBaselineRef.current, `Clear ${fieldId} sort`);
+                commit(sortBaselineRef.current, `Clear ${fieldId} sort`, undefined, { emitFieldWrites: false });
                 sortBaselineRef.current = undefined;
               }
             }

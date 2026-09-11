@@ -21,7 +21,7 @@ function sharedAdapterCache(adapter: object, maxPages: number) {
 }
 
 export type PagedSpreadsheetProps = Omit<SpreadsheetProps,
-  "initialData" | "bindingResolver" | "onViewportChange" | "onFieldWrite" | "onRecordCreate" | "sortMode" | "fieldIds"
+  "initialData" | "bindingResolver" | "onViewportChange" | "onFieldWrite" | "onFieldWrites" | "onRecordCreate" | "sortMode" | "fieldIds"
 > & Readonly<{
   adapter: PagedDataAdapter;
   datasetId: string;
@@ -210,6 +210,29 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     cacheRef.current.invalidateDataset(recordWrite.datasetId);
   };
 
+  /** Bulk edits land as one coordinator commit so the adapter sees a single mutation. */
+  const writeFields = async (writes: readonly FieldWrite[]) => {
+    const recordWrites: RecordFieldWrite[] = [];
+    for (const write of writes) {
+      if (!write.recordId) continue;
+      writeAddressesRef.current.set(JSON.stringify([write.recordId, write.fieldId]), write.address);
+      recordWrites.push({
+        datasetId: write.datasetId ?? datasetId,
+        recordId: write.recordId,
+        fieldId: write.fieldId,
+        after: write.value,
+      });
+    }
+    if (!recordWrites.length) return;
+    const result = await coordinator.commit(recordWrites);
+    if (result.status === "conflict") {
+      mergeConflicts(result.conflicts.map((conflict) => ({ conflict, write: conflict.write, currentRevision: result.currentRevision })));
+      throw Object.assign(new Error("Revision conflict"), { status: 409, conflict: result });
+    }
+    if (result.result.rejected.length) throw new Error(result.result.rejected[0]!.reason);
+    for (const id of new Set(recordWrites.map((write) => write.datasetId))) cacheRef.current.invalidateDataset(id);
+  };
+
   const keepMine = useCallback(async (entry: ConflictPanelEntry) => {
     coordinator.acceptRevision(entry.currentRevision);
     const result = await coordinator.commit([entry.write]);
@@ -290,6 +313,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       bindingResolver={(binding) => adapter.resolve(binding)}
       onViewportChange={handleViewportChange}
       onFieldWrite={writeField}
+      onFieldWrites={writeFields}
       onRecordCreate={createRecord}
       onCellClickTiming={(milliseconds) => {
         if (showLoadTimings) setStatus((current) => ({ ...current, cellClickMs: milliseconds }));

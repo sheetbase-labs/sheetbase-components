@@ -28,6 +28,18 @@ export function conflictKey(conflict: RevisionConflict): string {
   return JSON.stringify([conflict.write.recordId, conflict.write.fieldId]);
 }
 
+/**
+ * Extracts the conflicted record+field keys from an error thrown by a write
+ * path (a 409-shaped failure carrying the coordinator's conflict outcome).
+ * Returns "all" for a 409 without per-write detail, undefined for non-409s.
+ */
+export function conflictWriteKeys(error: unknown): ReadonlySet<string> | "all" | undefined {
+  if (typeof error !== "object" || error === null || !("status" in error) || (error as { status?: unknown }).status !== 409) return undefined;
+  const conflicts = (error as { conflict?: { conflicts?: readonly RevisionConflict[] } }).conflict?.conflicts;
+  if (!conflicts?.length) return "all";
+  return new Set(conflicts.map((conflict) => conflictKey(conflict)));
+}
+
 export function conflictRows(
   conflicts: readonly RevisionConflict[],
   fieldLabels?: ReadonlyMap<string, string> | Readonly<Record<string, string>>,

@@ -1,4 +1,5 @@
 import type { CellBinding, Scalar } from "../engine";
+import { parseAddress } from "../engine/coordinates";
 import type { GridMutation } from "../grid/mutations";
 import type { FilterClause, SortClause } from "./query";
 
@@ -68,4 +69,64 @@ export function recordWritesForMutation(
     });
   }
   return writes;
+}
+
+/** The bound-header shape needed to derive writes from a mutation. */
+export type MutationWriteHeader = Readonly<{
+  datasetId?: string;
+  recordIdForRow?(row: number): string | undefined;
+  fields: readonly Readonly<{ id: string; column: number; writable?: boolean }>[];
+}>;
+
+/** A mutation cell's authoritative write, paired with its pre-edit value for UI reverts. */
+export type MutationFieldWrite = Readonly<{
+  write: Readonly<{
+    address: string;
+    row: number;
+    datasetId?: string;
+    recordId: string;
+    fieldId: string;
+    value: string;
+  }>;
+  before?: string;
+}>;
+
+/**
+ * Derives the authoritative field writes for a grid mutation against a bound
+ * header. Record identity comes from the header's row→record map rather than
+ * worksheet cell bindings: editing a cell replaces its record-field binding
+ * with a literal, so the header is the durable source across edits. Cells
+ * without record identity (unbound grids, not-yet-loaded rows) and
+ * non-writable fields produce no write; cleared cells write the empty string.
+ */
+export function fieldWritesForMutation(
+  mutation: GridMutation,
+  header: MutationWriteHeader | undefined,
+): readonly MutationFieldWrite[] {
+  if (!header) return [];
+  const entries: MutationFieldWrite[] = [];
+  for (const change of mutation.cells) {
+    let point: ReturnType<typeof parseAddress>;
+    try {
+      point = parseAddress(change.address);
+    } catch {
+      continue;
+    }
+    const field = header.fields.find((item) => item.column === point.column);
+    if (!field || field.writable === false) continue;
+    const recordId = header.recordIdForRow?.(point.row);
+    if (!recordId) continue;
+    entries.push({
+      write: {
+        address: change.address,
+        row: point.row,
+        datasetId: header.datasetId,
+        recordId,
+        fieldId: field.id,
+        value: change.after ?? "",
+      },
+      before: change.before,
+    });
+  }
+  return entries;
 }

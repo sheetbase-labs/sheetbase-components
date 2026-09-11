@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DataAdapter, RecordFieldWrite } from "./adapter";
-import { conflictKey, conflictRows, RevisionConflictError, RevisionedCommitCoordinator } from "./conflicts";
+import { conflictKey, conflictRows, conflictWriteKeys, RevisionConflictError, RevisionedCommitCoordinator } from "./conflicts";
 
 const write: RecordFieldWrite = { datasetId: "d", recordId: "r", fieldId: "status", before: "Open", after: "Done" };
 describe("RevisionedCommitCoordinator", () => {
@@ -62,5 +62,27 @@ describe("conflict presentation model", () => {
     expect(rows.map((row) => row.fieldLabel)).toEqual(["status", "status"]);
     expect(rows[0]).toMatchObject({ mine: "Done", server: undefined });
     expect(conflictKey({ write, reason: "changed" })).not.toBe(conflictKey({ write: other, reason: "stale" }));
+  });
+});
+
+describe("conflictWriteKeys", () => {
+  const thrown = (conflicts: readonly { write: RecordFieldWrite; reason: string }[]) =>
+    Object.assign(new Error("Revision conflict"), { status: 409, conflict: { status: "conflict", currentRevision: "r2", conflicts } });
+
+  it("returns undefined for non-409 failures", () => {
+    expect(conflictWriteKeys(new Error("boom"))).toBeUndefined();
+    expect(conflictWriteKeys(Object.assign(new Error("nope"), { status: 500 }))).toBeUndefined();
+  });
+
+  it("returns \"all\" for a 409 without per-write detail", () => {
+    expect(conflictWriteKeys(Object.assign(new Error("Revision conflict"), { status: 409 }))).toBe("all");
+    expect(conflictWriteKeys(thrown([]))).toBe("all");
+  });
+
+  it("keys the listed conflicts by record and field", () => {
+    const keys = conflictWriteKeys(thrown([{ write, reason: "changed" }]));
+    expect(keys).toBeInstanceOf(Set);
+    expect((keys as Set<string>).has(conflictKey({ write, reason: "changed" }))).toBe(true);
+    expect((keys as Set<string>).has(conflictKey({ write: { ...write, recordId: "other" }, reason: "x" }))).toBe(false);
   });
 });
