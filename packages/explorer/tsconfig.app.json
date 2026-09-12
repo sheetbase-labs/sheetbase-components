@@ -16,6 +16,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
+      "sheetbase-shared": ["../shared/src/index.ts"],
       "sheetbase-table": ["../table/src/index.ts"]
     }
   },

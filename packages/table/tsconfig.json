@@ -14,7 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "sheetbase-shared": ["../shared/src/index.ts"]
+    }
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["src/**/*.bench.ts"]
