@@ -94,29 +94,20 @@
   display: flex;
   flex-direction: column;
 }
-/* Grouped pane header: same bar as a component top bar (33px, panel-2). */
+/* The tab strip is multiplexer chrome on the stack background — the component
+   below keeps its own plate and top bar. */
 .sb-pane-head {
   flex: none;
-  height: 33px;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 8px;
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-2);
+  padding: 0;
+  margin-bottom: 4px;
+  border-bottom: 0;
+  background: transparent;
   color: var(--text);
 }
-/* Lone pane with actions: a real title bar, and the drag handle for the pane. */
-.sb-pane-head.is-titled {
-  height: 28px;
-  padding: 0 4px 0 8px;
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--accent-ink);
-}
-.sb-pane-head.is-titled .sb-pane-title { padding: 0; cursor: grab; }
 /* Tab strip adopts the .sb-segmented idiom (shell.css): a bordered track on
    the bar, and the active tab raises to the canvas instead of the chip fill. */
 .sb-pane-tabs {
@@ -132,15 +123,6 @@
   background: var(--panel-2);
 }
 .sb-pane-tabs::-webkit-scrollbar { display: none; }
-.sb-pane-title {
-  padding: 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .sb-pane-tab {
   display: inline-flex;
   align-items: center;

@@ -28,9 +28,12 @@ tab them together.
 ```
 
 Panes add no surface of their own — the component frame is the surface. A tabbed
-stack renders a lightweight tab row; set `chrome="none"` on schema/rules/search
-and re-home their actions through `PaneSpec.actions` (backed by the components'
-imperative handles) so the pane bar is the only chrome.
+stack renders a segmented tab row as multiplexer chrome on the stack background;
+each component keeps its own top bar inside its plate. Host-level actions
+(`PaneSpec.actions`) sit on the tab row next to the pane menu and close button.
+Hosts that prefer a single merged bar can still set `chrome="none"` on
+schema/rules/search and re-home their controls through `PaneSpec.actions`
+(backed by the components' imperative handles).
 
 For one app surface around the whole layout instead of one per component, pass
 `surface="shared"` and wrap the layout in a host frame such as

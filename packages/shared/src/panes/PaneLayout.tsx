@@ -664,9 +664,8 @@ export function PaneLayout({
   function renderStack(node: StackNode): ReactNode {
     const tabbed = node.panes.length > 1;
     const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
-    // A lone pane only gets a header when it declares actions to host.
-    // Grouped panes show only the tab strip; lone panes show their component's
-    // own top bar. So the header is the tab strip, and content renders untabbed.
+    // The tab strip is multiplexer chrome on the stack background; every
+    // component keeps its own plate and top bar underneath it.
     const showHead = tabbed;
     const docked = drag && drag.overStackId === node.id && drag.overTabIndex === null ? drag.zone : null;
     const otherStacks = listStacks(layout)
@@ -698,36 +697,32 @@ export function PaneLayout({
       >
         {showHead && (
           <div className="sb-pane-head">
-            {tabbed ? (
-              <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
-                {node.panes.map((paneId, index) => {
-                  const pane = paneMap.get(paneId);
-                  return (
-                    <button
-                      key={paneId}
-                      type="button"
-                      role="tab"
-                      id={`sb-pane-tab-${node.id}-${paneId}`}
-                      aria-controls={`sb-pane-panel-${node.id}-${paneId}`}
-                      aria-selected={paneId === node.active}
-                      tabIndex={paneId === node.active ? 0 : -1}
-                      className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
-                      onPointerDown={(event) => beginDrag(event, node.id, paneId)}
-                      onKeyDown={(event) => onTabKeyDown(event, node, paneId, index)}
-                      onClick={(event) => {
-                        // Keyboard activation only; pointer clicks are resolved on pointerup.
-                        if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
-                      }}
-                    >
-                      {pane?.icon}
-                      {paneLabel(pane, paneId)}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <span className="sb-pane-title">{paneLabel(activePane, node.active)}</span>
-            )}
+            <div className="sb-pane-tabs" role="tablist" aria-label="Panes">
+              {node.panes.map((paneId, index) => {
+                const pane = paneMap.get(paneId);
+                return (
+                  <button
+                    key={paneId}
+                    type="button"
+                    role="tab"
+                    id={`sb-pane-tab-${node.id}-${paneId}`}
+                    aria-controls={`sb-pane-panel-${node.id}-${paneId}`}
+                    aria-selected={paneId === node.active}
+                    tabIndex={paneId === node.active ? 0 : -1}
+                    className={cx("sb-pane-tab", paneId === node.active && "active", drag?.paneId === paneId && "dragging")}
+                    onPointerDown={(event) => beginDrag(event, node.id, paneId)}
+                    onKeyDown={(event) => onTabKeyDown(event, node, paneId, index)}
+                    onClick={(event) => {
+                      // Keyboard activation only; pointer clicks are resolved on pointerup.
+                      if (event.detail === 0) commit(setActivePane(layout, node.id, paneId));
+                    }}
+                  >
+                    {pane?.icon}
+                    {paneLabel(pane, paneId)}
+                  </button>
+                );
+              })}
+            </div>
             <div className="sb-pane-actions">
               {activePane?.actions}
               {menu}

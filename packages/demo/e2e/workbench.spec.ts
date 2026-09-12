@@ -116,13 +116,16 @@ test("one app surface wraps the workbench", async ({ page }) => {
   await expect(page.locator(".sb-workbench-panes")).toHaveClass(/sb-panes--shared/);
 });
 
-test("grouped panes carry actions in the tab strip, not a second bar", async ({ page }) => {
+test("grouped panes keep their own top bars under the multiplexer tab strip", async ({ page }) => {
   await reset(page);
   const analysis = page.locator(".sb-pane-stack").filter({ has: page.getByRole("tab", { name: "Schema" }) });
 
-  // Grouped: actions are in the tab strip; the component's own bar is absent.
-  await expect(analysis.getByRole("button", { name: "+ Model" })).toBeVisible();
-  await expect(page.locator(".sb-schema .sb-topbar")).toHaveCount(0);
+  // The tab strip is multiplexer chrome on the stack background: it carries
+  // tabs plus host-level actions, while the component keeps its own top bar.
+  await expect(analysis.locator(".sb-pane-head")).toBeVisible();
+  await expect(analysis.locator(".sb-pane-head").getByRole("button", { name: "From table" })).toBeVisible();
+  await expect(analysis.locator(".sb-schema .sb-topbar")).toBeVisible();
+  await expect(analysis.locator(".sb-schema .sb-topbar").getByRole("button", { name: "+ Model" })).toBeVisible();
 
   // Their internal bodies still host panes (search shows filters only by default).
   await expect(page.locator(".sb-rules .sb-pane-stack")).toHaveCount(2);
