@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ddlToGraph, graphToDdl, graphToProvision, quoteIdent, SchemaParseError, SchemaValidationError } from "./ddl";
+import { ddlToGraph, diffGraphs, graphDiffToDdl, graphToDdl, graphToProvision, quoteIdent, SchemaParseError, SchemaValidationError } from "./ddl";
 import type { SchemaGraph } from "./types";
 
 const graph: SchemaGraph = {
@@ -162,5 +162,137 @@ describe("graphToProvision", () => {
   it("refuses invalid graphs", () => {
     const bad: SchemaGraph = { models: [{ name: "", fields: [] }] };
     expect(() => graphToProvision(bad)).toThrow(SchemaValidationError);
+  });
+});
+
+describe("diffGraphs / graphDiffToDdl", () => {
+  it("diffs identical graphs to nothing and emits no DDL", () => {
+    const diff = diffGraphs(graph, graph);
+    expect(diff).toEqual({ create: [], drop: [], alter: [], destructive: [], warnings: [] });
+    expect(graphDiffToDdl(graph, graph)).toBe("");
+  });
+
+  it("emits add column for a new field", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "order"
+          ? { ...model, fields: [...model.fields, { key: "discount", type: "number" as const }] }
+          : model),
+    };
+    expect(graphDiffToDdl(graph, next)).toBe('alter table "order"\n  add column "discount" numeric;');
+    expect(diffGraphs(graph, next).destructive).toEqual([]);
+  });
+
+  it("reports a dropped field as destructive and gates the clause behind drops:true", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "order"
+          ? { ...model, fields: model.fields.filter((field) => field.key !== "paid") }
+          : model),
+    };
+    const diff = diffGraphs(graph, next);
+    expect(diff.destructive).toEqual(['drops column "paid" on "order"']);
+    // Default emission is additive-safe: no drop column clause.
+    expect(graphDiffToDdl(graph, next)).toBe("");
+    expect(graphDiffToDdl(graph, next, { drops: true })).toBe('alter table "order"\n  drop column "paid";');
+  });
+
+  it("treats a field rename as drop+add and flags it destructive", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "order"
+          ? { ...model, fields: model.fields.map((field) => (field.key === "paid" ? { ...field, key: "is_paid" } : field)) }
+          : model),
+    };
+    const diff = diffGraphs(graph, next);
+    expect(diff.destructive).toEqual(['drops column "paid" on "order"']);
+    expect(graphDiffToDdl(graph, next, { drops: true })).toBe(
+      'alter table "order"\n  add column "is_paid" boolean,\n  drop column "paid";',
+    );
+  });
+
+  it("emits set/drop not null on nullable flips", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "order"
+          ? { ...model, fields: model.fields.map((field) => (field.key === "total" ? { ...field, nullable: false } : field)) }
+          : model),
+    };
+    expect(graphDiffToDdl(graph, next)).toBe('alter table "order"\n  alter column "total" set not null;');
+    expect(graphDiffToDdl(next, graph)).toBe('alter table "order"\n  alter column "total" drop not null;');
+  });
+
+  it("emits alter column type on a field-type change", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "order"
+          ? { ...model, fields: model.fields.map((field) => (field.key === "total" ? { ...field, type: "text" as const } : field)) }
+          : model),
+    };
+    const diff = diffGraphs(graph, next);
+    expect(diff.destructive).toEqual(['alters type of "total" on "order" (numeric → text)']);
+    expect(graphDiffToDdl(graph, next)).toBe('alter table "order"\n  alter column "total" type text;');
+  });
+
+  it("emits inline references for a new relationship column", () => {
+    const next: SchemaGraph = {
+      models: graph.models.map((model) =>
+        model.name === "customer"
+          ? { ...model, fields: [...model.fields, { key: "referrer_id", type: "relationship" as const, references: { model: "customer" } }] }
+          : model),
+    };
+    expect(graphDiffToDdl(graph, next)).toBe('alter table "customer"\n  add column "referrer_id" text references "customer"("id");');
+  });
+
+  it("emits add/drop constraint when a reference target changes", () => {
+    const next: SchemaGraph = {
+      models: [
+        ...graph.models,
+        { name: "account", fields: [{ key: "id", type: "number" as const, primaryKey: true }] },
+      ].map((model) =>
+        model.name === "order"
+          ? { ...model, fields: model.fields.map((field) => (field.key === "customer_id" ? { ...field, references: { model: "account" } } : field)) }
+          : model),
+    };
+    const ddl = graphDiffToDdl(graph, next);
+    expect(ddl).toContain('create table "account"');
+    expect(ddl).toContain('alter table "order"\n  alter column "customer_id" type numeric,\n  drop constraint "order_customer_id_fkey",\n  add constraint "order_customer_id_fkey" foreign key ("customer_id") references "account"("id");');
+  });
+
+  it("creates new models, drops removed ones only under drops:true", () => {
+    const next: SchemaGraph = {
+      models: [
+        graph.models[0],
+        { name: "line_item", fields: [{ key: "id", type: "text" as const, primaryKey: true }] },
+      ],
+    };
+    const diff = diffGraphs(graph, next);
+    expect(diff.create.map((model) => model.name)).toEqual(["line_item"]);
+    expect(diff.drop).toEqual(["order"]);
+    expect(diff.destructive).toEqual(['drops table "order" (5 fields)']);
+    const additive = graphDiffToDdl(graph, next);
+    expect(additive).toContain('create table "line_item"');
+    expect(additive).not.toContain("drop table");
+    const full = graphDiffToDdl(graph, next, { drops: true });
+    expect(full.endsWith('drop table "order";')).toBe(true);
+    // Creates land before drops.
+    expect(full.indexOf('create table "line_item"')).toBeLessThan(full.indexOf('drop table "order"'));
+  });
+
+  it("diffs a hand-edited graph against the re-imported live DDL", () => {
+    const previous = ddlToGraph(graphToDdl(graph));
+    const next: SchemaGraph = {
+      models: previous.models.map((model) =>
+        model.name === "customer"
+          ? { ...model, fields: [...model.fields, { key: "email", type: "text" as const }] }
+          : model),
+    };
+    expect(graphDiffToDdl(previous, next)).toBe('alter table "customer"\n  add column "email" text;');
+  });
+
+  it("throws SchemaValidationError on an invalid next graph", () => {
+    const bad: SchemaGraph = { models: [{ name: "a", fields: [{ key: "x", type: "text" }, { key: "x", type: "text" }] }] };
+    expect(() => diffGraphs(graph, bad)).toThrow(SchemaValidationError);
+    expect(() => graphDiffToDdl(graph, bad)).toThrow(SchemaValidationError);
   });
 });

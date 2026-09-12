@@ -29,9 +29,29 @@ For hosts that call an API instead of running SQL: the graph cleaned to
 `{ models: [{ name, label?, fields: [{ key, label?, type, nullable?,
 primaryKey?, references? }] }] }`. Same validation gate.
 
+## Migrations (`diffGraphs` / `graphDiffToDdl`)
+
+The intended flow: `ddlToGraph(current DDL)` gives a `previous` graph
+representing what exists, the host edits or re-exports, and
+`graphDiffToDdl(previous, next)` emits the migration — `create table` for
+new models, one `alter table` per altered model (`add column`,
+`alter column … type`, `set`/`drop not null`, `add`/`drop constraint` for
+key/reference changes under Postgres's default `<table>_pkey` /
+`<table>_<col>_fkey` names), `drop table` last.
+
+- Matching is by model `name` / field `key` — a rename is a drop+add.
+- `diffGraphs` returns the structured `SchemaDiff` (create / drop / alter)
+  plus `destructive`: the human-readable list of drops and type changes a
+  host UI should gate on. `next` must pass `validateGraph` (throws);
+  `previous` is trusted — its errors land in `diff.warnings`.
+- Default emission is additive-safe: `drop column`/`drop table` emit only
+  with `graphDiffToDdl(previous, next, { drops: true })`. `destructive`
+  reports them either way.
+- This is schema diffing, not data migration — no `using` clauses, no
+  backfills; hosts needing data-preserving type changes write their own.
+
 ## Limitations
 
-- `create table` only — alter-table diffing against an existing schema is v2.
 - Composite primary keys are not modelled; an FK references the target's single
   `primaryKey` field (or `references.field` when named explicitly).
 - The type map covers `FieldDataType` only — no arrays, enums, or

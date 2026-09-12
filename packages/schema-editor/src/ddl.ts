@@ -3,9 +3,11 @@ import { primaryKeyOf, validateGraph, withAutoLayout } from "./graph";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 
 /**
- * SchemaGraph → Postgres-flavoured `create table` DDL. This is the write-side
- * counterpart to `onHeaderFieldsChange`: the editor proposes, the host decides
- * what to run. Emission is `create table` only — alter-table diffing is v2.
+ * SchemaGraph → Postgres-flavoured DDL. This is the write-side counterpart
+ * to `onHeaderFieldsChange`: the editor proposes, the host decides what to
+ * run. `graphToDdl` emits `create table`; `diffGraphs`/`graphDiffToDdl` emit
+ * alter-table migrations between a previous graph (e.g. `ddlToGraph` of the
+ * live schema) and the edited one.
  */
 
 export class SchemaValidationError extends Error {
@@ -63,6 +65,11 @@ function columnDdl(graph: SchemaGraph, model: SchemaModel, field: SchemaField): 
   return parts.join(" ");
 }
 
+/** `create table` for a single model — shared by graphToDdl and diff emission. */
+function createTableDdl(graph: SchemaGraph, model: SchemaModel): string {
+  return `create table ${quoteIdent(model.name)} (\n${model.fields.map((field) => columnDdl(graph, model, field)).join(",\n")}\n);`;
+}
+
 /**
  * Emit `create table` statements for every model, in graph order.
  * Throws SchemaValidationError when `validateGraph` reports problems — a host
@@ -71,9 +78,7 @@ function columnDdl(graph: SchemaGraph, model: SchemaModel, field: SchemaField): 
 export function graphToDdl(graph: SchemaGraph): string {
   const errors = validateGraph(graph);
   if (errors.length > 0) throw new SchemaValidationError(errors);
-  return graph.models
-    .map((model) => `create table ${quoteIdent(model.name)} (\n${model.fields.map((field) => columnDdl(graph, model, field)).join(",\n")}\n);`)
-    .join("\n\n");
+  return graph.models.map((model) => createTableDdl(graph, model)).join("\n\n");
 }
 
 /**
@@ -110,6 +115,168 @@ export function graphToProvision(graph: SchemaGraph): Readonly<{
       })),
     })),
   };
+}
+
+/** A field present in both graphs whose column-relevant aspects changed. */
+export interface SchemaFieldChange {
+  /** The field as the `next` graph defines it. */
+  field: SchemaField;
+  /** The same-key field in the `previous` graph. */
+  previous: SchemaField;
+}
+
+/** Per-model field changes, matched by field `key`. */
+export interface SchemaModelAlter {
+  model: string;
+  add: readonly SchemaField[];
+  drop: readonly string[];
+  change: readonly SchemaFieldChange[];
+}
+
+/** Structured diff between an existing graph and an edited one. */
+export interface SchemaDiff {
+  /** Models in next not in previous → `create table`. */
+  create: readonly SchemaModel[];
+  /** Models in previous not in next → `drop table` (emission-gated). */
+  drop: readonly string[];
+  /** Models in both with field changes → `alter table`. */
+  alter: readonly SchemaModelAlter[];
+  /**
+   * Human-readable destructive operations the diff contains (table/column
+   * drops, SQL type changes — a rename shows up as its drop+add). Hosts
+   * surface these before running; listed whether or not emission emits them.
+   */
+  destructive: readonly string[];
+  /** `validateGraph` errors on `previous` — reported, not thrown. */
+  warnings: readonly string[];
+}
+
+/** Column aspects that changed, resolved against each side's own graph. */
+interface FieldChanges {
+  type?: { from: string; to: string };
+  /** New nullability: false → `set not null`, true → `drop not null`. */
+  nullable?: boolean;
+  primaryKeyAdded?: boolean;
+  primaryKeyDropped?: boolean;
+  referenceRemoved?: boolean;
+  referenceAdded?: boolean;
+}
+
+/** `references` as a comparable key: explicit field or the target's PK. */
+function refKey(graph: SchemaGraph, field: SchemaField): string | null {
+  const ref = field.references;
+  if (!ref) return null;
+  const target = graph.models.find((m) => m.name === ref.model);
+  const key = ref.field ?? (target ? primaryKeyOf(target) : undefined);
+  return `${ref.model}.${key ?? ""}`;
+}
+
+function fieldChanges(prevGraph: SchemaGraph, prevModel: SchemaModel, prev: SchemaField, nextGraph: SchemaGraph, nextModel: SchemaModel, field: SchemaField): FieldChanges | null {
+  const changes: FieldChanges = {};
+  const from = columnType(prevGraph, prevModel, prev);
+  const to = columnType(nextGraph, nextModel, field);
+  if (from !== to) changes.type = { from, to };
+  if ((prev.nullable !== false) !== (field.nullable !== false)) changes.nullable = field.nullable !== false;
+  if (Boolean(prev.primaryKey) !== Boolean(field.primaryKey)) {
+    if (field.primaryKey) changes.primaryKeyAdded = true;
+    else changes.primaryKeyDropped = true;
+  }
+  if (refKey(prevGraph, prev) !== refKey(nextGraph, field)) {
+    if (prev.references) changes.referenceRemoved = true;
+    if (field.references) changes.referenceAdded = true;
+  }
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/**
+ * Diff two graphs by name/key identity. `next` must pass `validateGraph`
+ * (throws SchemaValidationError, same gate as `graphToDdl`); `previous` is
+ * trusted — it represents what exists — so its validation errors land in
+ * `warnings` instead. Matching is name/key only: a renamed field or model is
+ * a drop+add, and the drop side appears in `destructive`.
+ */
+export function diffGraphs(previous: SchemaGraph, next: SchemaGraph): SchemaDiff {
+  const errors = validateGraph(next);
+  if (errors.length > 0) throw new SchemaValidationError(errors);
+  const prevByName = new Map(previous.models.map((model) => [model.name, model]));
+  const nextByName = new Map(next.models.map((model) => [model.name, model]));
+  const create = next.models.filter((model) => !prevByName.has(model.name));
+  const drop = previous.models.filter((model) => !nextByName.has(model.name)).map((model) => model.name);
+  const destructive: string[] = [];
+  for (const name of drop) {
+    const model = previous.models.find((m) => m.name === name);
+    destructive.push(`drops table "${name}" (${model?.fields.length ?? 0} fields)`);
+  }
+  const alter: SchemaModelAlter[] = [];
+  for (const nextModel of next.models) {
+    const prevModel = prevByName.get(nextModel.name);
+    if (!prevModel) continue;
+    const prevFields = new Map(prevModel.fields.map((field) => [field.key, field]));
+    const nextKeys = new Set(nextModel.fields.map((field) => field.key));
+    const add = nextModel.fields.filter((field) => !prevFields.has(field.key));
+    const dropped = prevModel.fields.filter((field) => !nextKeys.has(field.key)).map((field) => field.key);
+    const change: SchemaFieldChange[] = [];
+    for (const field of nextModel.fields) {
+      const prev = prevFields.get(field.key);
+      if (!prev) continue;
+      const changes = fieldChanges(previous, prevModel, prev, next, nextModel, field);
+      if (changes) change.push({ field, previous: prev });
+      if (changes?.type) destructive.push(`alters type of "${field.key}" on "${nextModel.name}" (${changes.type.from} → ${changes.type.to})`);
+    }
+    for (const key of dropped) destructive.push(`drops column "${key}" on "${nextModel.name}"`);
+    if (add.length > 0 || dropped.length > 0 || change.length > 0) {
+      alter.push({ model: nextModel.name, add, drop: dropped, change });
+    }
+  }
+  return { create, drop, alter, destructive, warnings: validateGraph(previous) };
+}
+
+/**
+ * Emit migration DDL between an existing graph and an edited one — the
+ * alter-table counterpart to `graphToDdl`. Takes both graphs (not a
+ * precomputed diff) because resolving relationship column types needs each
+ * side's own graph; `diffGraphs` runs internally and stays exported for hosts
+ * that gate on `destructive` first.
+ *
+ * Order: `create table` for new models, one `alter table` per altered model,
+ * `drop table` last — and drops (tables and columns) emit only under
+ * `{ drops: true }`. Default emission is additive-safe. Constraint drops
+ * reference Postgres's default names (`<table>_pkey`, `<table>_<col>_fkey`)
+ * — the names this package's own `create table` emission produces.
+ */
+export function graphDiffToDdl(previous: SchemaGraph, next: SchemaGraph, options?: { drops?: boolean }): string {
+  const diff = diffGraphs(previous, next);
+  const statements: string[] = [];
+  for (const model of diff.create) statements.push(createTableDdl(next, model));
+  for (const alter of diff.alter) {
+    const nextModel = next.models.find((m) => m.name === alter.model);
+    const prevModel = previous.models.find((m) => m.name === alter.model);
+    if (!nextModel || !prevModel) continue;
+    const clauses: string[] = [];
+    for (const field of alter.add) clauses.push(`add column ${columnDdl(next, nextModel, field).trim()}`);
+    if (options?.drops) for (const key of alter.drop) clauses.push(`drop column ${quoteIdent(key)}`);
+    for (const { field, previous: prevField } of alter.change) {
+      const changes = fieldChanges(previous, prevModel, prevField, next, nextModel, field);
+      if (!changes) continue;
+      const key = quoteIdent(field.key);
+      if (changes.type) clauses.push(`alter column ${key} type ${changes.type.to}`);
+      if (changes.nullable !== undefined) clauses.push(`alter column ${key} ${changes.nullable ? "drop" : "set"} not null`);
+      if (changes.primaryKeyDropped) clauses.push(`drop constraint ${quoteIdent(`${alter.model}_pkey`)}`);
+      if (changes.referenceRemoved) clauses.push(`drop constraint ${quoteIdent(`${alter.model}_${field.key}_fkey`)}`);
+      if (changes.primaryKeyAdded) clauses.push(`add primary key (${key})`);
+      const ref = field.references;
+      if (changes.referenceAdded && ref) {
+        const target = next.models.find((m) => m.name === ref.model);
+        const refKeyName = ref.field ?? (target ? primaryKeyOf(target) : undefined);
+        if (target && refKeyName) {
+          clauses.push(`add constraint ${quoteIdent(`${alter.model}_${field.key}_fkey`)} foreign key (${key}) references ${quoteIdent(ref.model)}(${quoteIdent(refKeyName)})`);
+        }
+      }
+    }
+    if (clauses.length > 0) statements.push(`alter table ${quoteIdent(alter.model)}\n  ${clauses.join(",\n  ")};`);
+  }
+  if (options?.drops) for (const name of diff.drop) statements.push(`drop table ${quoteIdent(name)};`);
+  return statements.join("\n\n");
 }
 
 export class SchemaParseError extends Error {

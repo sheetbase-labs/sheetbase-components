@@ -1,6 +1,6 @@
 # sheetbase-schemaeditor
 
-Zoomable schema graph: model list (left), canvas (centre), inspector (right). Field types and references use `sheetbase-shared`.
+Zoomable schema graph: model list (left), canvas (centre), inspector (right). Field types and references use `sheetbase-shared`. Emits `create table` DDL (`graphToDdl`), imports it back (`ddlToGraph`), and diffs two graphs into `alter table` migrations (`diffGraphs` / `graphDiffToDdl`).
 
 ```bash
 bun install
