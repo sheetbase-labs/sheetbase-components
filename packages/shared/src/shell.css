@@ -50,6 +50,7 @@
 .sb-icon-btn { width: 24px; padding: 0; }
 .sb-divider { height: 24px; border-left: 1px solid var(--border); margin: 0 4px; }
 .sb-panel-heading {
+  flex: none;
   height: 31px; padding: 0 10px; display: flex; justify-content: space-between; align-items: center;
   border-bottom: 1px solid var(--border); background: var(--accent-soft); color: var(--accent-ink);
   font-size: 10px; font-weight: 650; letter-spacing: 0.055em; text-transform: uppercase;
