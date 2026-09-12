@@ -17,7 +17,7 @@ import './explorer-interactions.css'
 const experimentsRemote = createHttpExplorerAdapter({
   baseUrl: 'http://127.0.0.1:8787',
   datasetId: 'experiments',
-  name: 'Experiments API (1M rows, remote)',
+  name: 'Experiments API (remote)',
   fields: [
     { key: 'experiment_id', kind: 'string', uniqueCount: 1_000_000 },
     { key: 'sample_id', kind: 'string', uniqueCount: 1_000_000 },

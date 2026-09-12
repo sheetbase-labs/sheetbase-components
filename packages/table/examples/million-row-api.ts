@@ -3,12 +3,25 @@ import { Database } from "bun:sqlite";
 // can't drift from the contract. Requires `bun run build:lib` in packages/shared
 // first (the workspace import resolves to dist-lib).
 import { buildPredicate, type FilterNode } from "sheetbase-shared";
+import { DATASET_COLUMNS, createDataset, filterTreeToSql, filtersToSql, insertRecord, quoteField, sortToSql } from "./sql-engine";
+
+// Two engines serve the same wire contract. The default `sql` engine seeds a
+// real SQLite table (SQL_ROWS rows, default 250k) and answers filtered/
+// sorted/aggregated/commits through the filterTree→SQL compiler in
+// sql-engine.ts — the reference host executor. `API_ENGINE=memory` keeps the
+// original all-JS million-row behaviour for the scroll-perf demo. In SQL mode
+// unfiltered+unsorted page requests still serve generated rows (the fast
+// path); overrides/created are mirrored into the table on every write so the
+// two representations never diverge.
 type Scalar = string | number | boolean | null;
 type RecordRow = { recordId: string; values: Record<string, Scalar> };
 type Write = { datasetId: string; recordId: string; fieldId: string; before?: string; after?: string };
 
 const TOTAL_ROWS = 1_000_000;
 const PORT = Number(process.env.SHEETBASE_API_PORT ?? 8787);
+const SQL_MODE = process.env.API_ENGINE !== "memory";
+const SQL_ROWS = Number(process.env.SQL_ROWS ?? 250_000);
+const DATASET_ROWS = SQL_MODE ? SQL_ROWS : TOTAL_ROWS;
 const overrides = new Map<string, Record<string, Scalar>>();
 const created: RecordRow[] = [];
 let revision = 1;
@@ -82,6 +95,56 @@ presentationDb.run("CREATE TABLE IF NOT EXISTS presentations (key TEXT PRIMARY K
 const savePresentation = presentationDb.prepare("INSERT INTO presentations (key, state) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET state = excluded.state");
 const loadPresentation = presentationDb.prepare("SELECT state FROM presentations WHERE key = ?");
 
+// SQL-mode dataset: same generated() bytes the memory engine serves, in a
+// real table the filterTree→SQL compiler queries.
+const datasetDb = SQL_MODE ? new Database(":memory:") : null;
+if (datasetDb) createDataset(datasetDb, SQL_ROWS, generated);
+
+type FlatFilter = { fieldId: string; operator: string; value?: unknown };
+type SortSpec = { fieldId: string; direction: "asc" | "desc" };
+
+/** The in-memory filtered/sorted page — the canonical engine. */
+function jsPage(treePredicate: ((row: Record<string, Scalar>) => boolean) | null, filters: FlatFilter[], filterLogic: "and" | "or", sort: SortSpec[], rowStart: number, rowCount: number): { records: RecordRow[]; totalRows: number } {
+  const candidateCount = DATASET_ROWS + created.length;
+  const candidates: RecordRow[] = [];
+  for (let index = 0; index < candidateCount; index++) {
+    const row = index < DATASET_ROWS ? generated(index) : created[index - DATASET_ROWS];
+    const keep = treePredicate
+      ? treePredicate(row.values)
+      : (filterLogic === "or" ? filters.some((filter) => matches(row.values[filter.fieldId] ?? null, filter)) : filters.every((filter) => matches(row.values[filter.fieldId] ?? null, filter)));
+    if (keep) candidates.push(row);
+  }
+  if (sort.length) candidates.sort((left, right) => {
+    for (const clause of sort) {
+      const order = compare(left.values[clause.fieldId] ?? null, right.values[clause.fieldId] ?? null);
+      if (order) return clause.direction === "asc" ? order : -order;
+    }
+    return left.recordId.localeCompare(right.recordId);
+  });
+  return { records: candidates.slice(rowStart, rowStart + rowCount), totalRows: candidates.length };
+}
+
+/** The same page via the SQL compiler — the reference host executor. */
+function sqlPage(db: Database, filterTreeParam: string | null, filters: FlatFilter[], filterLogic: "and" | "or", sort: SortSpec[], fieldIds: string[], rowStart: number, rowCount: number): { records: RecordRow[]; totalRows: number } {
+  const where = filterTreeParam
+    ? filterTreeToSql(JSON.parse(filterTreeParam) as FilterNode)
+    : filtersToSql(filters, filterLogic);
+  const known = new Set<string>(DATASET_COLUMNS);
+  const projected = fieldIds.filter((fieldId) => known.has(fieldId));
+  const rows = db.prepare(
+    `SELECT record_id${projected.length ? `, ${projected.map(quoteField).join(", ")}` : ""} FROM records WHERE ${where.sql} ORDER BY ${sortToSql(sort)} LIMIT ? OFFSET ?`,
+  ).all(...where.params, rowCount, rowStart);
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM records WHERE ${where.sql}`).get(...where.params);
+  return {
+    records: rows.map((row) => ({
+      recordId: String(row.record_id),
+      // Unknown fieldIds project as null — same as the memory engine's `?? null`.
+      values: Object.fromEntries(fieldIds.map((fieldId) => [fieldId, row[fieldId] ?? null])),
+    })),
+    totalRows: Number(total?.c ?? 0),
+  };
+}
+
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: PORT,
@@ -92,46 +155,60 @@ const server = Bun.serve({
       const rowStart = Math.max(0, Number(url.searchParams.get("rowStart") ?? 0));
       const rowCount = Math.min(500, Math.max(1, Number(url.searchParams.get("rowCount") ?? 200)));
       const fieldIds = (url.searchParams.get("fieldIds") ?? "").split(",").filter(Boolean);
-      const filters = JSON.parse(url.searchParams.get("filters") ?? "[]") as { fieldId: string; operator: string; value?: unknown }[];
+      const filters = JSON.parse(url.searchParams.get("filters") ?? "[]") as FlatFilter[];
       const filterLogic = url.searchParams.get("filterLogic") === "or" ? "or" : "and";
       const filterTreeParam = url.searchParams.get("filterTree");
       // A filter tree is authoritative over the flat clauses when present.
       const treePredicate = filterTreeParam ? buildPredicate(JSON.parse(filterTreeParam) as FilterNode) : null;
-      const sort = JSON.parse(url.searchParams.get("sort") ?? "[]") as { fieldId: string; direction: "asc" | "desc" }[];
-      const candidateCount = TOTAL_ROWS + created.length;
+      const sort = JSON.parse(url.searchParams.get("sort") ?? "[]") as SortSpec[];
+      const echo = { datasetId: "experiments", rowStart, rowCount, fieldIds, queryKey: url.searchParams.get("queryKey") ?? "", sort, filters, filterLogic, ...(filterTreeParam ? { filterTree: JSON.parse(filterTreeParam) } : {}) };
+      // ?engine=compare runs both engines on the same request and reports
+      // any divergence — the executable proof that sql-engine mirrors
+      // buildPredicate. Dev-only: the JS side scans the whole dataset.
+      if (datasetDb && url.searchParams.get("engine") === "compare" && (treePredicate || filters.length || sort.length)) {
+        const js = jsPage(treePredicate, filters, filterLogic, sort, rowStart, rowCount);
+        const sql = sqlPage(datasetDb, filterTreeParam, filters, filterLogic, sort, fieldIds, rowStart, rowCount);
+        const jsIds = js.records.map((record) => record.recordId).sort();
+        const sqlIds = sql.records.map((record) => record.recordId).sort();
+        const divergence = js.totalRows !== sql.totalRows || jsIds.join("") !== sqlIds.join("");
+        if (divergence) {
+          console.warn(`engine divergence: js=${js.totalRows}/${jsIds.length} sql=${sql.totalRows}/${sqlIds.length}`);
+          return json({ divergence: { js: { totalRows: js.totalRows, ids: jsIds }, sql: { totalRows: sql.totalRows, ids: sqlIds } } }, 409);
+        }
+      }
+      const candidateCount = DATASET_ROWS + created.length;
       let totalRows = candidateCount;
       let records: RecordRow[];
       if (!treePredicate && !filters.length && !sort.length) {
         records = Array.from({ length: Math.min(rowCount, Math.max(0, candidateCount - rowStart)) }, (_, offset) => {
           const index = rowStart + offset;
-          return index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
+          return index < DATASET_ROWS ? generated(index) : created[index - DATASET_ROWS];
         });
+      } else if (datasetDb) {
+        const page = sqlPage(datasetDb, filterTreeParam, filters, filterLogic, sort, fieldIds, rowStart, rowCount);
+        totalRows = page.totalRows;
+        records = page.records;
       } else {
-        const candidates: RecordRow[] = [];
-        for (let index = 0; index < candidateCount; index++) {
-          const row = index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
-          const keep = treePredicate
-            ? treePredicate(row.values)
-            : (filterLogic === "or" ? filters.some((filter) => matches(row.values[filter.fieldId] ?? null, filter)) : filters.every((filter) => matches(row.values[filter.fieldId] ?? null, filter)));
-          if (keep) candidates.push(row);
-        }
-        if (sort.length) candidates.sort((left, right) => {
-        for (const clause of sort) {
-          const order = compare(left.values[clause.fieldId] ?? null, right.values[clause.fieldId] ?? null);
-          if (order) return clause.direction === "asc" ? order : -order;
-        }
-        return left.recordId.localeCompare(right.recordId);
-        });
-        totalRows = candidates.length;
-        records = candidates.slice(rowStart, rowStart + rowCount);
+        const page = jsPage(treePredicate, filters, filterLogic, sort, rowStart, rowCount);
+        totalRows = page.totalRows;
+        records = page.records;
       }
       const projected = records.map((row) => ({ recordId: row.recordId, values: Object.fromEntries(fieldIds.map((fieldId) => [fieldId, row.values[fieldId] ?? null])) }));
-      return json({ request: { datasetId: "experiments", rowStart, rowCount, fieldIds, queryKey: url.searchParams.get("queryKey") ?? "", sort, filters, filterLogic, ...(filterTreeParam ? { filterTree: JSON.parse(filterTreeParam) } : {}) }, totalRows, revision: `r${revision}`, records: projected });
+      return json({ request: echo, totalRows, revision: `r${revision}`, records: projected });
     }
     if (request.method === "POST" && url.pathname === "/api/table/commits") {
       const body = await request.json() as { writes: Write[]; baseRevision?: string };
       if (body.baseRevision && body.baseRevision !== `r${revision}`) return conflict(body.writes);
-      for (const write of body.writes) overrides.set(write.recordId, { ...overrides.get(write.recordId), [write.fieldId]: write.after ?? null });
+      for (const write of body.writes) {
+        if (datasetDb && (DATASET_COLUMNS as readonly string[]).includes(write.fieldId)) {
+          const value = write.fieldId === "approved" ? (write.after === "true" || write.after === "1" ? 1 : 0) : (write.after ?? null);
+          datasetDb.prepare(`UPDATE records SET ${quoteField(write.fieldId)} = ? WHERE record_id = ?`).run(value, write.recordId);
+        }
+        // Keep the generated fast path in sync with the table.
+        const createdRow = created.find((row) => row.recordId === write.recordId);
+        if (createdRow) createdRow.values[write.fieldId] = write.after ?? null;
+        else overrides.set(write.recordId, { ...overrides.get(write.recordId), [write.fieldId]: write.after ?? null });
+      }
       revision++;
       return json({ revision: `r${revision}`, accepted: body.writes, rejected: [] });
     }
@@ -140,6 +217,7 @@ const server = Bun.serve({
       if (body.baseRevision && body.baseRevision !== `r${revision}`) return conflict([]);
       const recordId = `created-${created.length + 1}`;
       created.push({ recordId, values: body.values });
+      if (datasetDb) insertRecord(datasetDb, recordId, body.values);
       revision++;
       return json({ recordId, revision: `r${revision}` }, 201);
     }
@@ -150,13 +228,56 @@ const server = Bun.serve({
       const body = await request.json() as { datasetId?: string; filter?: FilterNode; groupBy?: string; seriesBy?: string[]; summary?: string; valueField?: string; limit?: number };
       if (!body.groupBy || !body.summary) return json({ error: "groupBy and summary are required" }, 400);
       if (body.summary !== "count" && body.valueField === undefined) return json({ error: "valueField is required for this summary" }, 400);
-      const seriesBy = Array.isArray(body.seriesBy) ? body.seriesBy.filter((field): field is string => typeof field === "string" && field !== body.groupBy) : [];
+      const seriesBy = (Array.isArray(body.seriesBy) ? body.seriesBy.filter((field): field is string => typeof field === "string" && field !== body.groupBy) : [])
+        .filter((field) => !datasetDb || (DATASET_COLUMNS as readonly string[]).includes(field));
+      if (datasetDb) {
+        // SQL engine: one GROUP BY over the (key × series) tuple. Median has
+        // no SQLite aggregate — each bucket's ordered values come back in a
+        // second pass (capped at MEDIAN_CAP; a production backend uses an
+        // approximate quantile).
+        const where = body.filter ? filterTreeToSql(body.filter) : { sql: "(1=1)", params: [] as (string | number | null)[] };
+        const groupByField = body.groupBy;
+        const dims = [groupByField, ...seriesBy];
+        const cols = dims.map(quoteField);
+        const valueCol = body.valueField ? quoteField(body.valueField) : null;
+        const aggExpr = body.summary === "count" ? "COUNT(*)" : body.summary === "median" ? null : `${{ mean: "AVG", sum: "SUM", min: "MIN", max: "MAX" }[body.summary as "mean" | "sum" | "min" | "max"]}(${valueCol})`;
+        const rows = datasetDb.prepare(
+          `SELECT ${cols.join(", ")}, COUNT(*) AS _n${aggExpr ? `, ${aggExpr} AS _v` : ""} FROM records WHERE ${where.sql} GROUP BY ${cols.join(", ")} ORDER BY ${cols.join(", ")}`,
+        ).all(...where.params);
+        const total = datasetDb.prepare(`SELECT COUNT(*) AS c FROM records WHERE ${where.sql}`).get(...where.params);
+        const MEDIAN_CAP = 100_000;
+        const buckets = rows.map((row) => {
+          const key = String(row[groupByField] ?? "");
+          const series = seriesBy.length ? Object.fromEntries(seriesBy.map((field) => [field, String(row[field] ?? "")])) : undefined;
+          const count = Number(row._n);
+          let value: number | null = null;
+          if (body.summary === "count") value = count;
+          else if (aggExpr) value = row._v === null || row._v === undefined ? null : Number(row._v);
+          else if (valueCol) {
+            // Exact per-bucket median: ordered values, capped.
+            const dimConds = dims.map((field, i) => row[field] === null || row[field] === undefined ? `${cols[i]} IS NULL` : `${cols[i]} = ?`);
+            const dimParams = dims.map((field) => row[field]).filter((v) => v !== null && v !== undefined) as (string | number)[];
+            const values = datasetDb.prepare(
+              `SELECT ${valueCol} AS v FROM records WHERE ${where.sql} AND ${dimConds.join(" AND ")} AND ${valueCol} IS NOT NULL ORDER BY ${valueCol} LIMIT ?`,
+            ).all(...where.params, ...dimParams, MEDIAN_CAP).map((r) => Number(r.v));
+            if (values.length) {
+              const middle = Math.floor(values.length / 2);
+              const lo = values[values.length % 2 ? middle : middle - 1] ?? 0;
+              const hi = values[middle] ?? 0;
+              value = values.length % 2 ? hi : (lo + hi) / 2;
+            }
+          }
+          return { key, ...(series ? { series } : {}), count, value };
+        });
+        const limit = typeof body.limit === "number" && body.limit > 0 ? body.limit : undefined;
+        return json({ buckets: limit ? buckets.slice(0, limit) : buckets, totalRows: Number(total?.c ?? 0), revision: `r${revision}` });
+      }
       const predicate = body.filter ? buildPredicate(body.filter) : () => true;
       const buckets = new Map<string, { key: string; series?: Record<string, string>; count: number; values: number[] }>();
       let matched = 0;
-      const candidateCount = TOTAL_ROWS + created.length;
+      const candidateCount = DATASET_ROWS + created.length;
       for (let index = 0; index < candidateCount; index++) {
-        const row = index < TOTAL_ROWS ? generated(index) : created[index - TOTAL_ROWS];
+        const row = index < DATASET_ROWS ? generated(index) : created[index - DATASET_ROWS];
         if (!predicate(row.values)) continue;
         matched++;
         const key = String(row.values[body.groupBy] ?? "");
@@ -208,8 +329,8 @@ const server = Bun.serve({
       savePresentation.run(body.key, JSON.stringify(body.state));
       return json({ saved: true });
     }
-    return json({ name: "Sheetbase million-row example API", rows: TOTAL_ROWS + created.length, revision: `r${revision}` });
+    return json({ name: "Sheetbase million-row example API", engine: SQL_MODE ? "sql" : "memory", rows: DATASET_ROWS + created.length, revision: `r${revision}` });
   },
 });
 
-console.log(`Sheetbase example API listening on http://127.0.0.1:${server.port}/api/table`);
+console.log(`Sheetbase example API listening on http://127.0.0.1:${server.port}/api/table (engine=${SQL_MODE ? `sql:${SQL_ROWS}` : "memory"})`);

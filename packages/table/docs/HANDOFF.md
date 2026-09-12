@@ -82,7 +82,7 @@ The design direction is compact, high-density and restrained:
 | `src/ui/presentation-state.ts` | Versioned serialisable presentation state and persistence adapter |
 | `src/ui/styles.css` | Compact light/dark component styling |
 | `src/data/*` | Adapter, HTTP, paging, cache, query and conflict boundaries |
-| `examples/million-row-api.ts` | Runnable Bun API for one million logical records |
+| `examples/million-row-api.ts` | Runnable Bun API (SQL engine 250k rows / memory engine 1M, `?engine=compare` checks parity) |
 | `e2e/paged-demo.spec.ts` | Browser-facing regression coverage for this composition |
 
 ## State and architecture notes

@@ -61,7 +61,7 @@ When the stored schema changes, bump `CURRENT_PRESENTATION_VERSION`, register a 
 
 ## Runnable Bun example
 
-`examples/million-row-api.ts` implements the complete contract over one million deterministic records. Start it with `bun run dev:api`, start Vite with `bun run dev`, and open `/million`.
+`examples/million-row-api.ts` implements the complete contract over deterministic generated records. Start it with `bun run dev:api`, start Vite with `bun run dev`, and open `/million`. Two engines share the same request contract: the default `API_ENGINE=sql` materialises 250k rows in SQLite (`examples/sql-engine.ts` compiles `filterTree` into parameterised `WHERE` clauses) and `API_ENGINE=memory` runs the original one-million-row JavaScript path. `?engine=compare` runs both engines on the same request and reports any row/count divergence — the proving ground for translating the documented filter contract into SQL.
 
 The unfiltered path generates only the requested page. Filtered and sorted requests deliberately perform server work so it is clear that the browser never treats a loaded page as the complete dataset. In production, the same request contract maps naturally to indexed Postgres queries with `LIMIT`, keyset/offset pagination and an application-managed revision or row-version column.
 

@@ -3,8 +3,8 @@
 The explorer charts whatever fits in memory: `DataAdapter.load()` returns a
 materialised `Dataset { rows }`, and the only built-in sources are the sample
 dataset and a whole-file reader. This spike adds the contract that lets the
-explorer chart datasets that stay on the server — the same million-row,
-Postgres-shaped data the table pages over.
+explorer chart datasets that stay on the server — the same Postgres-shaped
+data the table pages over.
 
 ## Contract
 
@@ -157,6 +157,7 @@ see a remote dataset. Pushing SQL server-side is out of scope.
 ## Demo
 
 `bun run dev:api` in `packages/table`, then `bun run dev` in
-`packages/explorer` — the source menu lists "Experiments API (1M rows,
-remote)". CORS on the example API is open, so the explorer dev server needs
+`packages/explorer` — the source menu lists the experiments API (250k rows
+under the default `API_ENGINE=sql`, one million under `API_ENGINE=memory`).
+CORS on the example API is open, so the explorer dev server needs
 no proxy.

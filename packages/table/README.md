@@ -78,7 +78,7 @@ bun run dev:api
 bun run dev
 ```
 
-Then open `http://localhost:5173/million`. The example exposes one million logical records through page-aligned viewport requests, server-side sorting/filtering, typed updates, blank-row record creation and optimistic revision conflicts. `POST /api/table/conflict` advances the server revision so the next edit demonstrates the visible conflict path. (The legacy `/?paged=1` URL redirects to `/million`.)
+Then open `http://localhost:5173/million`. The example serves generated logical records through page-aligned viewport requests, server-side sorting/filtering, typed updates, blank-row record creation and optimistic revision conflicts — by default 250k rows materialised in SQLite (`API_ENGINE=sql`), or one million via the original JavaScript path (`API_ENGINE=memory`). `POST /api/table/conflict` advances the server revision so the next edit demonstrates the visible conflict path. (The legacy `/?paged=1` URL redirects to `/million`.)
 
 The browser uses Vite's same-origin `/api/table` proxy, so it does not need direct access to the Bun port. This also avoids WSL localhost-forwarding and cross-origin differences between browsers.
 
