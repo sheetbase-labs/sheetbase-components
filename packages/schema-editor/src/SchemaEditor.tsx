@@ -11,7 +11,7 @@ import {
   validateGraph,
   withAutoLayout,
 } from "./graph";
-import { graphToDdl, graphToProvision } from "./ddl";
+import { ddlToGraph, graphToDdl, graphToProvision, SchemaParseError } from "./ddl";
 
 export interface SchemaEditorHandle {
   /** Add a model, as the topbar button does. */
@@ -91,6 +91,22 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
 
   const relations = useMemo(() => getRelations(graph), [graph]);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+
+  function importDdl() {
+    try {
+      const next = ddlToGraph(importText);
+      commit(next, next.models[0]?.name ?? null);
+      setImportOpen(false);
+      setImportText("");
+      setImportError(null);
+      setExportNote(`Imported ${next.models.length} model${next.models.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setImportError(error instanceof SchemaParseError ? error.errors.join("; ") : "Could not parse that DDL.");
+    }
+  }
 
   function copyExport(text: string, label: string) {
     navigator.clipboard?.writeText(text)
@@ -226,6 +242,11 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
             </div>
             <div className="sb-topbar-actions">
               {exportNote && <span className="sb-stat">{exportNote}</span>}
+              <button
+                className="sb-btn"
+                title="Paste create-table DDL to replace the graph"
+                onClick={() => { setImportOpen(true); setImportError(null); }}
+              >Import SQL</button>
               <button
                 className="sb-btn"
                 disabled={errors.length > 0}
@@ -482,6 +503,27 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
             },
           ] satisfies PaneSpec[]}
         />
+        {importOpen && (
+          <div className="sb-import-backdrop" onClick={() => setImportOpen(false)}>
+            <div className="sb-import-panel" role="dialog" aria-label="Import SQL" onClick={(e) => e.stopPropagation()}>
+              <div className="sb-panel-heading"><span>Import DDL</span><span>replaces the graph</span></div>
+              <textarea
+                className="sb-input sb-mono sb-import-sql"
+                autoFocus
+                spellCheck={false}
+                placeholder={'create table "samples" (\n  "id" text primary key,\n  …\n);'}
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") importDdl(); if (e.key === "Escape") setImportOpen(false); }}
+              />
+              {importError && <p className="sb-import-error">{importError}</p>}
+              <div className="sb-import-actions">
+                <button className="sb-btn" onClick={() => setImportOpen(false)}>Cancel</button>
+                <button className="sb-btn primary" disabled={!importText.trim()} onClick={importDdl}>Import</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

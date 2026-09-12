@@ -53,3 +53,12 @@
 .sb-toggle-row { display: flex; align-items: center; gap: 10px; font-size: 11px; min-height: 22px; }
 .sb-toggle-row label { display: inline-flex; align-items: center; gap: 6px; }
 .sb-toggle-row input { accent-color: var(--accent); }
+
+/* Import-DDL overlay: centres over the frame, themed like a plate. */
+.sb-import-backdrop { position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--canvas) 60%, transparent); }
+.sb-import-panel { display: flex; flex-direction: column; gap: 8px; width: min(480px, 90%); background: var(--panel); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-lg, var(--shadow)); overflow: hidden; padding-bottom: 10px; }
+.sb-import-panel .sb-panel-heading { border-bottom: 1px solid var(--border); }
+.sb-import-sql { margin: 0 10px; height: 180px; resize: vertical; font-size: 11px; line-height: 1.5; padding: 8px 10px; }
+.sb-import-error { margin: 0 10px; color: var(--danger); font-size: 11.5px; }
+.sb-import-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 10px; }
+.sb-schema .sb-frame { position: relative; }

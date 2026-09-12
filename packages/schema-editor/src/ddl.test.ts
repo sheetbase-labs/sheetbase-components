@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { graphToDdl, graphToProvision, quoteIdent, SchemaValidationError } from "./ddl";
+import { ddlToGraph, graphToDdl, graphToProvision, quoteIdent, SchemaParseError, SchemaValidationError } from "./ddl";
 import type { SchemaGraph } from "./types";
 
 const graph: SchemaGraph = {
@@ -72,6 +72,64 @@ describe("graphToDdl", () => {
     expect(quoteIdent('we"ird')).toBe('"we""ird"');
     const g: SchemaGraph = { models: [{ name: 'my"model', fields: [{ key: "id", type: "text", primaryKey: true }] }] };
     expect(graphToDdl(g)).toContain('create table "my""model"');
+  });
+});
+
+describe("ddlToGraph", () => {
+  it("round-trips emitted DDL back to the same models and fields", () => {
+    const parsed = ddlToGraph(graphToDdl(graph));
+    expect(parsed.models.map((m) => ({ name: m.name, fields: m.fields }))).toEqual(
+      graph.models.map((m) => ({ name: m.name, fields: m.fields })),
+    );
+  });
+
+  it("reads common Postgres spellings", () => {
+    const parsed = ddlToGraph(`
+      create table if not exists public.samples (
+        id serial primary key,
+        label varchar(80) not null,
+        ratio double precision,
+        taken_at timestamp with time zone,
+        batch_id integer references "batches"("id")
+      );
+      create table "batches" ( "id" int, primary key ("id") );
+    `);
+    const [samples, batches] = parsed.models;
+    expect(samples.name).toBe("samples");
+    expect(samples.fields).toEqual([
+      { key: "id", type: "number", primaryKey: true },
+      { key: "label", type: "text", nullable: false },
+      { key: "ratio", type: "number" },
+      { key: "taken_at", type: "datetime" },
+      { key: "batch_id", type: "relationship", references: { model: "batches" } }, // "id" is the target pk — kept implicit
+    ]);
+    expect(batches.name).toBe("batches");
+    expect(batches.fields[0]).toEqual({ key: "id", type: "number", primaryKey: true, nullable: false });
+  });
+
+  it("maps table-level foreign keys onto the column", () => {
+    const parsed = ddlToGraph(`
+      create table "orders" ( "id" int primary key, "customer_id" int not null,
+        foreign key ("customer_id") references "customers"("id") );
+      create table "customers" ( "id" int primary key );
+    `);
+    expect(parsed.models[0].fields[1]).toEqual({
+      key: "customer_id", type: "relationship", nullable: false,
+      references: { model: "customers" },
+    });
+  });
+
+  it("keeps a non-pk reference target explicit", () => {
+    const parsed = ddlToGraph(`
+      create table "c" ( "code" text, unique ("code") );
+      create table "o" ( "c_code" text references "c"("code") );
+    `);
+    expect(parsed.models[1].fields[0].references).toEqual({ model: "c", field: "code" });
+  });
+
+  it("throws SchemaParseError when nothing parses", () => {
+    expect(() => ddlToGraph("select 1;")).toThrow(SchemaParseError);
+    expect(() => ddlToGraph("")).toThrow(SchemaParseError);
   });
 });
 

@@ -37,6 +37,25 @@ primaryKey?, references? }] }] }`. Same validation gate.
 - The type map covers `FieldDataType` only — no arrays, enums, or
   precision/scale on `numeric` yet.
 
+## Import (`ddlToGraph`)
+
+The read-side counterpart: paste `create table` DDL and get a `SchemaGraph`
+back. Understands the emitted grammar plus common Postgres spellings —
+`if not exists`, schema-qualified names (`public.samples` → `samples`),
+type aliases (`varchar`, `int`, `serial`, `double precision`,
+`timestamp with time zone`), column and table-level `primary key` /
+`foreign key ... references` constraints. A column with `references`
+imports as `type: "relationship"`; a `references ("pk")` that restates the
+target's primary key is normalised to the implicit `{ model }` form.
+Unknown column types become `text`. Throws `SchemaParseError` when no
+statement yields a model; skipped statements are listed in `error.errors`.
+
+The editor's topbar "Import SQL" opens a paste dialog that replaces the
+graph (`cmd/ctrl+Enter` to import, `Esc` to close). Imported graphs are
+auto-laid-out and flow through the normal commit path — in the workbench
+the table, search, explorer and rules panes all re-render from the new
+fields via `onHeaderFieldsChange`.
+
 ## `datetime` parity
 
 `SheetbaseField` has six data types; the table's `CellDataType` now includes
