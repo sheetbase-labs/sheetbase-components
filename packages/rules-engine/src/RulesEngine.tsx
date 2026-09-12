@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
   PaneLayout,
@@ -180,11 +180,11 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
   const [applyOutcome, setApplyOutcome] = useState<string | null>(null);
   const applyCapable = Boolean(rows && recordIdOf && onApplyWrites);
   const applyPlan = useMemo(
-    () => (applyCapable ? ruleWritesForRows(rules, rows!, recordIdOf!) : null),
-    [applyCapable, rules, rows, recordIdOf],
+    () => (rows && recordIdOf && onApplyWrites ? ruleWritesForRows(rules, rows, recordIdOf) : null),
+    [rules, rows, recordIdOf, onApplyWrites],
   );
 
-  async function applyWrites(confirm = true) {
+  const applyWrites = useCallback(async (confirm = true) => {
     if (!applyPlan || !onApplyWrites || applying) return;
     if (applyPlan.writes.length === 0) { if (confirm) setApplyOutcome("No transform writes to apply."); return; }
     const writeRows = new Set(applyPlan.writes.map((write) => write.recordId)).size;
@@ -202,7 +202,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     } finally {
       setApplying(false);
     }
-  }
+  }, [applyPlan, onApplyWrites, applying]);
 
   function onProbeChange(text: string) {
     setProbe(text);
@@ -237,10 +237,10 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     }
     circuit.lastKey = applyKey;
     void applyWrites(false);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: applyKey is the
-    // content key of applyPlan — refires only when the write set changes;
-    // `applying` re-runs the check when the in-flight apply resolves.
-  }, [autoApply, applyKey, applying]);
+    // applyPlan/applyWrites identities change whenever the write set does;
+    // applyKey additionally dedups unchanged content, and `applying`
+    // re-runs the check when the in-flight apply resolves.
+  }, [autoApply, applying, applyPlan, applyKey, applyWrites]);
 
   useImperativeHandle(ref, () => ({ addRule }));
 
