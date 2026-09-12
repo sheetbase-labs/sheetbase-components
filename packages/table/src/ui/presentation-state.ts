@@ -19,7 +19,7 @@ export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 export type TablePresentationState = Readonly<{
-  version: 2;
+  version: 3;
   theme: ThemeMode;
   conditionalFormats: readonly ConditionalFormatRule[];
   formats: readonly SpreadsheetFormatEntry[];
@@ -59,7 +59,7 @@ export interface TablePresentationAdapter {
 }
 
 /** Bump this when the stored schema changes and register a migration for the previous version. */
-export const CURRENT_PRESENTATION_VERSION = 2;
+export const CURRENT_PRESENTATION_VERSION = 3;
 
 export type PresentationMigration = Readonly<{
   from: number;
@@ -75,6 +75,17 @@ registerPresentationMigration({
   from: 1,
   to: 2,
   migrate: (value) => ({ ...value, annotations: [] }),
+});
+
+/**
+ * v2 → v3: annotations gain optional `recordId`/`fieldId` (bound-grid
+ * identity). Stored entries were address-pinned when written, and stay
+ * address-pinned — no transform, just the version bump.
+ */
+registerPresentationMigration({
+  from: 2,
+  to: 3,
+  migrate: (value) => ({ ...value }),
 });
 
 /** Register a step that upgrades stored state from one schema version to the next. */
@@ -112,7 +123,7 @@ export function normalisePresentationState(value: unknown, fallback: TablePresen
     context: { ...object.context, ...(stored.panelField ? { fieldId: stored.panelField } : {}) },
   } : object);
   return {
-    version: 2,
+    version: 3,
     theme: stored.theme === "dark" || stored.theme === "light" || stored.theme === "system" ? stored.theme : fallback.theme,
     conditionalFormats: Array.isArray(stored.conditionalFormats) ? stored.conditionalFormats : Array.isArray(stored.rules) ? stored.rules : fallback.conditionalFormats,
     formats: Array.isArray(stored.formats) ? stored.formats : fallback.formats,

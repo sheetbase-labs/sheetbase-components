@@ -102,7 +102,7 @@ export const experimentFields = [
 ];
 
 const tableFallback: TablePresentationState = {
-  version: 2,
+  version: 3,
   theme: "system",
   conditionalFormats: [],
   formats: [],

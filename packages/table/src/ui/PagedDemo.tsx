@@ -30,7 +30,7 @@ const initialConditionalFormats: readonly ConditionalFormatRule[] = [
 
 const presentationKey = "sheetbase-table:presentation:experiments";
 const initialPresentation: TablePresentationState = {
-  version: 2,
+  version: 3,
   theme: "system",
   conditionalFormats: initialConditionalFormats,
   formats: [],

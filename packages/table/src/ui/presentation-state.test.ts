@@ -70,9 +70,20 @@ describe("table presentation state", () => {
     ]);
   });
 
-  it("migrates v1 stored state to v2 with an empty annotation overlay", () => {
+  it("migrates v1 stored state to v3 with an empty annotation overlay", () => {
     const migrated = normalisePresentationState({ version: 1, theme: "dark" }, fallback);
-    expect(migrated).toMatchObject({ version: 2, annotations: [] });
+    expect(migrated).toMatchObject({ version: 3, annotations: [] });
+  });
+
+  it("migrates v2 stored state to v3 leaving annotations address-pinned", () => {
+    const stored = {
+      version: 2,
+      theme: "dark",
+      annotations: [{ address: "C5", text: "check this", author: "g" }],
+    };
+    const migrated = normalisePresentationState(stored, fallback);
+    expect(migrated).toMatchObject({ version: 3 });
+    expect(migrated.annotations).toEqual([{ address: "C5", text: "check this", author: "g" }]);
   });
 
   it("replays registered migrations for older stored versions", () => {

@@ -806,10 +806,24 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     () => new Map((datasetHeader?.fields ?? []).map((field) => [field.column, field])),
     [datasetHeader],
   );
-  const annotationByAddress = useMemo(
-    () => new Map(annotations.map((annotation) => [annotation.address, annotation])),
-    [annotations],
-  );
+  // Two namespaces: record-keyed annotations match bound cells by
+  // (recordId, fieldId) wherever the record renders; address-keyed entries
+  // (unbound sheets, free columns, legacy state) match by coordinate. A bound
+  // cell never adopts a record-keyed note through its stale stored address.
+  const annotationMaps = useMemo(() => {
+    const byRecord = new Map<string, CellAnnotation>();
+    const byAddressKeyed = new Map<string, CellAnnotation>();
+    const byAddressAll = new Map<string, CellAnnotation>();
+    for (const annotation of annotations) {
+      if (annotation.recordId !== undefined && annotation.fieldId !== undefined) {
+        byRecord.set(`${annotation.recordId}\u0000${annotation.fieldId}`, annotation);
+      } else {
+        byAddressKeyed.set(annotation.address, annotation);
+      }
+      byAddressAll.set(annotation.address, annotation);
+    }
+    return { byRecord, byAddressKeyed, byAddressAll };
+  }, [annotations]);
   const columnByFieldId = useMemo(
     () => new Map(fieldIds.flatMap((fieldId, column) => fieldId === undefined ? [] : [[fieldId, column] as const])),
     [fieldIds],
@@ -1137,18 +1151,35 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return count;
   }, [commit, data, readOnly]);
 
+  /** Resolve a cell address to its bound identity when the grid is bound —
+   *  (recordId, fieldId) both required; free columns stay address-keyed. */
+  const annotationCellRef = useCallback((address: string): { address: string; recordId?: string; fieldId?: string; bound?: boolean } => {
+    if (!bound) return { address };
+    try {
+      const point = parseAddress(address);
+      const recordId = datasetHeader?.recordIdForRow?.(point.row);
+      const fieldId = fieldIds[point.column];
+      return recordId !== undefined && fieldId !== undefined
+        ? { address, recordId, fieldId, bound: true }
+        : { address, bound: true };
+    } catch {
+      return { address, bound: true };
+    }
+  }, [bound, datasetHeader, fieldIds]);
+
   const annotate = useCallback((address: string, note: string, meta?: { author?: string; createdAt?: string }) => {
     if (readOnly) return;
-    const next = setAnnotationIn(annotations, address, note, meta);
+    const cell = annotationCellRef(address);
+    const next = setAnnotationIn(annotations, cell.address, note, { ...meta, recordId: cell.recordId, fieldId: cell.fieldId, bound: cell.bound });
     setAnnotations(next);
     onAnnotationsChange?.(next);
-  }, [annotations, onAnnotationsChange, readOnly]);
+  }, [annotations, onAnnotationsChange, readOnly, annotationCellRef]);
   const removeAnnotationAt = useCallback((address: string) => {
     if (readOnly) return;
-    const next = removeFromAnnotations(annotations, address);
+    const next = removeFromAnnotations(annotations, annotationCellRef(address));
     setAnnotations(next);
     onAnnotationsChange?.(next);
-  }, [annotations, onAnnotationsChange, readOnly]);
+  }, [annotations, onAnnotationsChange, readOnly, annotationCellRef]);
 
   const clearWriteState = useCallback((address: string) => {
     clearTimeout(writeStateTimers.current.get(address));
@@ -1496,7 +1527,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         const spilled = raw === "" ? worksheet.spills.value(key) : undefined;
         const loading = raw === "" && spilled === undefined && loadingRanges.some((loadingRange) => row >= loadingRange.rowStart && row <= loadingRange.rowEnd && column >= loadingRange.columnStart && column <= loadingRange.columnEnd);
         const writeState = writeStates.get(key);
-        const annotation = annotationByAddress.get(key);
+        const annotationRecordId = bound ? datasetHeader?.recordIdForRow?.(row) : undefined;
+        const annotationFieldId = fieldIds[column];
+        const annotation = bound
+          ? ((annotationRecordId !== undefined && annotationFieldId !== undefined
+              ? annotationMaps.byRecord.get(`${annotationRecordId}\u0000${annotationFieldId}`)
+              : undefined) ?? annotationMaps.byAddressKeyed.get(key))
+          : annotationMaps.byAddressAll.get(key);
         const baseFormat = formats.get(point);
         const calculated = raw.startsWith("=") || spilled !== undefined ? displayValue(worksheet, point) : raw;
         // Empty rules are the common case — skip the per-cell scan entirely.
