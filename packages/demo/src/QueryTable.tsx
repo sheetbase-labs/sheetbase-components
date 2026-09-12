@@ -16,7 +16,7 @@ import { useWorkspace } from "sheetbase-shared";
  * adapter is host-owned so other panes (e.g. rules write-back) can commit
  * through the same boundary.
  */
-export function QueryTable({ theme, adapter, pageCache }: { theme: "light" | "dark"; adapter: PagedDataAdapter; pageCache?: DataPageCache }) {
+export function QueryTable({ theme, adapter, pageCache, datasetId = "sample" }: { theme: "light" | "dark"; adapter: PagedDataAdapter; pageCache?: DataPageCache; datasetId?: string }) {
   const workspace = useWorkspace();
   const fields = workspace?.fields ?? [];
   const query = workspace?.query ?? {};
@@ -44,7 +44,7 @@ export function QueryTable({ theme, adapter, pageCache }: { theme: "light" | "da
             ref={tableRef}
             adapter={adapter}
             pageCache={pageCache}
-            datasetId="sample"
+            datasetId={datasetId}
             fieldIds={fieldIds}
             query={query}
             datasetHeader={datasetHeader}

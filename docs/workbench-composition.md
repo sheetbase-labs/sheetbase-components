@@ -100,10 +100,39 @@ table so it re-reads committed state.
 
 ## Scaling to server data
 
-`WorkspaceState.rows` is optional — when the dataset is too large to
-materialise, set `workspace.source` to a `WorkspaceDataSource` (the structural
-shape of `PagedDataAdapter.fetchPage`) and let the table pane page from it.
-The view/query contract is unchanged; only the row realisation moves.
+`useWorkbench` takes `source` instead of `rows` — exactly one of the two is
+required (it throws `TypeError` otherwise):
+
+```tsx
+const wb = useWorkbench({
+  fields,
+  source: remoteSource,                 // WorkspaceDataSource — see below
+  initialView: emptyView("mean"),
+});
+wb.remote === true;                     // viewRows / filteredRows are null
+```
+
+`WorkspaceDataSource` is the structural twin of `PagedDataAdapter.fetchPage`
+(plus an optional `aggregate` twin of the explorer's remote contract) — any
+real adapter satisfies it. On remote sources the workbench dataflow is
+unchanged except for who realises rows:
+
+- **Table** pages through a host adapter (`HttpPagedDataAdapter`) driven by
+  the workspace `query` — `QueryTable` needs no changes.
+- **Explorer** gets a `Dataset` literal whose `remote.aggregate` /
+  `remote.page` bridge the source; charts aggregate server-side.
+- **Search** still edits the shared `view`; its live preview takes the
+  source's first filtered page (`fetchPage` with the compiled
+  `filterTree`) — already-filtered rows, so the client re-filter is a no-op.
+- **Rules** can't dry-run rows that aren't materialised — render an honest
+  placeholder ("this dataset lives on the server") rather than an empty
+  evaluation.
+- The **"filtered N / M"** counter reads the preview page's `totalRows`
+  (matched) against an unfiltered page's `totalRows`.
+
+The demo workbench (`packages/demo/src/Workbench.tsx`) shows the whole thing:
+a source selector swaps between the materialised sample and the remote
+`experiments` API.
 
 ## Follow-ups
 

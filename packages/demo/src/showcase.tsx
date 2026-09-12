@@ -84,6 +84,23 @@ function generateRows(count: number): SampleRow[] {
 /** One dataset shared by every pane: table rows, search rows and rules input. */
 export const sampleRows: SampleRow[] = generateRows(1500);
 
+/**
+ * Field descriptor for the example API's `experiments` dataset — the remote
+ * workbench source. Columns mirror `generated()` in
+ * `packages/table/examples/million-row-api.ts`.
+ */
+export const experimentFields = [
+  { id: "experiment_id", label: "experiment_id", column: 0, dataType: "text" as const },
+  { id: "sample_id", label: "sample_id", column: 1, dataType: "text" as const },
+  { id: "assay", label: "assay", column: 2, dataType: "text" as const },
+  { id: "result", label: "result", column: 3, dataType: "number" as const },
+  { id: "unit", label: "unit", column: 4, dataType: "text" as const },
+  { id: "run_date", label: "run_date", column: 5, dataType: "date" as const },
+  { id: "status", label: "status", column: 6, dataType: "text" as const },
+  { id: "reviewer", label: "reviewer", column: 7, dataType: "text" as const },
+  { id: "approved", label: "approved", column: 8, dataType: "boolean" as const },
+];
+
 const tableFallback: TablePresentationState = {
   version: 2,
   theme: "system",

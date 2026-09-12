@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { SheetbaseField } from "./fields";
-import type { DatasetQuery, SortClause } from "./query";
+import type { DatasetQuery, FilterClause, SortClause } from "./query";
 import type { GroupNode } from "./tree";
 import { applySearch } from "./tree";
 import { applyView, searchSpecFromView, type AnalysisView } from "./analysis";
@@ -19,11 +19,38 @@ export interface WorkspaceDataSource {
     rowCount: number;
     fieldIds: readonly string[];
     sort?: readonly SortClause[];
+    filters?: readonly FilterClause[];
+    filterLogic?: "and" | "or";
     filterTree?: GroupNode;
   }, signal?: AbortSignal): Promise<{
     records: readonly { recordId: string; values: Record<string, unknown> }[];
     totalRows: number;
+    revision?: string;
   }>;
+  /**
+   * Optional server-side group+aggregate — a structural twin of the
+   * explorer's `RemoteDatasetSource.aggregate`. Any object satisfying the
+   * explorer contract satisfies this one; when absent, panes that need
+   * aggregation show their remote note instead.
+   */
+  aggregate?(query: WorkspaceAggregateQuery, signal?: AbortSignal): Promise<WorkspaceAggregateResponse>;
+}
+
+/** Structural twin of the explorer's `AggregateQuery` (shared can't import it). */
+export interface WorkspaceAggregateQuery {
+  /** Filter tree; authoritative over any flat list. */
+  filter?: GroupNode;
+  groupBy: string;
+  summary: "mean" | "median" | "sum" | "count" | "min" | "max";
+  valueField?: string;
+  limit?: number;
+}
+
+/** Structural twin of the explorer's `AggregateResponse`. */
+export interface WorkspaceAggregateResponse {
+  buckets: { key: string; count: number; value: number | null }[];
+  totalRows: number;
+  revision?: string;
 }
 
 /**
@@ -67,11 +94,25 @@ export function useWorkspaceRows(fallback: readonly Record<string, unknown>[] = 
   return useContext(WorkspaceContext)?.rows ?? fallback;
 }
 
+/** The paged/server data source, or null when the workspace is materialised. */
+export function useWorkspaceSource(): WorkspaceDataSource | null {
+  return useContext(WorkspaceContext)?.source ?? null;
+}
+
 export interface UseWorkbenchOptions {
   /** Active dataset fields (typically from the schema editor). */
   fields: readonly SheetbaseField[];
-  /** Workspace rows — the snapshot search, explorer and rules evaluate. */
-  rows: readonly Record<string, unknown>[];
+  /**
+   * Workspace rows — the snapshot search, explorer and rules evaluate.
+   * Mutually exclusive with `source`: provide exactly one.
+   */
+  rows?: readonly Record<string, unknown>[];
+  /**
+   * Paged/server data source for datasets too large to materialise. When
+   * set, `viewRows`/`filteredRows` are null (they can't be derived
+   * client-side) and consumers show their remote affordances instead.
+   */
+  source?: WorkspaceDataSource;
   /** Starting view when nothing is persisted. */
   initialView: AnalysisView;
   /** Load a stored view once at mount. Saving stays with the search pane. */
@@ -94,13 +135,19 @@ export interface WorkbenchGlue {
   /** Compiled query the table follows — search's `onDatasetQueryChange`. */
   query: DatasetQuery;
   setQuery(next: DatasetQuery): void;
-  /** `rows` after the view's filter + sort + limit — feed explorer and rules. */
-  viewRows: readonly Record<string, unknown>[];
-  /** `rows` after the view's filter + sort only — the "filtered N / M" counter. */
-  filteredRows: readonly Record<string, unknown>[];
+  /** `rows` after the view's filter + sort + limit — feed explorer and rules.
+   *  Null when the workspace is server-backed (`source` mode). */
+  viewRows: readonly Record<string, unknown>[] | null;
+  /** `rows` after the view's filter + sort only — the "filtered N / M" counter.
+   *  Null when the workspace is server-backed. */
+  filteredRows: readonly Record<string, unknown>[] | null;
+  /** True when the workspace pages from `source` instead of materialised `rows`. */
+  remote: boolean;
   /** Ready-made `WorkspaceProvider` value. */
   workspace: WorkspaceState;
 }
+
+const EMPTY_ROWS: readonly Record<string, unknown>[] = [];
 
 /**
  * The workbench composition as code: one `AnalysisView` shared between the
@@ -108,7 +155,11 @@ export interface WorkbenchGlue {
  * table, and the derived row slices every consumer reads.
  */
 export function useWorkbench(options: UseWorkbenchOptions): WorkbenchGlue {
-  const { fields, rows, initialView, persistKey, adapter } = options;
+  const { fields, rows, source, initialView, persistKey, adapter } = options;
+  if ((rows === undefined) === (source === undefined)) {
+    throw new TypeError("useWorkbench requires exactly one of `rows` or `source`");
+  }
+  const remote = source !== undefined;
   const [view, setView] = useState<AnalysisView>(() => {
     const loaded = loadInitialState(persistKey, adapter, initialView);
     return { ...initialView, ...loaded };
@@ -117,11 +168,15 @@ export function useWorkbench(options: UseWorkbenchOptions): WorkbenchGlue {
   const patchView = useCallback((patch: Partial<AnalysisView>) => {
     setView((current) => ({ ...current, ...patch }));
   }, []);
-  const viewRows = useMemo(() => applyView(rows, view), [rows, view]);
+  const localRows = rows ?? EMPTY_ROWS;
+  const viewRows = useMemo(() => (remote ? null : applyView(localRows, view)), [remote, localRows, view]);
   const filteredRows = useMemo(
-    () => applySearch(rows, searchSpecFromView({ ...view, limit: undefined })),
-    [rows, view],
+    () => (remote ? null : applySearch(localRows, searchSpecFromView({ ...view, limit: undefined }))),
+    [remote, localRows, view],
   );
-  const workspace = useMemo<WorkspaceState>(() => ({ fields, rows, query }), [fields, rows, query]);
-  return { view, setView, patchView, query, setQuery, viewRows, filteredRows, workspace };
+  const workspace = useMemo<WorkspaceState>(
+    () => (remote ? { fields, query, source } : { fields, rows, query }),
+    [remote, fields, rows, source, query],
+  );
+  return { view, setView, patchView, query, setQuery, viewRows, filteredRows, remote, workspace };
 }

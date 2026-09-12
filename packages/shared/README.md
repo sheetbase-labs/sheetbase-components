@@ -149,6 +149,15 @@ with `useWorkspace`, `useWorkspaceQuery`, `useWorkspaceFields` or
 </WorkspaceProvider>
 ```
 
+For datasets too large to materialise, `useWorkbench` accepts `source: WorkspaceDataSource`
+instead of `rows` (exactly one is required — it throws `TypeError` otherwise).
+`WorkspaceDataSource` mirrors `PagedDataAdapter.fetchPage` structurally plus an
+optional `aggregate` twin of the explorer's remote contract. In source mode
+`wb.remote` is true, `viewRows`/`filteredRows` are `null` (rows aren't
+realised client-side), and `workspace.source` is readable via
+`useWorkspaceSource()`. See `docs/workbench-composition.md` for the per-pane
+remote dataflow.
+
 ## Build
 
 `bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and
