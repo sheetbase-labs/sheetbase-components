@@ -37,9 +37,29 @@ export interface AggregateResponse {
   revision?: string
 }
 
+/** A page of raw rows from a remote dataset — the Data-tab preview. */
+export interface RemotePageQuery {
+  offset: number
+  limit: number
+  fields: string[]
+  /** Same tree the aggregate takes; authoritative over any flat list. */
+  filter?: GroupNode
+}
+
+export interface RemotePage {
+  rows: DataRow[]
+  totalRows: number
+  revision?: string
+}
+
 /** Capability a remote dataset exposes: server-side group+aggregate. */
 export interface RemoteDatasetSource {
   aggregate(query: AggregateQuery, signal?: AbortSignal): Promise<AggregateResponse>
+  /**
+   * Optional raw-row fetch — when present the Data tab shows a first-page
+   * preview instead of the remote note. The chart never needs it.
+   */
+  page?(query: RemotePageQuery, signal?: AbortSignal): Promise<RemotePage>
 }
 
 export interface Dataset {
@@ -50,8 +70,8 @@ export interface Dataset {
   /**
    * Set when the dataset's rows live server-side: `rows` stays empty and
    * aggregated chart data is fetched through this capability instead of
-   * computed in-browser. Row-level features (data table, SQL, export-all)
-   * don't apply to remote datasets.
+   * computed in-browser. Row-level features (SQL, export-all) don't apply;
+   * the data table shows a preview when `remote.page` is provided.
    */
   remote?: RemoteDatasetSource
 }

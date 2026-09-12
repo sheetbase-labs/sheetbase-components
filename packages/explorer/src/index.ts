@@ -8,9 +8,11 @@ import './explorer-interactions.css'
 
 export { App, type AppProps } from './App'
 export type {
-  AggregateKind, BarLayout, ChartKind, ChartSpec, ColumnKind, ColumnMeta,
+  AggregateBucket, AggregateKind, AggregateQuery, AggregateResponse,
+  BarLayout, ChartKind, ChartSpec, ColumnKind, ColumnMeta,
   DataAdapter, DataRow, Dataset, ErrorMode, FilterLogic, FilterOperator,
-  FilterRule, PaletteKind, SavedExploration,
+  FilterRule, PaletteKind, RemoteDatasetSource, RemotePage, RemotePageQuery,
+  SavedExploration,
 } from './lib/types'
 export type { AnalysisView, SummaryKind } from 'sheetbase-shared'
 export { sampleAdapter } from './lib/adapters/sample'

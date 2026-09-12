@@ -54,15 +54,26 @@ structured; the commits route already sets that precedent.
 `Dataset` gains an optional capability:
 
 ```ts
-remote?: { aggregate(query: AggregateQuery, signal?: AbortSignal): Promise<AggregateResponse> }
+remote?: {
+  aggregate(query: AggregateQuery, signal?: AbortSignal): Promise<AggregateResponse>
+  page?(query: RemotePageQuery, signal?: AbortSignal): Promise<RemotePage>
+}
 ```
 
 `createHttpExplorerAdapter({ baseUrl, datasetId, fields })`
 (`lib/adapters/http.ts`) returns a `DataAdapter` whose `load()` resolves
 immediately to a metadata-only dataset — `rows: []`, caller-supplied column
-metadata, and the bound `remote.aggregate`. No schema endpoint is required;
+metadata, and the bound `remote`. No schema endpoint is required;
 a real backend could add `GET /api/explorer/schema` later without changing
 the contract.
+
+`remote.page` is wired to `GET {baseUrl}/api/table/pages` — the same paged
+rows endpoint the table's HTTP adapter uses (`rowStart`, `rowCount`,
+`fieldIds`, `filterTree` params; `{ records, totalRows, revision }`
+response). When a remote dataset offers it, the Data tab shows the first
+200 rows in the shared `DataGrid` under a "the rest stay on the server"
+strip, filtered by the active view; when it doesn't, the tab keeps the
+plain remote note.
 
 `bucketsToRows` shapes each bucket into the same row `preparedRows` emits
 for a client-side aggregate: `{ [groupBy]: key, [valueField]: value,
@@ -82,10 +93,20 @@ histogram, box, violin, and heatmap always draw distributions of raw rows.
 On a remote source these show an explicit note ("pick an aggregate…")
 instead of an empty chart — the honest answer rather than a silent cap.
 
-On remote datasets the bottom panel shows the same note in place of the
-data table and the SQL workspace: alasql runs in a worker over materialised
-rows and cannot see a remote dataset. Pushing SQL server-side is out of
-scope.
+On remote datasets the bottom panel's data table becomes a first-page
+preview (when `remote.page` is wired) and the SQL workspace keeps the
+remote note: alasql runs in a worker over materialised rows and cannot
+see a remote dataset. Pushing SQL server-side is out of scope.
+
+## Loading and failure UX
+
+- While the first aggregate is in flight the chart stage shows a spinner
+  with "Aggregating on the server…"; a spec change keeps the previous
+  buckets visible and swaps when the new response lands
+  (stale-while-revalidate).
+- A failed aggregate renders "Aggregation failed: …" with a **Retry**
+  button that re-fires the request; a failed row preview gets its own
+  Retry in the Data tab.
 
 ## Correctness properties
 

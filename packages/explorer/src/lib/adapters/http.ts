@@ -6,6 +6,8 @@ import type {
   DataAdapter,
   DataRow,
   Dataset,
+  RemotePage,
+  RemotePageQuery,
 } from '../types'
 import { ROW_ID } from '../explore'
 
@@ -60,6 +62,22 @@ export function createHttpExplorerAdapter(options: HttpExplorerAdapterOptions): 
     if (!response.ok) throw new Error(`Aggregate request failed (${response.status})`)
     return await response.json() as AggregateResponse
   }
+  const page = async (query: RemotePageQuery, signal?: AbortSignal): Promise<RemotePage> => {
+    const params = new URLSearchParams({
+      rowStart: String(query.offset),
+      rowCount: String(query.limit),
+      fieldIds: query.fields.join(','),
+    })
+    if (query.filter) params.set('filterTree', JSON.stringify(query.filter))
+    const response = await fetcher(`${options.baseUrl}/api/table/pages?${params}`, { signal: signal ?? null })
+    if (!response.ok) throw new Error(`Page request failed (${response.status})`)
+    const body = await response.json() as { records: { recordId: string; values: Record<string, unknown> }[]; totalRows: number; revision?: string }
+    return {
+      rows: body.records.map((record, index) => ({ ...record.values, [ROW_ID]: query.offset + index })),
+      totalRows: body.totalRows,
+      revision: body.revision,
+    }
+  }
   return {
     id: `http:${options.datasetId}`,
     label: options.name ?? options.datasetId,
@@ -74,7 +92,7 @@ export function createHttpExplorerAdapter(options: HttpExplorerAdapterOptions): 
           uniqueCount: field.uniqueCount ?? 0,
         })),
         source: `http:${options.datasetId}`,
-        remote: { aggregate },
+        remote: { aggregate, page },
       }
     },
   }

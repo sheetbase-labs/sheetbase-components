@@ -39,6 +39,9 @@ function channelDefaults(loaded: Dataset): Partial<ChartSpec> {
   }
 }
 
+/** How many raw rows the Data tab previews for a remote dataset. */
+const REMOTE_PREVIEW_ROWS = 200
+
 export interface AppProps {
   /** Dataset sources listed under Import. Defaults to the built-in sample. */
   sources?: DataAdapter[]
@@ -296,6 +299,7 @@ export function App(props: AppProps = {}) {
   }, [remote, chartSpec.x, chartSpec.y, chartSpec.aggregate, chartSpec.kind, chartSpec.filters, chartSpec.filterLogic, view])
   const [remoteResult, setRemoteResult] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [remoteRetry, setRemoteRetry] = useState(0)
   useEffect(() => {
     if (!remote || !remoteQuery || !dataset) return
     const controller = new AbortController()
@@ -311,7 +315,30 @@ export function App(props: AppProps = {}) {
       },
     )
     return () => controller.abort()
-  }, [remote, remoteQuery, dataset])
+  }, [remote, remoteQuery, dataset, remoteRetry])
+
+  // First-page preview for the Data tab — only fetched when the remote
+  // capability exists, and re-fetched when the shared view's filter changes.
+  const [remotePage, setRemotePage] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
+  const [remotePageError, setRemotePageError] = useState<string | null>(null)
+  const [remotePageRetry, setRemotePageRetry] = useState(0)
+  useEffect(() => {
+    if (!remote?.page || !dataset) return
+    const controller = new AbortController()
+    remote.page({ offset: 0, limit: REMOTE_PREVIEW_ROWS, fields: dataset.columns.map((column) => column.key), filter: view?.filter }, controller.signal).then(
+      (page) => {
+        if (controller.signal.aborted) return
+        setRemotePage({ dataset, rows: page.rows, totalRows: page.totalRows })
+        setRemotePageError(null)
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted || error instanceof DOMException && error.name === 'AbortError') return
+        setRemotePageError(error instanceof Error ? error.message : String(error))
+      },
+    )
+    return () => controller.abort()
+  }, [remote, dataset, view, remotePageRetry])
+  const remotePageRows = remotePage?.dataset === dataset ? remotePage.rows : null
   const remoteRows = remoteResult?.dataset === dataset ? remoteResult.rows : null
 
   const chartDataset = useMemo<Dataset | null>(() => {
@@ -336,10 +363,10 @@ export function App(props: AppProps = {}) {
     if (remote) return remoteRows ?? []
     return filteredRows(chartDataset, chartSpec)
   }, [chartDataset, chartSpec, remote, remoteRows])
-  const remoteNote = !remote ? null
-    : remoteError ? `Aggregation failed: ${remoteError}`
-    : !remoteQuery ? 'Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.'
-    : remoteRows === null ? 'Aggregating on the server…'
+  const remoteState = !remote ? null
+    : remoteError ? 'error' as const
+    : !remoteQuery ? 'raw' as const
+    : remoteRows === null ? 'loading' as const
     : null
   const seriesField = chartSpec.color ?? chartSpec.group
   const hiddenSeries = useMemo(() => new Set(chartSpec.hiddenSeries ?? []), [chartSpec.hiddenSeries])
@@ -481,22 +508,38 @@ export function App(props: AppProps = {}) {
 
   if (!dataset) return <div className="loading">Loading Explorer…</div>
 
+  const remoteTable = !remote?.page ? null
+    : remotePageError
+      ? <div className="remote-note">Row preview failed: {remotePageError}{' '}<button type="button" className="sb-btn subtle" onClick={() => setRemotePageRetry((n) => n + 1)}>Retry</button></div>
+      : remotePageRows === null
+        ? <div className="remote-note"><span className="sb-spinner" aria-hidden="true" /> Fetching the first {REMOTE_PREVIEW_ROWS.toLocaleString()} rows…</div>
+        : <div className="remote-preview">
+            <div className="remote-note remote-note--strip">Showing the first {remotePageRows.length.toLocaleString()} of {(remotePage?.totalRows ?? 0).toLocaleString()} rows — the rest stay on the server.</div>
+            <DataTable dataset={dataset} rows={remotePageRows} />
+          </div>
+
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
     <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
-    {remoteNote
-      ? <div className="chart-stage chart-stage-v3"><div className="empty-state"><strong>Remote source</strong><span>{remoteNote}</span></div></div>
+    {remoteState
+      ? <div className="chart-stage chart-stage-v3"><div className="empty-state"><strong>Remote source</strong>
+          {remoteState === 'error'
+            ? <><span>Aggregation failed: {remoteError}</span><button type="button" className="sb-btn" onClick={() => { setRemoteError(null); setRemoteRetry((n) => n + 1) }}>Retry</button></>
+            : remoteState === 'raw'
+              ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
+              : <><span className="sb-spinner" aria-hidden="true" /><span>Aggregating on the server…</span></>}
+        </div></div>
       : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>
         {remote
-          ? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div>
+          ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div>
           : <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/>}
       </details>
     )}
   </section></main>
-  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={visibleRows.length} totalCount={remote ? remoteResult?.totalRows ?? 0 : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? <div className="remote-note">{tab === 'data' ? 'Rows live on the server for this source — the chart above shows aggregated buckets.' : 'SQL runs against rows in the browser; remote datasets stay on the server.'}</div> : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
+  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)
   return <ExplorerFrame framed={props.frame} rootRef={rootRef} panel={showPanel} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }
