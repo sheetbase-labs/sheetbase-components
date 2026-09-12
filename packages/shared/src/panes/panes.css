@@ -117,13 +117,19 @@
   color: var(--accent-ink);
 }
 .sb-pane-head.is-titled .sb-pane-title { padding: 0; cursor: grab; }
+/* Tab strip adopts the .sb-segmented idiom (shell.css): a bordered track on
+   the bar, and the active tab raises to the canvas instead of the chip fill. */
 .sb-pane-tabs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-2);
 }
 .sb-pane-tabs::-webkit-scrollbar { display: none; }
 .sb-pane-title {
@@ -139,21 +145,26 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 24px;
+  height: 22px;
   padding: 0 8px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: grab;
   user-select: none;
   touch-action: none;
 }
-.sb-pane-tab:hover { background: var(--accent-soft); color: var(--accent-dark); }
-.sb-pane-tab.active { background: var(--accent-soft); color: var(--accent-dark); }
+.sb-pane-tab:hover { color: var(--text); }
+.sb-pane-tab.active {
+  background: var(--canvas);
+  color: var(--accent-dark);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
 .sb-pane-tab.dragging { opacity: 0.4; }
 .sb-pane-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
