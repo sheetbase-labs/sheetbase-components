@@ -77,7 +77,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const [draft, setDraft] = useState<SchemaGraph>(() => withAutoLayout(loadInitialState(persistKey, adapter, initialGraph ?? { models: [] })));
   const graph = withAutoLayout(value ?? draft);
   useIdleSave(persistKey, graph, adapter);
-  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
+  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
   const [selected, setSelected] = useState<string | null>(graph.models[0]?.name ?? null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -226,7 +226,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   if (nodeDrag) posByModel[nodeDrag.name] = { x: nodeDrag.x, y: nodeDrag.y };
 
   return (
-    <div className="sheetbase-scope sb-schema" data-theme={activeTheme}>
+    <div className="sheetbase-scope sb-schema" data-theme={resolvedTheme}>
       <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
         {chrome !== "none" && (
           <div className="sb-topbar">

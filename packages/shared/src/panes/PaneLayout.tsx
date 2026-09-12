@@ -15,7 +15,7 @@ import {
 import { createPortal } from "react-dom";
 import "./panes.css";
 import { useIdleSave, type PersistenceAdapter } from "../persistence";
-import type { ThemeMode } from "../ThemeToggle";
+import { useResolvedTheme, type ThemeMode } from "../ThemeToggle";
 import {
   addPaneToStack,
   listStacks,
@@ -177,6 +177,7 @@ function PaneMenu({ stackId, theme, otherStacks, closable, canSplit, onTabInto, 
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const resolvedTheme = useResolvedTheme(theme ?? "light");
 
   function toggle() {
     if (!open && buttonRef.current) {
@@ -206,7 +207,7 @@ function PaneMenu({ stackId, theme, otherStacks, closable, canSplit, onTabInto, 
       {open && CAN_PORTAL && createPortal(
         <>
           <button type="button" className="sb-pane-menu-backdrop" aria-label="Close pane menu" onClick={() => setOpen(false)} />
-          <div className="sheetbase-scope sb-pane-menu" role="menu" data-theme={theme} style={{ top: position.top, left: position.left }}>
+          <div className="sheetbase-scope sb-pane-menu" role="menu" data-theme={theme === undefined ? undefined : resolvedTheme} style={{ top: position.top, left: position.left }}>
             {otherStacks.length > 0 && <p className="sb-pane-menu-label">Tab with</p>}
             {otherStacks.map((stack) => (
               <button key={stack.id} type="button" role="menuitem" onClick={() => { onTabInto(stack.id); setOpen(false); }}>
@@ -259,6 +260,7 @@ export function PaneLayout({
   paneMenu = "head",
   onRequestNewPane,
 }: PaneLayoutProps) {
+  const resolvedTheme = useResolvedTheme(theme ?? "light");
   const paneMap = useMemo(() => new Map(panes.map((pane) => [pane.id, pane])), [panes]);
   const paneIds = useMemo(() => panes.map((pane) => pane.id), [panes]);
   const paneIdsKey = paneIds.join("\u0000");
@@ -813,7 +815,7 @@ export function PaneLayout({
   return (
     <div
       className={cx("sb-panes", surface === "shared" && "sb-panes--shared", theme && "sheetbase-scope", className)}
-      data-theme={theme}
+      data-theme={theme === undefined ? undefined : resolvedTheme}
       data-dragging={drag ? "true" : undefined}
       ref={rootRef}
     >

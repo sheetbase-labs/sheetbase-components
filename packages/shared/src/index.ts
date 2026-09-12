@@ -6,7 +6,7 @@ export * from "./tree";
 export * from "./analysis";
 export * from "./panes";
 export * from "./workspace";
-export { MoonIcon, SunIcon, ThemeToggleButton, usePersistedTheme, SHARED_THEME_STORAGE_KEY, type ThemeMode } from "./ThemeToggle";
+export { MoonIcon, SunIcon, ThemeToggleButton, resolveTheme, usePersistedTheme, useResolvedTheme, SHARED_THEME_STORAGE_KEY, type ResolvedTheme, type ThemeMode } from "./ThemeToggle";
 export {
   createHttpAdapter,
   createLocalStorageAdapter,

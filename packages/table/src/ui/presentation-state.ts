@@ -1,5 +1,5 @@
 import { useEffect, useState, type SetStateAction } from "react";
-import { createHttpAdapter } from "sheetbase-shared";
+import { createHttpAdapter, resolveTheme, useResolvedTheme, type ResolvedTheme, type ThemeMode } from "sheetbase-shared";
 import type { ConditionalFormatRule } from "../grid/conditional-formatting";
 import type { SpreadsheetFormatEntry } from "./Spreadsheet";
 import { normaliseCellAnnotations, type CellAnnotation } from "./annotations";
@@ -15,8 +15,7 @@ export type SurfaceObjectLayout = Readonly<{
   context?: Readonly<Record<string, string>>;
 }>;
 
-export type ThemeMode = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
+export type { ResolvedTheme, ThemeMode };
 
 export type TablePresentationState = Readonly<{
   version: 3;
@@ -202,28 +201,7 @@ export function useTablePresentationState(
   return [state, setState] as const;
 }
 
-/** Resolve a stored mode to a concrete theme; system reads the OS preference live. */
-export function resolveTheme(mode: ThemeMode): ResolvedTheme {
-  if (mode !== "system") return mode;
-  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return "light";
-}
-
-/** Resolved theme that tracks the OS preference while the mode is system. */
-export function useResolvedTheme(mode: ThemeMode): ResolvedTheme {
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(mode));
-  useEffect(() => {
-    setResolved(resolveTheme(mode));
-    if (mode !== "system" || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setResolved(query.matches ? "dark" : "light");
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, [mode]);
-  return resolved;
-}
+export { resolveTheme, useResolvedTheme };
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof (value as PromiseLike<unknown> | undefined)?.then === "function";

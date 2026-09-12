@@ -134,7 +134,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
-  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
+  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
   const [draftText, setDraftText] = useState("");
   const canGenerate = Boolean(draftText.trim());
   const [parseError, setParseError] = useState<string | null>(null);
@@ -308,7 +308,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
   useImperativeHandle(ref, () => ({ addRule }));
 
   return (
-    <div className="sheetbase-scope sb-rules" data-theme={activeTheme}>
+    <div className="sheetbase-scope sb-rules" data-theme={resolvedTheme}>
       <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
         {chrome !== "none" && (
           <div className="sb-topbar">

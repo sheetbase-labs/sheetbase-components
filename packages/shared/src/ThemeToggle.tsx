@@ -1,29 +1,57 @@
-import { useState } from "react";
-export type ThemeMode = "light" | "dark";
+import { useEffect, useState } from "react";
+export type ThemeMode = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
 /** Shared localStorage key so schema/rules/search agree on next mount. Table + explorer keep their own persisted states. */
 export const SHARED_THEME_STORAGE_KEY = "sheetbase:theme";
 
-/** Uncontrolled theme state with localStorage persistence. Controlled (`theme` defined) disables internal writes; the host owns persistence via `onThemeChange`. */
+/** Resolve a stored mode to a concrete theme; system reads the OS preference live. */
+export function resolveTheme(mode: ThemeMode): ResolvedTheme {
+  if (mode !== "system") return mode;
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "light";
+}
+
+/** Resolved theme that tracks the OS preference while the mode is system. */
+export function useResolvedTheme(mode: ThemeMode): ResolvedTheme {
+  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(mode));
+  useEffect(() => {
+    setResolved(resolveTheme(mode));
+    if (mode !== "system" || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setResolved(query.matches ? "dark" : "light");
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, [mode]);
+  return resolved;
+}
+
+/**
+ * Uncontrolled theme state with localStorage persistence. Controlled (`theme` defined) disables internal writes; the host owns persistence via `onThemeChange`.
+ * `activeTheme` is the stored mode (may be "system"); `resolvedTheme` is the concrete light/dark to apply. Toggling from system lands on the opposite of the current resolved value.
+ */
 export function usePersistedTheme({ theme, defaultTheme = "light", onThemeChange, storageKey = SHARED_THEME_STORAGE_KEY }: {
   theme?: ThemeMode;
   defaultTheme?: ThemeMode;
   onThemeChange?: (next: ThemeMode) => void;
   /** Pass `undefined` to keep the theme ephemeral (no localStorage). */
   storageKey?: string;
-}): { activeTheme: ThemeMode; toggleTheme(): void } {
+}): { activeTheme: ThemeMode; resolvedTheme: ResolvedTheme; toggleTheme(): void } {
   const [innerTheme, setInnerTheme] = useState<ThemeMode>(() => {
     if (theme !== undefined || !storageKey || typeof localStorage === "undefined") return defaultTheme;
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored === "dark" || stored === "light" ? stored : defaultTheme;
+      return stored === "dark" || stored === "light" || stored === "system" ? stored : defaultTheme;
     } catch {
       return defaultTheme;
     }
   });
   const activeTheme = theme ?? innerTheme;
+  const resolvedTheme = useResolvedTheme(activeTheme);
   function toggleTheme() {
-    const next = activeTheme === "dark" ? "light" : "dark";
+    const next = resolvedTheme === "dark" ? "light" : "dark";
     if (theme === undefined) {
       setInnerTheme(next);
       if (storageKey) {
@@ -36,7 +64,7 @@ export function usePersistedTheme({ theme, defaultTheme = "light", onThemeChange
     }
     onThemeChange?.(next);
   }
-  return { activeTheme, toggleTheme };
+  return { activeTheme, resolvedTheme, toggleTheme };
 }
 
 export function MoonIcon() {
@@ -56,9 +84,9 @@ export function SunIcon() {
   );
 }
 
-/** Explorer-style sun/moon toggle for the topbar. */
+/** Explorer-style sun/moon toggle for the topbar. Flips light/dark; under `system` it shows the resolved theme and the flip leaves system mode. */
 export function ThemeToggleButton({ theme, onToggle }: { theme: ThemeMode; onToggle(): void }) {
-  const dark = theme === "dark";
+  const dark = useResolvedTheme(theme) === "dark";
   return (
     <button
       className="sb-icon-btn sb-theme-btn"

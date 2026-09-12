@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ThemeToggleButton, type ThemeMode } from "../ThemeToggle";
+import { ThemeToggleButton, useResolvedTheme, type ThemeMode } from "../ThemeToggle";
 
 export interface SheetbaseShellProps {
   /** Active theme. Drives both the scope tokens and the built-in toggle icon. */
@@ -46,6 +46,7 @@ export function SheetbaseShell({
   bodyClassName,
   children,
 }: SheetbaseShellProps) {
+  const resolvedTheme = useResolvedTheme(theme);
   const chrome = (
     <>
       {header && (
@@ -62,7 +63,7 @@ export function SheetbaseShell({
     </>
   );
   return (
-    <div className={cx("sheetbase-scope", "sb-shell", className)} data-theme={theme}>
+    <div className={cx("sheetbase-scope", "sb-shell", className)} data-theme={resolvedTheme}>
       {frame ? (
         <div className={cx("sb-frame", "sb-shell-frame", !header && "no-topbar", header && subbar ? "has-subbar" : false)}>{chrome}</div>
       ) : (

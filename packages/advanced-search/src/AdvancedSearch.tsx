@@ -264,7 +264,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   const [draft, setDraft] = useState<SearchSpec>(() => loadInitialState(persistKey, adapter, initialSpec ?? { filter: emptyRoot() }));
   const spec = value ?? draft;
   useIdleSave(persistKey, spec, adapter);
-  const { activeTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
+  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({ theme, defaultTheme, onThemeChange });
   const [innerPreview, setInnerPreview] = useState(true);
   const showPreview = preview ?? innerPreview;
   function togglePreview() {
@@ -300,7 +300,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   }, [compiledKey, onDatasetQueryChange]);
 
   return (
-    <div className="sheetbase-scope sb-search" data-theme={activeTheme}>
+    <div className="sheetbase-scope sb-search" data-theme={resolvedTheme}>
       <div className={chrome === "none" ? "sb-frame no-topbar" : "sb-frame"}>
         {chrome !== "none" && (
           <div className="sb-topbar">

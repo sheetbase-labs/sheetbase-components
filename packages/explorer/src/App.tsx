@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
-import { andCondition, applyView, emptyCondition, emptyRoot, withoutCondition, type AnalysisView, type FilterOperator } from 'sheetbase-shared'
+import { andCondition, applyView, emptyCondition, emptyRoot, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'
@@ -75,8 +75,10 @@ export interface AppProps {
   /**
    * Controlled theme. When provided the host owns it and edits are reported
    * through onThemeChange, so a parent shell can keep every pane in sync.
+   * `"system"` follows the OS preference live; persisted explorer state keeps
+   * storing the resolved light/dark value.
    */
-  theme?: 'light' | 'dark'
+  theme?: ThemeMode
   onThemeChange?(theme: 'light' | 'dark'): void
   /**
    * Fixed chart height in pixels. Unframed auto-height hosts should pass
@@ -138,7 +140,8 @@ export function App(props: AppProps = {}) {
   const [tab, setTab] = useState<BottomTab>('data')
   const [dark, setDark] = useState(restored.theme === 'dark')
   const controlledTheme = props.theme
-  const isDark = controlledTheme !== undefined ? controlledTheme === 'dark' : dark
+  const resolvedControlledTheme = useResolvedTheme(controlledTheme ?? 'light')
+  const isDark = controlledTheme !== undefined ? resolvedControlledTheme === 'dark' : dark
   const showThemeToggle = controlledTheme === undefined
   const [menu, setMenu] = useState<Menu>(null)
   const [measuredHeight, setMeasuredHeight] = useState(420)

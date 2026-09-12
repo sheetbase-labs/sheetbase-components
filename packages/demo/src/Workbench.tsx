@@ -79,7 +79,7 @@ const workbenchLayout: Layout = {
  * with drag-to-dock tabs and resizable splits.
  */
 export function Workbench() {
-  const { activeTheme, toggleTheme } = usePersistedTheme({});
+  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({});
   const adapter = useMemo(() => createLocalStorageAdapter<PaneLayoutState>(), []);
   const graphAdapter = useMemo(() => createLocalStorageAdapter<SchemaGraph>(), []);
   const rulesAdapter = useMemo(() => createLocalStorageAdapter<PipelineRule[]>(), []);
@@ -291,7 +291,7 @@ export function Workbench() {
   }
 
   const panes: PaneSpec[] = [
-    { id: "table", title: "Table", closable: true, content: <QueryTable key={`${datasetId}:${applyTick}`} theme={activeTheme} adapter={tableAdapter} pageCache={tablePageCache} datasetId={datasetId} /> },
+    { id: "table", title: "Table", closable: true, content: <QueryTable key={`${datasetId}:${applyTick}`} theme={resolvedTheme} adapter={tableAdapter} pageCache={tablePageCache} datasetId={datasetId} /> },
     { id: "explorer", title: "Explorer", closable: true, content: explorerDataset ? <Explorer dataset={explorerDataset} view={view} onViewChange={setView} theme={activeTheme} onThemeChange={onThemeChange} showPanel={false} /> : null },
     {
       id: "schema",
@@ -398,7 +398,7 @@ export function Workbench() {
         />
         </SheetbaseShell>
       </WorkspaceProvider>
-      <div className="sheetbase-scope sb-workbench-tools" data-theme={activeTheme}>
+      <div className="sheetbase-scope sb-workbench-tools" data-theme={resolvedTheme}>
         {!remoteActive && filteredRows && filteredRows.length !== rows.length && <span className="sb-muted">filtered {filteredRows.length} / {rows.length} rows</span>}
         {remoteActive && remoteTotals && remoteTotals.matched !== remoteTotals.total && <span className="sb-muted">filtered {remoteTotals.matched.toLocaleString()} / {remoteTotals.total.toLocaleString()} rows</span>}
         <select className="sb-btn" aria-label="Data source" value={sourceId} onChange={(event) => switchSource(event.target.value as SourceId)}>
