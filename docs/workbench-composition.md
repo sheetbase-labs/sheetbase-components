@@ -150,3 +150,4 @@ a source selector swaps between the materialised sample and the remote
 
 Saved views / named workspaces are a natural next layer — `PersistenceAdapter`
 + the view triad already imply the shape — but are deliberately not built yet.
+The option space and open product questions are in `docs/saved-views.md`.
