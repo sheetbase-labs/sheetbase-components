@@ -40,3 +40,50 @@ Notes for hosts:
 - A server-side "run pipeline" is the intended destination; `onApplyWrites`
   stays a callback so the same prop works against `HttpPagedDataAdapter`
   unchanged.
+
+## Server-resident datasets
+
+When rows live on the server, pass `source` (+ the workspace `filterTree`)
+instead of `rows`:
+
+```tsx
+<RulesEngine
+  source={{
+    fetchSample: ({ rowStart, rowCount, filterTree }) => /* fetchPage-shaped */,
+    totalRows,                       // unfiltered dataset size, when known
+  }}
+  filterTree={wb.query.filterTree}
+  onApplyWrites={onApplyWrites}
+/>
+```
+
+The component fetches a capped sample (first 200 matching rows) through the
+host's page transport and re-fetches whenever `filterTree` changes. The
+dry-run then evaluates **only the sample, and every label says so**: the
+summary reads "M matched of first N sampled rows (F matching · T total)",
+per-rule counts carry a "sampled" suffix, the apply confirm names the
+sampled scope, and auto-apply is disabled — an apply loop that commits the
+sample's writes while implying dataset coverage is exactly the dishonest
+half-measure this prop exists to avoid.
+
+Sampled apply is still real: fetched pages carry server `recordId`s, so
+`RuleWrite`s commit through the same `PagedDataAdapter.commit` boundary —
+useful for verifying a rule against real rows before a pipeline run.
+
+### The all-matching-rows path is host work
+
+A true "run pipeline on every matching row" endpoint is deliberately not
+component work. The intended shape for a host that builds one:
+
+```
+POST /api/rules/run
+{ datasetId, rules: PipelineRule[], filterTree? }  →
+{ applied, rejected, revision }
+```
+
+The server evaluates conditions against its own data (the same operators
+`filterTree`→SQL already covers), produces the write set, and commits it
+under the dataset's revision semantics; the client's table picks it up
+through ordinary revision/cache invalidation. The component's job ends at
+proposing `RuleWrite[]` for the rows it can see — the sampled path exists
+so the UI is honest today without pretending the endpoint exists.

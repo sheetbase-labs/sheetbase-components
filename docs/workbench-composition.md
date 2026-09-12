@@ -132,9 +132,13 @@ unchanged except for who realises rows:
 - **Search** still edits the shared `view`; its live preview takes the
   source's first filtered page (`fetchPage` with the compiled
   `filterTree`) — already-filtered rows, so the client re-filter is a no-op.
-- **Rules** can't dry-run rows that aren't materialised — render an honest
-  placeholder ("this dataset lives on the server") rather than an empty
-  evaluation.
+- **Rules** get `source={remoteRulesSource}` + `filterTree={wb.query.filterTree}`
+  instead of `rows` — the component fetches a capped sample (first 200
+  matching rows) through `fetchPage` and dry-runs it with every label
+  stating the sampled scope. Apply commits real recordIds but says
+  "sampled rows"; auto-apply is disabled (it would keep writing to a
+  sample while implying dataset coverage). See the rules-engine README's
+  server-resident section for the all-matching-rows design.
 - The **"filtered N / M"** counter reads the preview page's `totalRows`
   (matched) against an unfiltered page's `totalRows`.
 

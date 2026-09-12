@@ -9,12 +9,13 @@ import {
   useIdleSave,
   usePersistedTheme,
   type FilterOperator,
+  type GroupNode,
   type Layout,
   type PaneSpec,
   type PersistenceAdapter,
   type ThemeMode,
 } from "sheetbase-shared";
-import type { PipelineRule, Row, RuleActionDef, RuleApplyResult, RuleCondition, RuleOperator, RuleWrite } from "./types";
+import type { PipelineRule, Row, RuleActionDef, RuleApplyResult, RuleCondition, RuleOperator, RulesRemoteSource, RuleWrite } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun, ruleWritesForRows } from "./engine";
 
@@ -37,8 +38,24 @@ export interface RulesEngineProps {
   /**
    * Maps a dry-run row back to its host record id. Required for the apply
    * affordance — matched rows it can't resolve are counted as skipped.
+   * Unused when `source` is set: remote samples carry their own recordIds.
    */
   recordIdOf?: (row: Row, index: number) => string | undefined;
+  /**
+   * Server-backed evaluation. When set, the component fetches a sample of
+   * matching rows through this source and the dry-run evaluates only that
+   * sample — the summary, per-rule counts, apply button and confirm text all
+   * state the sampled scope, and auto-apply is disabled (committing writes
+   * for a 200-row sample while implying the dataset is the dishonest
+   * outcome this prop exists to avoid).
+   */
+  source?: RulesRemoteSource;
+  /**
+   * The workspace's current filter — forwarded to `source.fetchSample`, so
+   * the sample re-fetches when the shared query (search edits, chart
+   * cross-filters) changes.
+   */
+  filterTree?: GroupNode;
   /**
    * Commit boundary for transform writes. The component proposes the write
    * set; the host commits it (e.g. `PagedDataAdapter.commit`) and may resolve
@@ -110,7 +127,10 @@ function isEmptyOp(operator: RuleOperator): boolean {
   return canon === "isNull" || canon === "notNull";
 }
 
-export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, recordIdOf, onApplyWrites, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
+/** Remote dry-runs evaluate at most this many fetched rows. */
+const SAMPLE_CAP = 200;
+
+export function RulesEngine({ value, initialRules, onChange, fields = [], actions = [], rows, recordIdOf, source, filterTree, onApplyWrites, theme, defaultTheme = "light", onThemeChange, persistKey, adapter, chrome = "full", ref }: RulesEngineProps) {
   const [draft, setDraft] = useState<PipelineRule[]>(() => loadInitialState(persistKey, adapter, initialRules ?? []));
   const rules = value ?? draft;
   useIdleSave(persistKey, rules, adapter);
@@ -162,7 +182,46 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     }
   }, [probe, rules]);
 
-  const dataset = useMemo(() => (rows ? dryRun(rules, [...rows]) : null), [rules, rows]);
+  // Remote sampling: page 1 (capped) of the filtered dataset arrives through
+  // the host's source; the dry-run then evaluates only that sample and every
+  // label states the scope. filterTreeKey serialises the tree so effect deps
+  // stay honest across render-identical tree objects.
+  const [sample, setSample] = useState<{ rows: Row[]; recordIds: string[]; totalRows: number } | null>(null);
+  const [sampleError, setSampleError] = useState<string | null>(null);
+  const [sampleLoading, setSampleLoading] = useState(false);
+  const filterTreeKey = useMemo(() => JSON.stringify(filterTree ?? null), [filterTree]);
+  useEffect(() => {
+    if (!source) {
+      setSample(null);
+      setSampleError(null);
+      setSampleLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setSampleLoading(true);
+    source.fetchSample({ rowStart: 0, rowCount: SAMPLE_CAP, filterTree }).then(
+      (next) => {
+        if (controller.signal.aborted) return;
+        setSample(next);
+        setSampleError(null);
+        setSampleLoading(false);
+      },
+      (error) => {
+        if (controller.signal.aborted) return;
+        setSample(null);
+        setSampleError(error instanceof Error ? error.message : "Sample fetch failed.");
+        setSampleLoading(false);
+      },
+    );
+    return () => controller.abort();
+    // biome-ignore lint/correctness/useExhaustiveDependencies: filterTreeKey is the serialised form of filterTree
+  }, [source, filterTreeKey]);
+
+  const evalRows: readonly Row[] | null = source ? (sample?.rows ?? null) : (rows ?? null);
+  const remoteRecordIdOf = useCallback((_row: Row, index: number) => sample?.recordIds[index], [sample]);
+  const effectiveRecordIdOf = source ? remoteRecordIdOf : recordIdOf;
+
+  const dataset = useMemo(() => (evalRows ? dryRun(rules, [...evalRows]) : null), [rules, evalRows]);
   const datasetSummary = useMemo(() => {
     if (!dataset) return null;
     const counts = new Map<string, number>();
@@ -178,17 +237,18 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   const [applying, setApplying] = useState(false);
   const [applyOutcome, setApplyOutcome] = useState<string | null>(null);
-  const applyCapable = Boolean(rows && recordIdOf && onApplyWrites);
+  const applyCapable = Boolean(evalRows && effectiveRecordIdOf && onApplyWrites);
   const applyPlan = useMemo(
-    () => (rows && recordIdOf && onApplyWrites ? ruleWritesForRows(rules, rows, recordIdOf) : null),
-    [rules, rows, recordIdOf, onApplyWrites],
+    () => (evalRows && effectiveRecordIdOf && onApplyWrites ? ruleWritesForRows(rules, evalRows, effectiveRecordIdOf) : null),
+    [rules, evalRows, effectiveRecordIdOf, onApplyWrites],
   );
 
   const applyWrites = useCallback(async (confirm = true) => {
     if (!applyPlan || !onApplyWrites || applying) return;
     if (applyPlan.writes.length === 0) { if (confirm) setApplyOutcome("No transform writes to apply."); return; }
     const writeRows = new Set(applyPlan.writes.map((write) => write.recordId)).size;
-    if (confirm && !window.confirm(`Apply ${applyPlan.writes.length} transform writes to ${writeRows} rows?`)) return;
+    const scope = source ? ` sampled rows (of ${sample?.totalRows.toLocaleString() ?? "?"} matching)` : " rows";
+    if (confirm && !window.confirm(`Apply ${applyPlan.writes.length} transform writes to ${writeRows}${scope}?`)) return;
     setApplying(true);
     try {
       const result = await onApplyWrites(applyPlan.writes, { matched: applyPlan.matched, skipped: applyPlan.skipped, rejected: applyPlan.rejected });
@@ -218,6 +278,9 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
   // write set) instead of looping forever.
   const [autoApply, setAutoApply] = useState(false);
   const autoCircuit = useRef({ count: 0, windowStart: 0, lastKey: "" });
+  // Auto-apply is gated on remote sources: it would keep committing the
+  // sample's writes while implying dataset coverage. Force it off.
+  useEffect(() => { if (source) setAutoApply(false); }, [source]);
   const applyKey = applyPlan?.writes.length ? JSON.stringify(applyPlan.writes) : "";
   useEffect(() => {
     if (!autoApply || applying) return;
@@ -251,9 +314,14 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
           <div className="sb-topbar">
             <div className="sb-toolbar-group">
               <span className="sb-stat">{active} of {rules.length} active</span>
-              {applyCapable && (
-                <label className="sb-check" title="Commit matching transform writes to the dataset as it changes — a grid edit that puts a row in scope applies immediately">
-                  <input type="checkbox" checked={autoApply} onChange={(e) => setAutoApply(e.target.checked)} /> auto-apply
+              {(applyCapable || (source && onApplyWrites)) && (
+                <label
+                  className="sb-check"
+                  title={source
+                    ? `Auto-apply is unavailable on server datasets — it would keep committing writes for the ${SAMPLE_CAP}-row sample, not the full dataset`
+                    : "Commit matching transform writes to the dataset as it changes — a grid edit that puts a row in scope applies immediately"}
+                >
+                  <input type="checkbox" checked={autoApply} disabled={Boolean(source)} onChange={(e) => setAutoApply(e.target.checked)} /> auto-apply
                 </label>
               )}
             </div>
@@ -384,7 +452,11 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
             <div className="sb-rules-editor">
               {datasetSummary ? (
                 <>
-                  <p className="sb-muted" aria-live="polite" aria-atomic="true">{datasetSummary.total} rows · {datasetSummary.matched} matched</p>
+                  <p className="sb-muted" aria-live="polite" aria-atomic="true">
+                    {source && sample
+                      ? `${datasetSummary.matched} matched of first ${datasetSummary.total} sampled rows (${sample.totalRows.toLocaleString()} matching${source.totalRows !== undefined ? ` · ${source.totalRows.toLocaleString()} total` : ""})`
+                      : `${datasetSummary.total} rows · ${datasetSummary.matched} matched`}
+                  </p>
                   {rules.length === 0 ? (
                     <p className="sb-muted">No rules to evaluate.</p>
                   ) : (
@@ -392,7 +464,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                       {rules.map((rule) => (
                         <li key={rule.id}>
                           <strong>{rule.name}</strong>
-                          <small>{datasetSummary.counts.get(rule.id) ?? 0} of {datasetSummary.total} rows</small>
+                          <small>{datasetSummary.counts.get(rule.id) ?? 0} of {datasetSummary.total}{source ? " sampled" : ""} rows</small>
                         </li>
                       ))}
                     </ul>
@@ -402,12 +474,18 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                   {applyPlan && (
                     <>
                       <button type="button" className="sb-btn" disabled={applying} onClick={() => applyWrites()}>
-                        {applying ? "Applying…" : `Apply ${applyPlan.writes.length} writes`}
+                        {applying ? "Applying…" : source ? `Apply ${applyPlan.writes.length} writes to sampled rows` : `Apply ${applyPlan.writes.length} writes`}
                       </button>
                       {applyOutcome && <p className="sb-muted" role="status">{applyOutcome}</p>}
                     </>
                   )}
                 </>
+              ) : source ? (
+                <p className="sb-muted" aria-live="polite">
+                  {sampleLoading
+                    ? `Fetching up to ${SAMPLE_CAP} matching rows from the server…`
+                    : (sampleError ?? "No sample rows returned.")}
+                </p>
               ) : (
                 <>
                   <label>Test row (JSON)<textarea className="sb-probe" value={probe} onChange={(e) => onProbeChange(e.target.value)} rows={5} spellCheck={false} /></label>

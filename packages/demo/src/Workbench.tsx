@@ -20,7 +20,7 @@ import {
   type SheetbaseField,
   type WorkspaceDataSource,
 } from "sheetbase-shared";
-import { RulesEngine, type PipelineRule, type RuleWrite } from "sheetbase-rulesengine";
+import { RulesEngine, type PipelineRule, type RulesRemoteSource, type RuleWrite } from "sheetbase-rulesengine";
 import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
 import { AdvancedSearch } from "sheetbase-advanced-search";
 import type { Dataset } from "sheetbase-explorer";
@@ -30,7 +30,6 @@ import {
   createExplorerDataset,
   experimentFields,
   ruleActions,
-  ruleFields,
   rulesStarter,
   schemaFromFields,
   schemaStarter,
@@ -177,6 +176,27 @@ export function Workbench() {
     });
     return () => controller.abort();
   }, [remoteActive, remoteSource, datasetId, wb.query, headerFields]);
+  // The rules pane's server-backed sample: pages come from the same remote
+  // source the table reads, so dry-run recordIds are real and apply commits
+  // land through the HTTP adapter. `remoteTotals.total` (the unfiltered
+  // dataset size) feeds the scope label once the preview fetch lands.
+  const remoteRulesSource = useMemo<RulesRemoteSource>(() => ({
+    fetchSample: async ({ rowStart, rowCount, filterTree }) => {
+      const page = await remoteSource.fetchPage({
+        datasetId: "experiments",
+        rowStart,
+        rowCount,
+        fieldIds: headerFields.map((field) => field.id),
+        filterTree,
+      }, undefined);
+      return {
+        rows: page.records.map((record) => record.values as Record<string, unknown>),
+        recordIds: page.records.map((record) => record.recordId),
+        totalRows: page.totalRows,
+      };
+    },
+    totalRows: remoteTotals?.total,
+  }), [remoteSource, headerFields, remoteTotals]);
   const recordIdOf = useCallback((row: Record<string, unknown>) =>
     typeof row.sample_id === "string" ? row.sample_id : undefined, []);
   const onApplyWrites = useCallback(async (writes: readonly RuleWrite[]) => {
@@ -296,9 +316,22 @@ export function Workbench() {
       id: "rules",
       title: "Rules",
       closable: true,
-      content: remoteActive
-        ? <div className="sb-muted" style={{ padding: 14 }}>Rules evaluate materialised rows — this dataset lives on the server.</div>
-        : <RulesEngine value={rules} onChange={setRules} fields={ruleFields} actions={ruleActions} rows={viewRows ?? []} recordIdOf={recordIdOf} onApplyWrites={onApplyWrites} persistKey={WORKBENCH_RULES_KEY} adapter={rulesAdapter} theme={activeTheme} onThemeChange={onThemeChange} />,
+      content: (
+        <RulesEngine
+          value={rules}
+          onChange={setRules}
+          fields={headerFields.map((field) => field.id)}
+          actions={ruleActions}
+          {...(remoteActive
+            ? { source: remoteRulesSource, filterTree: wb.query.filterTree }
+            : { rows: viewRows ?? [], recordIdOf })}
+          onApplyWrites={onApplyWrites}
+          persistKey={WORKBENCH_RULES_KEY}
+          adapter={rulesAdapter}
+          theme={activeTheme}
+          onThemeChange={onThemeChange}
+        />
+      ),
     },
     {
       id: "search",

@@ -1,4 +1,4 @@
-import type { FilterOperator } from "sheetbase-shared";
+import type { FilterOperator, GroupNode } from "sheetbase-shared";
 
 /** Canonical operators plus parse-time aliases; evaluateRule normalises. */
 export type RuleOperator = FilterOperator | "isEmpty" | "isNotEmpty";
@@ -51,6 +51,24 @@ export interface PipelineRule {
 }
 
 export type Row = Record<string, unknown>;
+
+/**
+ * Server-backed dry-run sample. The host pages through its workspace source
+ * (this is `WorkspaceDataSource.fetchPage` minus `datasetId`/`fieldIds`, which
+ * the host binds); the component evaluates only the fetched sample and labels
+ * that scope. A server-side "run pipeline" over all matching rows is host
+ * infrastructure — see the README's server-resident datasets section.
+ */
+export interface RulesRemoteSource {
+  /** Fetch a page of the remote dataset under the current workspace filter. */
+  fetchSample(request: {
+    rowStart: number;
+    rowCount: number;
+    filterTree?: GroupNode;
+  }): Promise<{ rows: Row[]; recordIds: string[]; totalRows: number }>;
+  /** Unfiltered dataset size for the scope label; omit until known. */
+  totalRows?: number;
+}
 
 /**
  * A field write proposed by a transform action. Structurally identical to the
