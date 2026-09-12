@@ -37,7 +37,7 @@
 .left-panel { border-right: 1px solid var(--border); }
 .right-panel { border-left: 1px solid var(--border); overflow-y: auto; }
 .sidebar { display: flex; flex-direction: column; }
-.panel-heading { height: 28px; padding: 0 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .055em; }
+.panel-heading { flex: none; height: 31px; padding: 0 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .055em; }
 .dataset-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; border-bottom: 1px solid var(--border); }
 .dataset-row strong { font-size: 11.5px; font-weight: 560; }
 .dataset-row small { color: var(--muted); font-size: 9.5px; }

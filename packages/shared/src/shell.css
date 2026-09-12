@@ -27,7 +27,8 @@
 /* Secondary action row beneath the strip: indigo band for contextual actions. */
 .sb-subbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 4px 10px;
+  flex: none;
+  height: 31px; padding: 3px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--accent-soft);
   color: var(--accent-ink);
