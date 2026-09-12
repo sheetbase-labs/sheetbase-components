@@ -4,6 +4,7 @@ import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
 import { AdvancedSearch } from "sheetbase-advanced-search";
 import { Explorer, DemoTable, ruleActions, ruleFields, rulesStarter, schemaStarter, searchFields, searchRows } from "./showcase";
 import { Workbench } from "./Workbench";
+import { DocsSite } from "./DocsSite";
 
 /** Stacked reference page: all five components in a column, each owning its theme. */
 function StackedDemo() {
@@ -39,9 +40,9 @@ function StackedDemo() {
   );
 }
 
-type View = "panes" | "stacked";
+type View = "panes" | "stacked" | "docs";
 
-/** Demo shell with a switch between the pane multiplexer and the stacked reference. */
+/** Demo shell with a switch between the pane multiplexer, the stacked reference, and the docs site. */
 export function App() {
   const [view, setView] = useState<View>("panes");
   return (
@@ -49,8 +50,9 @@ export function App() {
       <nav className="sb-demo-switch" aria-label="Demo view">
         <button className={view === "panes" ? "active" : ""} onClick={() => setView("panes")}>Pane layout</button>
         <button className={view === "stacked" ? "active" : ""} onClick={() => setView("stacked")}>Stacked</button>
+        <button className={view === "docs" ? "active" : ""} onClick={() => setView("docs")}>Docs</button>
       </nav>
-      {view === "panes" ? <Workbench /> : <StackedDemo />}
+      {view === "panes" ? <Workbench /> : view === "stacked" ? <StackedDemo /> : <DocsSite />}
     </>
   );
 }

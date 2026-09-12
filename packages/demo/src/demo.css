@@ -78,3 +78,25 @@
   background: var(--panel);
   box-shadow: var(--shadow);
 }
+
+/* Docs site: fixed sidebar + flowing article, themed light inside the demo shell. */
+.sb-docs { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; background: var(--canvas); color: var(--ink); }
+.sb-docs-nav { position: sticky; top: 0; align-self: start; height: 100vh; display: flex; flex-direction: column; gap: 2px; padding: 18px 10px; border-right: 1px solid var(--border); background: var(--panel-2, var(--panel)); }
+.sb-docs-brand { font-weight: 650; font-size: 13px; letter-spacing: -0.01em; padding: 0 8px 14px; }
+.sb-docs-nav button { text-align: left; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 12px; color: var(--ink-2, var(--muted-ink, #555)); cursor: pointer; }
+.sb-docs-nav button:hover { color: var(--ink); }
+.sb-docs-nav button.active { background: var(--accent-soft); color: var(--accent-dark); font-weight: 560; }
+.sb-docs-main { padding: 34px 42px 80px; max-width: 900px; }
+.sb-docs-main h1 { font-size: 22px; letter-spacing: -0.02em; margin: 0 0 4px; }
+.sb-docs-main h2 { font-size: 14px; margin: 26px 0 8px; }
+.sb-docs-main p { font-size: 13px; line-height: 1.6; color: var(--ink-2, var(--muted-ink, #444)); }
+.sb-docs-main code { font-family: var(--font-mono); font-size: 11.5px; background: var(--accent-soft-2, rgba(0,0,0,0.04)); padding: 1px 5px; border-radius: 4px; }
+.sb-docs-main pre { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.sb-docs-main pre code { background: none; padding: 0; font-size: 11.5px; line-height: 1.55; }
+.sb-docs-pkg { margin: 2px 0 10px; }
+.sb-docs-live { margin: 18px 0 6px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.sb-docs-live > * { max-width: none; }
+.sb-docs-live .sb-frame { width: 100%; min-height: 420px; border: 0; border-radius: 0; box-shadow: none; }
+.sb-docs-props { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sb-docs-props th { text-align: left; font-size: 10px; font-weight: 560; color: var(--accent-ink); background: var(--accent-soft); padding: 6px 10px; }
+.sb-docs-props td { padding: 6px 10px; border-top: 1px solid var(--border); vertical-align: top; }
