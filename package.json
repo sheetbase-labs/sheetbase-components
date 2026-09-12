@@ -8,7 +8,7 @@
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
-    "lint": "biome ci .",
+    "lint": "biome ci --error-on-warnings .",
     "build:lib": "bun run --filter sheetbase-shared build:lib && bun run --filter sheetbase-table build:lib && bun run --filter sheetbase-explorer build:lib && bun run --filter sheetbase-schemaeditor build:lib && bun run --filter sheetbase-rulesengine build:lib && bun run --filter sheetbase-advanced-search build:lib",
     "dev": "bun run dev:table & bun run dev:explorer & bun run dev:schema & bun run dev:rules & bun run dev:search & bun run dev:demo & wait",
     "dev:table": "bun run --filter sheetbase-table dev",

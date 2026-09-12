@@ -1659,6 +1659,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         <div
         role="rowheader"
         tabIndex={-1}
+        aria-label={String(row + 1)}
         aria-selected={row >= range.top && row <= range.bottom}
         className={`row-header${row >= range.top && row <= range.bottom ? " selected-header" : ""}`}
         key={`row-${row}`}
@@ -1676,6 +1677,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         <div
         role="columnheader"
         tabIndex={-1}
+        aria-label={`${columnLabel(column)} ${datasetHeader?.fields.find((field) => field.column === column)?.label ?? columnLabel(column)}`}
         aria-selected={column >= range.left && column <= range.right}
         className={`column-header${column >= range.left && column <= range.right ? " selected-header" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}`}
         key={`column-${column}`}
