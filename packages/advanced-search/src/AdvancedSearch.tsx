@@ -360,9 +360,10 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             ...(showPreview ? [{
               id: "preview",
               title: "Preview",
-              dragHandle: false,
+              dragHandle: "heading",
               content: (
                 <aside className="sb-search-side sb-plate">
+                  <div className="sb-panel-heading"><span>Preview</span><span>{matches ? matches.length : null}</span></div>
                   {!matches ? (
                     <p className="sb-muted" style={{ padding: 14 }}>Pass <code>rows</code> to preview matches live.</p>
                   ) : spec.groupBy ? (

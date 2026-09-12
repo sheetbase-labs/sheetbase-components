@@ -84,6 +84,22 @@
 .sb-resizer:focus-visible { outline: none; }
 .sb-resizer:focus-visible::after { background: var(--accent); }
 
+/* When the panes on both sides of a gutter open with a `.sb-panel-heading`,
+   carry the lavender band across the resizer so the row reads as one bar. */
+.sb-split.is-row
+  > .sb-split-cell:has(> .sb-pane-stack > .sb-pane-body > .sb-pane-view:not([hidden]) > .sb-pane-host > :first-child > .sb-panel-heading:first-child)
+  + .sb-resizer:has(+ .sb-split-cell > .sb-pane-stack > .sb-pane-body > .sb-pane-view:not([hidden]) > .sb-pane-host > :first-child > .sb-panel-heading:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  height: 31px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+
 /* ── Stack (one or more tabbed panes) ──────────────────────────────────── */
 /* A pane adds no surface of its own: the component is the surface. */
 .sb-pane-stack {

@@ -275,11 +275,13 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
             {
               id: "canvas",
               title: "Canvas",
-              dragHandle: false,
+              dragHandle: "heading",
               content: (
+                <div className="sb-plate">
+                  <div className="sb-panel-heading"><span>Canvas</span></div>
                 <div
                   ref={canvasRef}
-                  className="sb-schema-canvas sb-plate"
+                  className="sb-schema-canvas"
                   role="group"
                   tabIndex={0}
                   aria-label="Schema canvas. Tab to a model, press Enter to move it. Plus and minus zoom, arrow keys pan, 0 resets the view."
@@ -410,6 +412,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                     })}
                   </div>
                   <div className="sb-schema-live" aria-live="polite" aria-atomic="true">{announcement}</div>
+                </div>
                 </div>
               ),
             },

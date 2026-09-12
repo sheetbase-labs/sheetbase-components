@@ -236,6 +236,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
               dragHandle: "heading",
               content: (
                 <section className="sb-rules-main sb-plate">
+            <div className="sb-panel-heading"><span>Pipeline rules</span><span>{rules.length}</span></div>
             <div className="sb-nl">
               <div className="sb-nl-row">
                 <input
@@ -252,7 +253,6 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
               </div>
               {parseError && <p className="sb-error">{parseError}</p>}
             </div>
-            <div className="sb-panel-heading"><span>Pipeline rules</span><span>{rules.length}</span></div>
             <ul className="sb-rule-list">
               {rules.map((rule) => (
                 <li key={rule.id} className="sb-rule">
