@@ -54,6 +54,20 @@ export const DATASET_COLUMNS = ["experiment_id", "sample_id", "assay", "result",
 
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
+/** The caller-declared column set — `undefined` trusts every field name. */
+export type FieldScope = ReadonlySet<string> | undefined;
+
+/**
+ * Field reference → SQL expression. A name outside `known` compiles to the
+ * NULL literal — the same "missing field reads as null" the JS engines get
+ * from `cell()`/`?? null` — so a stale or foreign field degrades to the
+ * predicate's null semantics instead of `no such column`. (eq 'x' → no match,
+ * neq 'x'/isNull → match, ordering ops → no match.)
+ */
+function fieldSql(name: string, known: FieldScope): string {
+  return known === undefined || known.has(name) ? quoteIdent(name) : "NULL";
+}
+
 /** looseEqual's numeric sniff: finite numbers, or text that trims to a
  *  digit-containing token built only of number characters (a '-' past the
  *  first character disqualifies — ISO dates like '2026-01-01' must not
@@ -129,8 +143,8 @@ function orderingSql(field: string, operator: "gt" | "gte" | "lt" | "lte", value
   return { sql: "(0=1)", params: [] };
 }
 
-function conditionSql(node: ConditionNode): { sql: string; params: SqlParam[] } {
-  const f = quoteIdent(node.field);
+function conditionSql(node: ConditionNode, known: FieldScope): { sql: string; params: SqlParam[] } {
+  const f = fieldSql(node.field, known);
   const value = node.value;
   switch (node.operator) {
     case "isNull":
@@ -197,9 +211,9 @@ function conditionSql(node: ConditionNode): { sql: string; params: SqlParam[] } 
   }
 }
 
-function compile(node: FilterNode): { sql: string; params: SqlParam[] } {
-  if (node.type === "condition") return conditionSql(node);
-  const children = node.children.map(compile);
+function compile(node: FilterNode, known: FieldScope): { sql: string; params: SqlParam[] } {
+  if (node.type === "condition") return conditionSql(node, known);
+  const children = node.children.map((child) => compile(child, known));
   if (node.combinator === "OR") {
     return { sql: children.length ? `(${children.map((c) => c.sql).join(" OR ")})` : "(0=1)", params: children.flatMap((c) => c.params) };
   }
@@ -213,15 +227,16 @@ function compile(node: FilterNode): { sql: string; params: SqlParam[] } {
 }
 
 /** Compile a plan-008 filter tree to a parameterised WHERE clause
- *  (no leading WHERE keyword). */
-export function filterTreeToSql(node: FilterNode): { sql: string; params: SqlParam[] } {
-  return compile(node);
+ *  (no leading WHERE keyword). `known` scopes field references: names it
+ *  doesn't contain compile to NULL (see `fieldSql`). */
+export function filterTreeToSql(node: FilterNode, known?: FieldScope): { sql: string; params: SqlParam[] } {
+  return compile(node, known);
 }
 
 /** Compile flat `filters` + `filterLogic` as a single-level tree — the
  *  canonical (looseEqual) semantics, which are what the wire contract
  *  prescribes; the legacy in-file `matches` shim differs on null edges. */
-export function filtersToSql(filters: readonly { fieldId: string; operator: string; value?: unknown }[], logic: "and" | "or"): { sql: string; params: SqlParam[] } {
+export function filtersToSql(filters: readonly { fieldId: string; operator: string; value?: unknown }[], logic: "and" | "or", known?: FieldScope): { sql: string; params: SqlParam[] } {
   if (!filters.length) return { sql: "(1=1)", params: [] };
   const group: GroupNode = {
     type: "group",
@@ -229,7 +244,7 @@ export function filtersToSql(filters: readonly { fieldId: string; operator: stri
     combinator: logic === "or" ? "OR" : "AND",
     children: filters.map((filter, index) => ({ type: "condition", id: `f${index}`, field: filter.fieldId, operator: filter.operator as ConditionNode["operator"], value: filter.value })),
   };
-  return compile(group);
+  return compile(group, known);
 }
 
 /** Sort clause → ORDER BY. Null ordering mirrors the in-file `compare`:
@@ -237,10 +252,10 @@ export function filtersToSql(filters: readonly { fieldId: string; operator: stri
  *  (localeCompare on these ids is byte order). With no sort the JS path
  *  keeps scan order — `rowid` is exactly that (insertion order), which a
  *  textual `record_id` sort would not be ('record-10' < 'record-2'). */
-export function sortToSql(sort: readonly { fieldId: string; direction: "asc" | "desc" }[]): string {
+export function sortToSql(sort: readonly { fieldId: string; direction: "asc" | "desc" }[], known?: FieldScope): string {
   if (!sort.length) return "rowid";
   const parts = sort.map((clause) => {
-    const f = quoteIdent(clause.fieldId);
+    const f = fieldSql(clause.fieldId, known);
     return clause.direction === "desc" ? `${f} IS NULL DESC, ${f} DESC` : `${f} IS NULL ASC, ${f} ASC`;
   });
   parts.push("record_id ASC");
@@ -283,7 +298,10 @@ export function createDataset(db: SqlDb, rows: number, rowAt: (index: number) =>
   )`);
   db.exec("BEGIN");
   try {
-    for (let index = 0; index < rows; index++) insertRecord(db, rowAt(index).recordId, rowAt(index).values);
+    for (let index = 0; index < rows; index++) {
+      const row = rowAt(index);
+      insertRecord(db, row.recordId, row.values);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

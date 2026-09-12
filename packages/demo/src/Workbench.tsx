@@ -8,7 +8,9 @@ import {
   emptyView,
   loadInitialState,
   loadPaneLayoutState,
+  pruneViewToFields,
   queryKey,
+  toDatasetQuery,
   useIdleSave,
   usePersistedTheme,
   useWorkbench,
@@ -275,19 +277,32 @@ export function Workbench() {
   const onThemeChange = () => toggleTheme();
   const panesRef = useRef<PaneLayoutHandle>(null);
   const onHeaderFieldsChange = useCallback((fields: ReadonlyArray<SheetbaseField & { column: number }>) => {
-    setHeaderFields(fields.length > 0
+    const nextFields = fields.length > 0
       ? fields.map((field) => ({ id: field.id, label: field.label, column: field.column, dataType: field.dataType }))
-      : tableFields);
-  }, []);
+      : tableFields;
+    setHeaderFields(nextFields);
+    // The view is dataset-relative: a schema edit that removes a field drops
+    // the conditions/bindings referencing it rather than letting them compile
+    // into the shared query.
+    setView((current) => pruneViewToFields(current, nextFields));
+  }, [setView]);
 
   /** Swap between the materialised sample dataset and the remote example API.
-   *  Resets the field set + schema graph to the source's own columns. */
+   *  Resets the field set + schema graph to the source's own columns, and
+   *  re-homes the shared view: references to fields the new source lacks are
+   *  pruned (a stale field must never compile into remote requests), while
+   *  conditions on fields both datasets carry (status, sample_id) survive. */
   function switchSource(next: SourceId) {
     if (next === sourceId) return;
     setSourceId(next);
     const fields = next === "experiments" ? experimentFields : tableFields;
     setHeaderFields(fields);
-    setGraph(schemaFromFields(fields, next === "experiments" ? "experiments" : "sample", next === "experiments" ? "Experiments" : "Sample"));
+    setGraph(schemaFromFields(fields, next, next === "experiments" ? "Experiments" : "Sample"));
+    const nextView = pruneViewToFields(view, fields);
+    setView(nextView);
+    // Recompile immediately — otherwise the outgoing query fires once more
+    // against the new dataset before AdvancedSearch re-emits.
+    setQuery(toDatasetQuery(nextView.filter, nextView.sort ? [{ fieldId: nextView.sort.field, direction: nextView.sort.direction }] : undefined));
   }
 
   const panes: PaneSpec[] = [
@@ -298,7 +313,7 @@ export function Workbench() {
       title: "Schema",
       closable: true,
       actions: (
-        <button className="sb-btn" title="Rebuild the schema from the table's columns" onClick={() => setGraph(schemaFromFields(headerFields, "sample", "Sample"))}>From table</button>
+        <button className="sb-btn" title="Rebuild the schema from the table's columns" onClick={() => setGraph(schemaFromFields(headerFields, datasetId, remoteActive ? "Experiments" : "Sample"))}>From table</button>
       ),
       content: (
         <SchemaEditor
@@ -361,7 +376,11 @@ export function Workbench() {
     setSourceId("sample");
     setGraph(schemaStarter);
     setRules(rulesStarter);
-    setView(emptyView("mean"));
+    // Same recompile-on-swap rule as switchSource: the outgoing query must not
+    // fire once against the reset dataset before the search pane re-emits.
+    const next = emptyView("mean");
+    setView(next);
+    setQuery(toDatasetQuery(next.filter));
     setHeaderFields(tableFields);
     setRows(sampleRows);
   }

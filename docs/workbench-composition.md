@@ -98,6 +98,27 @@ column index) for the selected model; the host stores them and they become the
 workspace `fields` — so renaming a field in the schema pane re-labels the
 table column.
 
+## Views are dataset-relative
+
+A view's field references — filter conditions, `groupBy`, `sort`, and the
+explorer's chart channels/filters — only mean something against a field set
+that has them. `pruneViewToFields(view, fields)` is the boundary: conditions
+on unknown fields drop out of the tree (emptied child groups collapse), and
+`groupBy`/`sort` bindings to unknown fields are dropped. Apply it at every
+point where a view meets a field set it wasn't built against:
+
+- `useWorkbench` prunes the persisted view it merges over `initialView` —
+  a view saved under one dataset can't compile into another's queries.
+- The host prunes on schema edits (`onHeaderFieldsChange`) and when swapping
+  datasets, and recompiles the `DatasetQuery` from the pruned view in the
+  same commit so a stale query never fires against the new dataset.
+- The explorer reconciles chart channels and `spec.filters` against the
+  incoming dataset's columns on its own (same rule, chart-shaped state).
+
+Without this a persisted `material` filter would reach a dataset that has no
+`material` column — remote executors then reject the query rather than
+return wrong data.
+
 ## Rules → filtered rows → write-back
 
 `RulesEngine` receives `rows={wb.viewRows}` (what the user sees is what the

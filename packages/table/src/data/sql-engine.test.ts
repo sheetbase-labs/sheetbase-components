@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { buildPredicate, type FilterNode } from "sheetbase-shared";
-import { createDataset, filterTreeToSql, insertRecord, type SeededRow } from "../../examples/sql-engine";
+import { DATASET_COLUMNS, createDataset, filterTreeToSql, filtersToSql, insertRecord, sortToSql, type FieldScope, type SeededRow } from "../../examples/sql-engine";
 import type { ConditionNode } from "sheetbase-shared";
 
 // The example engine is bun-run (bun:sqlite); the suite is vitest/node —
@@ -32,9 +32,9 @@ const group = (combinator: "AND" | "OR" | "NOT", children: FilterNode[]): Filter
 
 /** Row ids the SQL engine returns for a tree — and the ids buildPredicate
  *  keeps on the same fixture. They must be identical. */
-function expectParity(tree: FilterNode, rows: SeededRow[] = FIXTURE) {
+function expectParity(tree: FilterNode, rows: SeededRow[] = FIXTURE, known?: FieldScope) {
   const database = db(rows);
-  const compiled = filterTreeToSql(tree);
+  const compiled = filterTreeToSql(tree, known);
   const sqlIds = database.prepare(`SELECT record_id FROM records WHERE ${compiled.sql}`).all(...compiled.params).map((row) => row.record_id).sort();
   const jsIds = rows.filter((row) => buildPredicate(tree)(row.values)).map((row) => row.recordId).sort();
   expect({ sql: compiled.sql, ids: sqlIds }).toEqual({ sql: compiled.sql, ids: jsIds });
@@ -124,6 +124,55 @@ describe("filterTreeToSql parity with buildPredicate", () => {
     const compiled = filterTreeToSql(cond('we"ird', "eq", "yes"));
     expect(compiled.sql).toContain('"we""ird"');
     expect(database.prepare(`SELECT record_id FROM t WHERE ${compiled.sql}`).all(...compiled.params)).toHaveLength(1);
+  });
+});
+
+const KNOWN: FieldScope = new Set(DATASET_COLUMNS);
+
+describe("FieldScope — unknown fields read as NULL", () => {
+  // The fixture rows carry no 'material' field, so buildPredicate's cell()
+  // returns undefined for it — the same null semantics the NULL literal gives SQL.
+  it("matches buildPredicate's missing-cell semantics per operator", () => {
+    expectParity(cond("material", "eq", "steel"), FIXTURE, KNOWN);       // none
+    expectParity(cond("material", "neq", "steel"), FIXTURE, KNOWN);      // all
+    expectParity(cond("material", "eq", ""), FIXTURE, KNOWN);            // all — asText(undefined) === ''
+    expectParity(cond("material", "neq", ""), FIXTURE, KNOWN);           // none
+    expectParity(cond("material", "isNull"), FIXTURE, KNOWN);            // all
+    expectParity(cond("material", "notNull"), FIXTURE, KNOWN);           // none
+    expectParity(cond("material", "contains", "x"), FIXTURE, KNOWN);     // none
+    expectParity(cond("material", "contains", ""), FIXTURE, KNOWN);      // all
+    expectParity(cond("material", "startsWith", "x"), FIXTURE, KNOWN);   // none
+    expectParity(cond("material", "endsWith", "x"), FIXTURE, KNOWN);     // none
+    expectParity(cond("material", "in", ["a", "b"]), FIXTURE, KNOWN);    // none
+    expectParity(cond("material", "in", ["", "x"]), FIXTURE, KNOWN);     // all — the '' arm matches
+    expectParity(cond("material", "gt", 1), FIXTURE, KNOWN);             // none
+    expectParity(cond("material", "between", [1, 5]), FIXTURE, KNOWN);   // none
+    expectParity(cond("material", "withinLastDays", 5), FIXTURE, KNOWN); // none
+    expectParity(cond("material", "eq", true), FIXTURE, KNOWN);          // none
+  });
+
+  it("composes with known fields inside trees", () => {
+    expectParity(group("AND", [cond("status", "eq", "Flagged"), cond("material", "neq", "x")]), FIXTURE, KNOWN);
+    expectParity(group("NOT", [cond("material", "eq", "x")]), FIXTURE, KNOWN);
+    expectParity(group("OR", [cond("material", "eq", "x"), cond("assay", "eq", "BCA")]), FIXTURE, KNOWN);
+  });
+
+  it("never emits the unknown identifier — no 'no such column'", () => {
+    const database = db();
+    const where = filterTreeToSql(cond("material", "eq", "steel"), KNOWN);
+    expect(where.sql).not.toContain('"material"');
+    expect(() => database.prepare(`SELECT record_id FROM records WHERE ${where.sql}`).all(...where.params)).not.toThrow();
+    const flat = filtersToSql([{ fieldId: "material", operator: "eq", value: "steel" }], "and", KNOWN);
+    expect(flat.sql).not.toContain('"material"');
+    expect(() => database.prepare(`SELECT record_id FROM records WHERE ${flat.sql}`).all(...flat.params)).not.toThrow();
+    const order = sortToSql([{ fieldId: "material", direction: "asc" }], KNOWN);
+    expect(order).not.toContain('"material"');
+    expect(() => database.prepare(`SELECT record_id FROM records ORDER BY ${order}`).all()).not.toThrow();
+  });
+
+  it("keeps trusting callers without a scope (no whitelist supplied)", () => {
+    const compiled = filterTreeToSql(cond('we"ird', "eq", "yes"));
+    expect(compiled.sql).toContain('"we""ird"');
   });
 });
 

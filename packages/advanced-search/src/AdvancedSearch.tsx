@@ -293,10 +293,10 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
   const ids = fieldIds(fields);
   const compiledKey = queryKey(compiled);
 
+  // compiled is a fresh object each render; key on its stable content.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed on compiledKey, not the object identity.
   useEffect(() => {
     onDatasetQueryChange?.(compiled);
-    // compiled is a fresh object each render; key on its stable content.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed on compiledKey, not the object identity.
   }, [compiledKey, onDatasetQueryChange]);
 
   return (

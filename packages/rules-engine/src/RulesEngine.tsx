@@ -190,6 +190,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
   const [sampleError, setSampleError] = useState<string | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const filterTreeKey = useMemo(() => JSON.stringify(filterTree ?? null), [filterTree]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on filterTreeKey, the serialised tree — the live filterTree object is read inside; host objects rebuilt each render must not refetch.
   useEffect(() => {
     if (!source) {
       setSample(null);
@@ -214,7 +215,6 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
       },
     );
     return () => controller.abort();
-    // biome-ignore lint/correctness/useExhaustiveDependencies: filterTreeKey is the serialised form of filterTree
   }, [source, filterTreeKey]);
 
   const evalRows: readonly Row[] | null = source ? (sample?.rows ?? null) : (rows ?? null);
@@ -262,7 +262,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
     } finally {
       setApplying(false);
     }
-  }, [applyPlan, onApplyWrites, applying]);
+  }, [applyPlan, onApplyWrites, applying, source, sample]);
 
   function onProbeChange(text: string) {
     setProbe(text);

@@ -3,7 +3,7 @@ import type { SheetbaseField } from "./fields";
 import type { DatasetQuery, FilterClause, SortClause } from "./query";
 import type { GroupNode } from "./tree";
 import { applySearch } from "./tree";
-import { applyView, searchSpecFromView, type AnalysisView } from "./analysis";
+import { applyView, pruneViewToFields, searchSpecFromView, type AnalysisView } from "./analysis";
 import { loadInitialState, type PersistenceAdapter } from "./persistence";
 
 /**
@@ -167,8 +167,12 @@ export function useWorkbench(options: UseWorkbenchOptions): WorkbenchGlue {
   }
   const remote = source !== undefined;
   const [view, setView] = useState<AnalysisView>(() => {
-    const loaded = loadInitialState(persistKey, adapter, initialView);
-    return { ...initialView, ...loaded };
+    const merged = { ...initialView, ...loadInitialState(persistKey, adapter, initialView) };
+    // A persisted view is dataset-relative: a condition or binding on a field
+    // this dataset doesn't have must not compile into its queries (remote
+    // executors would reject or silently mis-filter). Unknown fields can't be
+    // validated while `fields` is empty, so the view loads untouched then.
+    return fields.length > 0 ? pruneViewToFields(merged, fields) : merged;
   });
   const [query, setQuery] = useState<DatasetQuery>({});
   const patchView = useCallback((patch: Partial<AnalysisView>) => {

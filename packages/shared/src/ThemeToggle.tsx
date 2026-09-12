@@ -22,8 +22,17 @@ export function useResolvedTheme(mode: ThemeMode): ResolvedTheme {
     if (mode !== "system" || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
     const update = () => setResolved(query.matches ? "dark" : "light");
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    // MediaQueryList.addEventListener is the modern API; older Safari (and
+    // thin test mocks) only carry addListener.
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+    if (typeof query.addListener === "function") {
+      query.addListener(update);
+      return () => query.removeListener(update);
+    }
+    return undefined;
   }, [mode]);
   return resolved;
 }

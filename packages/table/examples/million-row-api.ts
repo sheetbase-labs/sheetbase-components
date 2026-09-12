@@ -100,6 +100,11 @@ const loadPresentation = presentationDb.prepare("SELECT state FROM presentations
 const datasetDb = SQL_MODE ? new Database(":memory:") : null;
 if (datasetDb) createDataset(datasetDb, SQL_ROWS, generated);
 
+/** SQL-mode field whitelist — passed to the compiler so field references the
+ *  table doesn't have (a stale filter, a foreign dataset's view) project as
+ *  NULL, matching the JS engines' missing-field semantics. */
+const KNOWN_FIELDS: ReadonlySet<string> = new Set<string>(DATASET_COLUMNS);
+
 type FlatFilter = { fieldId: string; operator: string; value?: unknown };
 type SortSpec = { fieldId: string; direction: "asc" | "desc" };
 
@@ -127,12 +132,11 @@ function jsPage(treePredicate: ((row: Record<string, Scalar>) => boolean) | null
 /** The same page via the SQL compiler — the reference host executor. */
 function sqlPage(db: Database, filterTreeParam: string | null, filters: FlatFilter[], filterLogic: "and" | "or", sort: SortSpec[], fieldIds: string[], rowStart: number, rowCount: number): { records: RecordRow[]; totalRows: number } {
   const where = filterTreeParam
-    ? filterTreeToSql(JSON.parse(filterTreeParam) as FilterNode)
-    : filtersToSql(filters, filterLogic);
-  const known = new Set<string>(DATASET_COLUMNS);
-  const projected = fieldIds.filter((fieldId) => known.has(fieldId));
+    ? filterTreeToSql(JSON.parse(filterTreeParam) as FilterNode, KNOWN_FIELDS)
+    : filtersToSql(filters, filterLogic, KNOWN_FIELDS);
+  const projected = fieldIds.filter((fieldId) => KNOWN_FIELDS.has(fieldId));
   const rows = db.prepare(
-    `SELECT record_id${projected.length ? `, ${projected.map(quoteField).join(", ")}` : ""} FROM records WHERE ${where.sql} ORDER BY ${sortToSql(sort)} LIMIT ? OFFSET ?`,
+    `SELECT record_id${projected.length ? `, ${projected.map(quoteField).join(", ")}` : ""} FROM records WHERE ${where.sql} ORDER BY ${sortToSql(sort, KNOWN_FIELDS)} LIMIT ? OFFSET ?`,
   ).all(...where.params, rowCount, rowStart);
   const total = db.prepare(`SELECT COUNT(*) AS c FROM records WHERE ${where.sql}`).get(...where.params);
   return {
@@ -228,21 +232,24 @@ const server = Bun.serve({
       const body = await request.json() as { datasetId?: string; filter?: FilterNode; groupBy?: string; seriesBy?: string[]; summary?: string; valueField?: string; limit?: number };
       if (!body.groupBy || !body.summary) return json({ error: "groupBy and summary are required" }, 400);
       if (body.summary !== "count" && body.valueField === undefined) return json({ error: "valueField is required for this summary" }, 400);
-      const seriesBy = (Array.isArray(body.seriesBy) ? body.seriesBy.filter((field): field is string => typeof field === "string" && field !== body.groupBy) : [])
-        .filter((field) => !datasetDb || (DATASET_COLUMNS as readonly string[]).includes(field));
+      const seriesBy = Array.isArray(body.seriesBy) ? body.seriesBy.filter((field): field is string => typeof field === "string" && field !== body.groupBy) : [];
       if (datasetDb) {
         // SQL engine: one GROUP BY over the (key × series) tuple. Median has
         // no SQLite aggregate — each bucket's ordered values come back in a
         // second pass (capped at MEDIAN_CAP; a production backend uses an
         // approximate quantile).
-        const where = body.filter ? filterTreeToSql(body.filter) : { sql: "(1=1)", params: [] as (string | number | null)[] };
+        const where = body.filter ? filterTreeToSql(body.filter, KNOWN_FIELDS) : { sql: "(1=1)", params: [] as (string | number | null)[] };
         const groupByField = body.groupBy;
         const dims = [groupByField, ...seriesBy];
-        const cols = dims.map(quoteField);
-        const valueCol = body.valueField ? quoteField(body.valueField) : null;
+        // Unknown dim/value fields project as NULL (memory-engine parity: the
+        // memory path reads them as undefined → one ""-keyed series bucket).
+        // selectCols aliases NULL under the field name so row[field] reads work.
+        const selectCols = dims.map((field) => KNOWN_FIELDS.has(field) ? quoteField(field) : `NULL AS ${quoteField(field)}`);
+        const groupCols = dims.map((field) => KNOWN_FIELDS.has(field) ? quoteField(field) : "NULL");
+        const valueCol = body.valueField ? (KNOWN_FIELDS.has(body.valueField) ? quoteField(body.valueField) : "NULL") : null;
         const aggExpr = body.summary === "count" ? "COUNT(*)" : body.summary === "median" ? null : `${{ mean: "AVG", sum: "SUM", min: "MIN", max: "MAX" }[body.summary as "mean" | "sum" | "min" | "max"]}(${valueCol})`;
         const rows = datasetDb.prepare(
-          `SELECT ${cols.join(", ")}, COUNT(*) AS _n${aggExpr ? `, ${aggExpr} AS _v` : ""} FROM records WHERE ${where.sql} GROUP BY ${cols.join(", ")} ORDER BY ${cols.join(", ")}`,
+          `SELECT ${selectCols.join(", ")}, COUNT(*) AS _n${aggExpr ? `, ${aggExpr} AS _v` : ""} FROM records WHERE ${where.sql} GROUP BY ${groupCols.join(", ")} ORDER BY ${groupCols.join(", ")}`,
         ).all(...where.params);
         const total = datasetDb.prepare(`SELECT COUNT(*) AS c FROM records WHERE ${where.sql}`).get(...where.params);
         const MEDIAN_CAP = 100_000;
@@ -255,7 +262,7 @@ const server = Bun.serve({
           else if (aggExpr) value = row._v === null || row._v === undefined ? null : Number(row._v);
           else if (valueCol) {
             // Exact per-bucket median: ordered values, capped.
-            const dimConds = dims.map((field, i) => row[field] === null || row[field] === undefined ? `${cols[i]} IS NULL` : `${cols[i]} = ?`);
+            const dimConds = dims.map((field, i) => row[field] === null || row[field] === undefined ? `${groupCols[i]} IS NULL` : `${groupCols[i]} = ?`);
             const dimParams = dims.map((field) => row[field]).filter((v) => v !== null && v !== undefined) as (string | number)[];
             const values = datasetDb.prepare(
               `SELECT ${valueCol} AS v FROM records WHERE ${where.sql} AND ${dimConds.join(" AND ")} AND ${valueCol} IS NOT NULL ORDER BY ${valueCol} LIMIT ?`,

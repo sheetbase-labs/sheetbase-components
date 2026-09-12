@@ -12,7 +12,7 @@ import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 import { runSqlAsync } from './lib/sql'
-import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, SavedExploration } from './lib/types'
+import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, FilterRule, SavedExploration } from './lib/types'
 import {
   ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
 } from './explorer-chrome'
@@ -194,13 +194,19 @@ export function App(props: AppProps = {}) {
   const datasetColumnsKey = dataset
     ? dataset.columns.map((column) => `${column.key}:${column.kind}:${column.uniqueCount}`).join('\u0000')
     : ''
+  // Reconcile only when the dataset's columns change, not on every spec edit.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on datasetColumnsKey deliberately — spec edits must not retrigger reconciliation.
   useEffect(() => {
     if (!dataset) return
     const columns = dataset.columns
     const valid = (key: string | undefined) => key === undefined || columns.some((column) => column.key === key)
+    // Chart filters are dataset-relative too — rules on columns the new
+    // dataset doesn't have would compile into remote requests as dead fields.
+    const pruneFilters = (filters: FilterRule[] | undefined) => filters?.filter((rule) => valid(rule.field))
+    const filtersStale = (current: ChartSpec) => current.filters?.some((rule) => !valid(rule.field)) ?? false
     if (valid(spec.x) && valid(spec.y)) {
       // x/y are fine; still drop any stale channel references from another dataset.
-      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh)
+      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh) || filtersStale(spec)
       if (!stale) return
       setSpec((current) => ({
         ...current,
@@ -210,6 +216,7 @@ export function App(props: AppProps = {}) {
         ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
         ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
         ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
+        ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
       }))
       return
     }
@@ -234,9 +241,8 @@ export function App(props: AppProps = {}) {
       ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
       ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
       ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
+      ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
     }))
-    // Reconcile only when the dataset's columns change, not on every spec edit.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on datasetColumnsKey deliberately — spec edits must not retrigger reconciliation.
   }, [datasetColumnsKey])
 
   useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark])
