@@ -39,6 +39,25 @@ describe("ruleWritesForRows", () => {
     expect(plan.writes).toHaveLength(0);
   });
 
+  it("omits writes that already hold the target value, so apply converges", () => {
+    const rules = [rule("when status is failed then set triage to urgent")];
+    const rows: Row[] = [
+      { id: "r1", status: "failed" },                    // missing field — write
+      { id: "r2", status: "failed", triage: "urgent" },  // satisfied — no write
+      { id: "r3", status: "failed", triage: "low" },     // differs — write
+    ];
+    const plan = ruleWritesForRows(rules, rows, recordIdOf);
+    expect(plan.matched).toBe(3);
+    expect(plan.writes).toEqual([
+      { recordId: "r1", fieldId: "triage", after: "urgent" },
+      { recordId: "r3", fieldId: "triage", before: "low", after: "urgent" },
+    ]);
+    // A second pass over the applied output is empty — the fixpoint auto-apply relies on.
+    const applied = rows.map((row) =>
+      row.status === "failed" ? { ...row, triage: "urgent" } : row);
+    expect(ruleWritesForRows(rules, applied, recordIdOf).writes).toHaveLength(0);
+  });
+
   it("counts matched rows whose recordId cannot be resolved as skipped", () => {
     const rules = [rule("when status is failed then set status to triaged")];
     const rows: Row[] = [{ id: "r1", status: "failed" }, { status: "failed" }];

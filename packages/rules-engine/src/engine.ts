@@ -105,6 +105,10 @@ export function ruleWritesForRows(
     const recordId = recordIdOf(row, index);
     if (!recordId) { skipped += 1; return; }
     for (const field of fields) {
+      // Skip writes that would restate the current value — the write set is
+      // what a pass still needs to change, so applied rules converge to an
+      // empty set instead of rewriting the same cells forever.
+      if (row[field] !== undefined && String(row[field]) === String(effects.transforms[field])) continue;
       writes.push({
         recordId,
         fieldId: field,

@@ -1,4 +1,4 @@
-import { useImperativeHandle, useMemo, useState, type Ref } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import {
   ThemeToggleButton,
   PaneLayout,
@@ -178,16 +178,17 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   const [applying, setApplying] = useState(false);
   const [applyOutcome, setApplyOutcome] = useState<string | null>(null);
+  const applyCapable = Boolean(rows && recordIdOf && onApplyWrites);
   const applyPlan = useMemo(
-    () => (rows && recordIdOf && onApplyWrites ? ruleWritesForRows(rules, rows, recordIdOf) : null),
-    [rules, rows, recordIdOf, onApplyWrites],
+    () => (applyCapable ? ruleWritesForRows(rules, rows!, recordIdOf!) : null),
+    [applyCapable, rules, rows, recordIdOf],
   );
 
-  async function applyWrites() {
+  async function applyWrites(confirm = true) {
     if (!applyPlan || !onApplyWrites || applying) return;
-    if (applyPlan.writes.length === 0) { setApplyOutcome("No transform writes to apply."); return; }
+    if (applyPlan.writes.length === 0) { if (confirm) setApplyOutcome("No transform writes to apply."); return; }
     const writeRows = new Set(applyPlan.writes.map((write) => write.recordId)).size;
-    if (!window.confirm(`Apply ${applyPlan.writes.length} transform writes to ${writeRows} rows?`)) return;
+    if (confirm && !window.confirm(`Apply ${applyPlan.writes.length} transform writes to ${writeRows} rows?`)) return;
     setApplying(true);
     try {
       const result = await onApplyWrites(applyPlan.writes, { matched: applyPlan.matched, skipped: applyPlan.skipped, rejected: applyPlan.rejected });
@@ -210,6 +211,37 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
 
   const active = rules.filter((r) => r.enabled).length;
 
+  // Auto-apply: when enabled, each non-empty write set commits through the
+  // host — so a grid edit that brings a row in scope applies immediately,
+  // and writes cascade until the rules reach a fixpoint. The circuit
+  // breaker stops rules that never converge (each apply produces a fresh
+  // write set) instead of looping forever.
+  const [autoApply, setAutoApply] = useState(false);
+  const autoCircuit = useRef({ count: 0, windowStart: 0, lastKey: "" });
+  const applyKey = applyPlan?.writes.length ? JSON.stringify(applyPlan.writes) : "";
+  useEffect(() => {
+    if (!autoApply || applying) return;
+    const circuit = autoCircuit.current;
+    // An empty plan re-arms the key guard, so a later edit that recreates a
+    // previously-applied write set fires again.
+    if (!applyPlan?.writes.length) { circuit.lastKey = ""; return; }
+    // The same write set must never refire — if it survives an apply, the
+    // host dropped it, and repeating only floods the commit path.
+    if (applyKey === circuit.lastKey) return;
+    const now = Date.now();
+    if (now - circuit.windowStart > 2000) { circuit.count = 0; circuit.windowStart = now; }
+    if (++circuit.count > 10) {
+      setAutoApply(false);
+      setApplyOutcome("Auto-apply stopped — the rules kept producing writes.");
+      return;
+    }
+    circuit.lastKey = applyKey;
+    void applyWrites(false);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: applyKey is the
+    // content key of applyPlan — refires only when the write set changes;
+    // `applying` re-runs the check when the in-flight apply resolves.
+  }, [autoApply, applyKey, applying]);
+
   useImperativeHandle(ref, () => ({ addRule }));
 
   return (
@@ -219,6 +251,11 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
           <div className="sb-topbar">
             <div className="sb-toolbar-group">
               <span className="sb-stat">{active} of {rules.length} active</span>
+              {applyCapable && (
+                <label className="sb-check" title="Commit matching transform writes to the dataset as it changes — a grid edit that puts a row in scope applies immediately">
+                  <input type="checkbox" checked={autoApply} onChange={(e) => setAutoApply(e.target.checked)} /> auto-apply
+                </label>
+              )}
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
@@ -364,7 +401,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                   {datasetSummary.routes.length > 0 && <p className="sb-muted">Route {datasetSummary.routes.join(", ")}</p>}
                   {applyPlan && (
                     <>
-                      <button type="button" className="sb-btn" disabled={applying} onClick={applyWrites}>
+                      <button type="button" className="sb-btn" disabled={applying} onClick={() => applyWrites()}>
                         {applying ? "Applying…" : `Apply ${applyPlan.writes.length} writes`}
                       </button>
                       {applyOutcome && <p className="sb-muted" role="status">{applyOutcome}</p>}
