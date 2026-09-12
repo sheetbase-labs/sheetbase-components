@@ -17,6 +17,7 @@
     "dev:rules": "bun run --filter sheetbase-rulesengine dev",
     "dev:search": "bun run --filter sheetbase-advanced-search dev",
     "dev:demo": "bun run --filter sheetbase-demo dev",
+    "version:bump": "bun scripts/version.mjs",
     "pack:smoke": "node scripts/pack-smoke.mjs"
   },
   "devDependencies": {

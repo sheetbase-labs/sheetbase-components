@@ -51,7 +51,24 @@ smoke test verifies exactly what consumers will install.
 CI runs `pack-smoke --skip-build` on every PR after the lib builds, so a
 manifest regression fails review without touching a registry.
 
-## Not done yet
+## Release flow (tag-driven)
 
-- No NPM_TOKEN / release workflow — first publish is a deliberate manual act.
-- No CHANGELOG.md generation; add one with the first real `0.2.0`.
+```bash
+bun run version:bump 0.2.0     # rewrites version in all seven manifests
+# update CHANGELOG.md, commit:
+git tag v0.2.0 && git push origin main --tags
+```
+
+The `v*` tag triggers `.github/workflows/release.yml`: full verify
+(typecheck/lint/tests), lib builds, pack smoke, a tag↔manifest version
+check, then `bun publish --access public` in dependency order. Needs an
+`NPM_TOKEN` repo secret; without it the verify steps still run and publish
+fails before touching the registry — that's the dry-run mode until the
+first real release. `workflow_dispatch` runs the same pipeline minus the
+tag check.
+
+`CHANGELOG.md` is manual — one heading per lockstep release.
+
+## Still manual
+
+- Creating the `NPM_TOKEN` secret and the first `v0.1.0` tag.

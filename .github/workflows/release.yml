@@ -1,0 +1,62 @@
+name: Release
+
+# Publishes the six libraries in dependency order when a v* tag lands.
+# Requires an NPM_TOKEN secret; without it the verify steps still run and
+# the publish step fails fast — which is the intended dry-run mode until
+# the first real release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Verify, build, publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Unit tests
+        run: bun run test
+
+      - name: Build libraries
+        run: bun run build:lib
+
+      - name: Pack smoke — tarballs install + typecheck as a consumer
+        run: node scripts/pack-smoke.mjs --skip-build
+
+      - name: Tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./packages/shared/package.json').version")
+          [ "$TAG" = "$PKG" ] || { echo "tag $GITHUB_REF_NAME but package.json is $PKG — run bun scripts/version.mjs first"; exit 1; }
+
+      - name: Registry auth
+        run: echo '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > ~/.npmrc
+
+      - name: Publish in dependency order
+        run: |
+          for pkg in shared table advanced-search explorer schema-editor rules-engine; do
+            (cd "packages/$pkg" && bun publish --access public)
+          done
