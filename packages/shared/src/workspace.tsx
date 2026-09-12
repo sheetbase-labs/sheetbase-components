@@ -41,6 +41,12 @@ export interface WorkspaceAggregateQuery {
   /** Filter tree; authoritative over any flat list. */
   filter?: GroupNode;
   groupBy: string;
+  /**
+   * Additional statistical dimensions (spec.group/color/facet, deduped,
+   * excluding groupBy). Buckets key on (groupBy × seriesBy) and report
+   * their series values in `series`; servers may ignore it and degrade.
+   */
+  seriesBy?: string[];
   summary: "mean" | "median" | "sum" | "count" | "min" | "max";
   valueField?: string;
   limit?: number;
@@ -48,7 +54,7 @@ export interface WorkspaceAggregateQuery {
 
 /** Structural twin of the explorer's `AggregateResponse`. */
 export interface WorkspaceAggregateResponse {
-  buckets: { key: string; count: number; value: number | null }[];
+  buckets: { key: string; series?: Record<string, string>; count: number; value: number | null }[];
   totalRows: number;
   revision?: string;
 }

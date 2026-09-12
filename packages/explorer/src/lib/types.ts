@@ -18,6 +18,13 @@ export interface AggregateQuery {
   filter?: GroupNode
   /** Field whose distinct values become the buckets — the chart's x channel. */
   groupBy: string
+  /**
+   * Additional statistical dimensions (spec.group/color/facet, deduped,
+   * excluding groupBy). Buckets key on (groupBy × seriesBy); each bucket
+   * reports its series values in `series`. Servers that ignore it return
+   * single-dimension buckets and the client degrades to flat rendering.
+   */
+  seriesBy?: string[]
   summary: Exclude<SummaryKind, 'none'>
   /** Measure field; required for every summary except `count`. */
   valueField?: string
@@ -26,6 +33,8 @@ export interface AggregateQuery {
 
 export interface AggregateBucket {
   key: string
+  /** Values for each `seriesBy` field, in request order. */
+  series?: Record<string, string>
   count: number
   value: number | null
 }

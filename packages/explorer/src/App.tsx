@@ -292,11 +292,14 @@ export function App(props: AppProps = {}) {
       // are rebuilt into one. Either way the server applies it once.
       filter: view?.filter ?? treeFromFilters(chartSpec.filters ?? [], chartSpec.filterLogic ?? 'and'),
       groupBy: chartSpec.x,
+      seriesBy: [chartSpec.group, chartSpec.color, chartSpec.facet]
+        .filter((field): field is string => Boolean(field) && field !== chartSpec.x)
+        .filter((field, index, all) => all.indexOf(field) === index),
       summary: chartSpec.aggregate,
       valueField: chartSpec.aggregate === 'count' ? undefined : chartSpec.y,
       limit: view?.limit,
     }
-  }, [remote, chartSpec.x, chartSpec.y, chartSpec.aggregate, chartSpec.kind, chartSpec.filters, chartSpec.filterLogic, view])
+  }, [remote, chartSpec.x, chartSpec.y, chartSpec.group, chartSpec.color, chartSpec.facet, chartSpec.aggregate, chartSpec.kind, chartSpec.filters, chartSpec.filterLogic, view])
   const [remoteResult, setRemoteResult] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [remoteRetry, setRemoteRetry] = useState(0)

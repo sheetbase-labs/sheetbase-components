@@ -32,13 +32,16 @@ export interface HttpExplorerAdapterOptions {
 
 /**
  * Shape one server bucket into the row a chart expects: the groupBy field
- * holds the key, the valueField holds the aggregated value, and the bucket
- * count rides along under the same `__sheetbaseCount` key `preparedRows`
- * emits for client-side aggregates.
+ * holds the key, the valueField holds the aggregated value, the bucket's
+ * series values land under their own field names (mirroring how
+ * client-side `preparedRows` rows still carry every statistical
+ * dimension), and the bucket count rides along under the same
+ * `__sheetbaseCount` key `preparedRows` emits for client-side aggregates.
  */
-export function bucketsToRows(buckets: readonly AggregateBucket[], query: Pick<AggregateQuery, 'groupBy' | 'valueField'>): DataRow[] {
+export function bucketsToRows(buckets: readonly AggregateBucket[], query: Pick<AggregateQuery, 'groupBy' | 'valueField' | 'seriesBy'>): DataRow[] {
   return buckets.map((bucket, index) => ({
     [query.groupBy]: bucket.key,
+    ...(bucket.series ?? {}),
     ...(query.valueField !== undefined ? { [query.valueField]: bucket.value } : {}),
     __sheetbaseCount: bucket.count,
     [ROW_ID]: index,

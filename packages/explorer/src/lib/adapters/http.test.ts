@@ -33,7 +33,7 @@ describe('createHttpExplorerAdapter', () => {
     const adapter = createHttpExplorerAdapter({ baseUrl: 'http://api.test', datasetId: 'experiments', fields, fetcher })
     const dataset = await adapter.load()
     const filter: GroupNode = { type: 'group', id: 'g1', combinator: 'AND', children: [{ type: 'condition', id: 'c1', field: 'assay', operator: 'eq', value: 'BCA' }] }
-    const response = await dataset.remote!.aggregate({ filter, groupBy: 'status', summary: 'mean', valueField: 'result', limit: 5 })
+    const response = await dataset.remote!.aggregate({ filter, groupBy: 'status', seriesBy: ['reviewer'], summary: 'mean', valueField: 'result', limit: 5 })
     expect(response.buckets).toHaveLength(1)
     expect(calls).toHaveLength(1)
     expect(calls[0]!.url).toBe('http://api.test/api/explorer/aggregate')
@@ -41,6 +41,7 @@ describe('createHttpExplorerAdapter', () => {
     const body = JSON.parse(String(calls[0]!.init?.body)) as Record<string, unknown>
     expect(body.datasetId).toBe('experiments')
     expect(body.groupBy).toBe('status')
+    expect(body.seriesBy).toEqual(['reviewer'])
     expect(body.summary).toBe('mean')
     expect(body.valueField).toBe('result')
     expect(body.limit).toBe(5)
@@ -110,5 +111,19 @@ describe('bucketsToRows', () => {
   it('omits the value field for count summaries', () => {
     const rows = bucketsToRows([{ key: 'Ct', count: 7, value: 7 }], { groupBy: 'unit' })
     expect(rows).toEqual([{ unit: 'Ct', __sheetbaseCount: 7, [ROW_ID]: 0 }])
+  })
+
+  it('spreads bucket series values into their own fields, mirroring preparedRows dimensions', () => {
+    const rows = bucketsToRows(
+      [
+        { key: 'Complete', series: { reviewer: 'Alice' }, count: 3, value: 1.5 },
+        { key: 'Complete', series: { reviewer: 'Bob' }, count: 2, value: 2.5 },
+      ],
+      { groupBy: 'status', seriesBy: ['reviewer'], valueField: 'result' },
+    )
+    expect(rows).toEqual([
+      { status: 'Complete', reviewer: 'Alice', result: 1.5, __sheetbaseCount: 3, [ROW_ID]: 0 },
+      { status: 'Complete', reviewer: 'Bob', result: 2.5, __sheetbaseCount: 2, [ROW_ID]: 1 },
+    ])
   })
 })

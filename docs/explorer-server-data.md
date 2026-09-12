@@ -28,20 +28,32 @@ Request body (`AggregateQuery` + `datasetId`, see `lib/types.ts`):
   authoritative; a server should not also apply a flat `filters` list.
 - `groupBy` — the field whose distinct values become buckets; the chart's
   x channel.
+- `seriesBy` — optional additional statistical dimensions (the spec's
+  `group`/`color`/`facet`, deduped, excluding `groupBy`). When present,
+  buckets key on the `(groupBy × seriesBy)` tuple and each bucket reports
+  its series values in `series` — mirroring how client-side
+  `preparedRows` groups on the same tuple. A server that ignores
+  `seriesBy` returns single-dimension buckets; the client still renders
+  them, as one flat series.
 - `summary` — `mean | median | sum | count | min | max`.
 - `valueField` — the measure; required for every summary except `count`.
 - `limit` — cap on returned buckets (applied after a deterministic
-  key-ascending sort).
+  key-ascending then series-ascending sort; it truncates
+  (key × series) pairs, so a high-cardinality series field can starve
+  later keys).
 
 Response (`AggregateResponse`):
 
 ```json
 {
-  "buckets": [{ "key": "Complete", "count": 333334, "value": 49.87 }],
+  "buckets": [{ "key": "Complete", "series": { "reviewer": "Alice" }, "count": 333334, "value": 49.87 }],
   "totalRows": 1000000,
   "revision": "r12"
 }
 ```
+
+`series` is present only on multi-dimension responses and maps each
+`seriesBy` field to its value for that bucket, in request order.
 
 `totalRows` counts matching rows *before* bucketing — it is what the bottom
 panel's row count reports.
@@ -76,8 +88,10 @@ strip, filtered by the active view; when it doesn't, the tab keeps the
 plain remote note.
 
 `bucketsToRows` shapes each bucket into the same row `preparedRows` emits
-for a client-side aggregate: `{ [groupBy]: key, [valueField]: value,
-__sheetbaseCount: count, __sheetbaseRowId: i }`. The chart is then built
+for a client-side aggregate: `{ [groupBy]: key, ...series, [valueField]:
+value, __sheetbaseCount: count, __sheetbaseRowId: i }` — series values land
+under their own field names, so `group`/`color`/`facet` chart channels pick
+them up unchanged. The chart is then built
 with `aggregate: 'none'` so `preparedRows` passes bucket rows through
 untouched — downstream code barely notices the data came from a server.
 
@@ -123,10 +137,13 @@ see a remote dataset. Pushing SQL server-side is out of scope.
 
 ## Known limitations (documented, not bugs)
 
-- **Single-dimension bucketing.** Buckets key on `groupBy` only; a spec's
-  `group`/`color`/`facet` series fields and `y2` second measure are not
-  aggregated — they need a multi-dimension response shape. Bucket rows
-  render as a single series.
+- **No second measure.** A spec's `y2` is not aggregated remotely —
+  client-side `preparedRows` keeps the first raw row's `y2`, so "correct"
+  remote parity is itself ambiguous and deferred.
+- **Servers without `seriesBy` degrade silently.** Older/simpler
+  endpoints return single-dimension buckets and grouped specs render as
+  one flat series — plausible-looking but wrong. A `capabilities` echo
+  on the response is a candidate follow-up.
 - **No row-level selection.** `ROW_ID` is synthesised per bucket, so a
   clicked mark selects a bucket index, not a server record.
 - **`replicateSummary`/`visibleRows` stats on remote reflect buckets, not
