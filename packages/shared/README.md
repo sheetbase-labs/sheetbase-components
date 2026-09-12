@@ -128,6 +128,13 @@ Cache identity: `queryKey` folds the tree in through `canonicalFilterTree`,
 which strips node `id`s — they are session-random, so canonicalisation is by
 structure (combinator, fields, operators, values, child order), not identity.
 
+Tree editing: `andCondition(root, condition)` appends a condition under an AND
+root (wrapping OR/NOT roots so the tree stays intact), and
+`withoutCondition(root, { field, operator, value })` removes matching
+root-level conditions by serialised-value equality, returning `root` unchanged
+when nothing matched — the referential compare doubles as a containment check.
+The explorer uses both for chart-click cross-filtering.
+
 **Executor obligations**: if you receive a `filterTree` you cannot evaluate,
 say so — echo it in `DatasetPage.request` and/or surface an error — never
 silently ignore it and return unfiltered rows. Do not evaluate the flat

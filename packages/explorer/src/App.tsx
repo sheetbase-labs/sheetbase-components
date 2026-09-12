@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
-import { applyView, emptyRoot, type AnalysisView } from 'sheetbase-shared'
+import { andCondition, applyView, emptyCondition, emptyRoot, withoutCondition, type AnalysisView, type FilterOperator } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'
@@ -144,6 +144,8 @@ export function App(props: AppProps = {}) {
   const [measuredHeight, setMeasuredHeight] = useState(420)
   const chartHeight = props.chartHeight ?? measuredHeight
   const [selectedRow, setSelectedRow] = useState<number | undefined>()
+  type CrossFilterMatch = { field: string; operator: FilterOperator; value: unknown }
+  const [crossFilter, setCrossFilter] = useState<CrossFilterMatch[] | null>(null)
   const [panelHeight, setPanelHeight] = useState(250)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [libraryName, setLibraryName] = useState('')
@@ -179,6 +181,7 @@ export function App(props: AppProps = {}) {
   const datasetSwapped = useDatasetSwap(dataset)
   if (datasetSwapped) {
     if (selectedRow !== undefined) setSelectedRow(undefined)
+    if (crossFilter !== null) setCrossFilter(null)
     if (spec.zoomX !== undefined && props.spec === undefined) setInternalSpec({ ...spec, zoomX: undefined })
   }
 
@@ -275,6 +278,47 @@ export function App(props: AppProps = {}) {
       summary: next.aggregate,
     })
   }, [setSpec])
+  /**
+   * Chart-mark click: toggles row selection, and when a shared view is
+   * attached ANDs the clicked bucket's dimension values into `view.filter`
+   * as ordinary eq conditions (x, plus the series field group ?? color when
+   * the datum carries it). Clicking the same mark again removes them.
+   */
+  const onSelectChartMark = useCallback((index: number, datum: Record<string, unknown>) => {
+    setSelectedRow((current) => current === index ? undefined : index)
+    const currentView = viewRef.current
+    const emit = onViewChangeRef.current
+    const x = chartSpecRef.current.x
+    if (!currentView || !emit || !x || !(x in datum)) return
+    const matches: CrossFilterMatch[] = [{ field: x, operator: 'eq', value: String(datum[x]) }]
+    const seriesField = chartSpecRef.current.group ?? chartSpecRef.current.color
+    if (seriesField && seriesField in datum) {
+      matches.push({ field: seriesField, operator: 'eq', value: String(datum[seriesField]) })
+    }
+    const stripped = matches.reduce((root, match) => withoutCondition(root, match), currentView.filter)
+    if (stripped !== currentView.filter) {
+      setCrossFilter(null)
+      emit({ ...currentView, filter: stripped })
+      return
+    }
+    const next = matches.reduce(
+      (root, match) => andCondition(root, { ...emptyCondition(match.field), operator: match.operator, value: match.value }),
+      currentView.filter,
+    )
+    setCrossFilter(matches)
+    emit({ ...currentView, filter: next })
+  }, [])
+  const crossFilterActive = Boolean(view && crossFilter?.some((match) => withoutCondition(view.filter, match) !== view.filter))
+  const clearCrossFilter = useCallback(() => {
+    const currentView = viewRef.current
+    if (currentView && onViewChangeRef.current && crossFilter) {
+      onViewChangeRef.current({
+        ...currentView,
+        filter: crossFilter.reduce((root, match) => withoutCondition(root, match), currentView.filter),
+      })
+    }
+    setCrossFilter(null)
+  }, [crossFilter])
   const viewRows = useMemo<DataRow[] | null>(() => (view && dataset ? applyView(dataset.rows, view) : null), [view, dataset])
 
   // Remote datasets keep their rows server-side: `dataset.remote.aggregate`
@@ -524,6 +568,11 @@ export function App(props: AppProps = {}) {
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
     <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    {crossFilterActive && crossFilter && (
+      <div className="remote-note remote-note--strip">Cross-filtered by {crossFilter.map((match) => `${match.field} = ${String(match.value)}`).join(', ')}
+        <button type="button" className="sb-btn" onClick={clearCrossFilter}>Clear</button>
+      </div>
+    )}
     {remoteState
       ? <div className="chart-stage chart-stage-v3"><div className="empty-state"><strong>Remote source</strong>
           {remoteState === 'error'
@@ -532,7 +581,7 @@ export function App(props: AppProps = {}) {
               ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
               : <><span className="sb-spinner" aria-hidden="true" /><span>Aggregating on the server…</span></>}
         </div></div>
-      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={(index) => setSelectedRow((current) => current === index ? undefined : index)} />}
+      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>

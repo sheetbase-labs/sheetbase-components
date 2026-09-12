@@ -61,10 +61,10 @@ export function ChartStage({ stageRef, seriesValues, palette, hiddenSeries, onTo
   definition: ComponentProps<typeof Chart>['definition']
   chartHeight: number
   chartLabel: string
-  onSelectRowId(index: number): void
+  onSelectRowId(index: number, datum: Record<string, unknown>): void
 }) {
   return (
-    <div className="chart-stage chart-stage-v3" ref={stageRef}>{seriesValues.length > 1 && <SeriesLegend values={seriesValues} palette={palette} hidden={hiddenSeries} onToggle={onToggleSeries} />}{definition ? <div className="chart-wrap"><Chart definition={definition} height={chartHeight} ariaLabel={chartLabel} renderTooltipBody={({ defaultBody }) => <div className="sheetbase-tooltip-body">{defaultBody}</div>} onSelect={(point) => { const datum = point?.datum as Record<string, unknown> | undefined; if (datum && typeof datum[ROW_ID] === 'number') onSelectRowId(Number(datum[ROW_ID])) }}/></div> : <div className="empty-state"><strong>Choose fields to begin</strong><span>Use Fields in the toolbar to map X and Y.</span></div>}</div>
+    <div className="chart-stage chart-stage-v3" ref={stageRef}>{seriesValues.length > 1 && <SeriesLegend values={seriesValues} palette={palette} hidden={hiddenSeries} onToggle={onToggleSeries} />}{definition ? <div className="chart-wrap"><Chart definition={definition} height={chartHeight} ariaLabel={chartLabel} renderTooltipBody={({ defaultBody }) => <div className="sheetbase-tooltip-body">{defaultBody}</div>} onSelect={(point) => { const datum = point?.datum as Record<string, unknown> | undefined; if (datum && typeof datum[ROW_ID] === 'number') onSelectRowId(Number(datum[ROW_ID]), datum) }}/></div> : <div className="empty-state"><strong>Choose fields to begin</strong><span>Use Fields in the toolbar to map X and Y.</span></div>}</div>
   )
 }
 

@@ -60,6 +60,14 @@ const wb = useWorkbench({
 - `wb.workspace` — the `WorkspaceProvider` value (`{ fields, rows, query }`)
   the table reads through `useWorkspace`.
 
+The view flows back too: clicking a chart mark ANDs `eq` conditions into
+`view.filter` (x bucket key, plus the series field when the mark carries
+one) — the search pane shows them, the compiled query re-filters the
+table, and remote datasets re-aggregate. Clicking the mark again removes
+them (`andCondition`/`withoutCondition` from shared do the tree edits; a
+dismiss chip duplicates the affordance). Cross-filter conditions are
+ordinary conditions — the search pane can edit or remove them.
+
 ## The query channel
 
 Search compiles the view to a `DatasetQuery` (with `filterTree` authoritative —

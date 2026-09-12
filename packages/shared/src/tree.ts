@@ -44,6 +44,37 @@ export function emptyRoot(): GroupNode {
   return emptyGroup("AND");
 }
 
+/**
+ * AND `condition` into a root group: appends to an AND root, or wraps a
+ * non-AND root so the existing tree stays intact under one AND. Never
+ * mutates; existing nodes keep their ids.
+ */
+export function andCondition(root: GroupNode, condition: ConditionNode): GroupNode {
+  if (root.combinator === "AND") return { ...root, children: [...root.children, condition] };
+  return { ...emptyRoot(), children: [root, condition] };
+}
+
+/**
+ * Remove root-level conditions matching field + operator + serialised value
+ * (structural equality). Cross-filter conditions are always added at root
+ * level, so deeper nodes are left alone. Returns `root` unchanged when
+ * nothing matched — referential compare doubles as a containment check.
+ */
+export function withoutCondition(
+  root: GroupNode,
+  match: { field: string; operator: FilterOperator; value: unknown },
+): GroupNode {
+  const serialised = JSON.stringify(match.value);
+  const children = root.children.filter(
+    (child) =>
+      child.type !== "condition" ||
+      child.field !== match.field ||
+      child.operator !== match.operator ||
+      JSON.stringify(child.value) !== serialised,
+  );
+  return children.length === root.children.length ? root : { ...root, children };
+}
+
 function conditionClause(node: ConditionNode): FilterClause {
   return { fieldId: node.field, operator: node.operator, value: node.value };
 }
