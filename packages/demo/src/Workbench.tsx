@@ -313,7 +313,7 @@ export function Workbench() {
       title: "Schema",
       closable: true,
       actions: (
-        <button className="sb-btn" title="Rebuild the schema from the table's columns" onClick={() => setGraph(schemaFromFields(headerFields, datasetId, remoteActive ? "Experiments" : "Sample"))}>From table</button>
+        <button type="button" className="sb-btn" title="Rebuild the schema from the table's columns" onClick={() => setGraph(schemaFromFields(headerFields, datasetId, remoteActive ? "Experiments" : "Sample"))}>From table</button>
       ),
       content: (
         <SchemaEditor
@@ -425,7 +425,7 @@ export function Workbench() {
           <option value="experiments">Experiments API (remote)</option>
         </select>
         <span className="sb-muted" title="demo build">{__BUILD__}</span>
-        <button className="sb-btn" onClick={reset}>Reset layout</button>
+        <button type="button" className="sb-btn" onClick={reset}>Reset layout</button>
         <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />
       </div>
     </div>

@@ -36,7 +36,7 @@ describe("PaneLayout", () => {
     const html = renderToStaticMarkup(<PaneLayout panes={panes} layout={twoUp} />);
     expect(html).toContain("sb-split is-row");
     expect(html.match(/class="sb-pane-stack"/g)).toHaveLength(2);
-    expect(html).toContain('role="separator"');
+    expect(html).toContain('class="sb-resizer"');
     expect(html).toContain('aria-orientation="vertical"');
   });
 

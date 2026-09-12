@@ -66,6 +66,7 @@
   position: relative;
   flex: none;
   z-index: 2;
+  margin: 0;
   border: 0;
   background: transparent;
   padding: 0;

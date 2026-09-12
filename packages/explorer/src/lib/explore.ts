@@ -52,14 +52,20 @@ export function filteredRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
   bySpec.set(key, filtered)
   // Bound retention: a filtered array per spec is cheap, but an interactive
   // session accumulates many specs against one dataset.
-  while (bySpec.size > 8) bySpec.delete(bySpec.keys().next().value!)
+  while (bySpec.size > 8) {
+    const oldest = bySpec.keys().next().value
+    if (oldest === undefined) break
+    bySpec.delete(oldest)
+  }
   return filtered
 }
 
 function median(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+  return sorted.length % 2
+    ? (sorted[middle] ?? Number.NaN)
+    : ((sorted[middle - 1] ?? Number.NaN) + (sorted[middle] ?? Number.NaN)) / 2
 }
 
 function standardDeviation(values: number[]) {
@@ -95,6 +101,7 @@ export function preparedRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
   const errorMode = spec.errorMode ?? (spec.errorLow && spec.errorHigh ? 'explicit' : 'none')
   const calculatedError = ['sd', 'sem', 'ci95'].includes(errorMode)
   if (!spec.x || !spec.y || (spec.aggregate === 'none' && !calculatedError) || spec.kind === 'histogram' || spec.kind === 'box' || spec.kind === 'violin' || spec.kind === 'heatmap') return rows
+  const yField = spec.y
 
   const dimensions = statisticalDimensions(spec)
   const groups = new Map<string, DataRow[]>()
@@ -107,10 +114,10 @@ export function preparedRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
   }
 
   return Array.from(groups.values(), (groupRows) => {
-    const first = groupRows[0]!
+    const first = groupRows[0] ?? {}
     const values: number[] = []
     for (const row of groupRows) {
-      const value = Number(row[spec.y!])
+      const value = Number(row[yField])
       if (Number.isFinite(value)) values.push(value)
     }
     const mean = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : Number.NaN
@@ -137,7 +144,7 @@ export function preparedRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
 
     return {
       ...first,
-      [spec.y!]: summary,
+      [yField]: summary,
       ...(margin === undefined ? {} : { [ERROR_LOW]: summary - margin, [ERROR_HIGH]: summary + margin }),
       __sheetbaseCount: groupRows.length,
     }

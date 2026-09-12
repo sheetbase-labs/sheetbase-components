@@ -29,7 +29,7 @@ import {
   type StackNode,
 } from "./layout";
 
-const stack = (id: string, panes: string[], active = panes[0]!): StackNode =>
+const stack = (id: string, panes: string[], active = panes[0] ?? ""): StackNode =>
   ({ kind: "stack", id, panes, active });
 
 const split = (id: string, direction: "row" | "column", children: LayoutNode[], sizes?: number[]): SplitNode =>

@@ -42,7 +42,7 @@ describe("paged write path", () => {
     expect(cache.size).toBe(0);
     const fresh = await cache.getOrLoad(request, fetch);
     expect(fetches).toBe(2);
-    expect(fresh.records[0]!.values.status).toBe("Done");
+    expect(fresh.records[0]?.values.status).toBe("Done");
     expect(fresh.revision).toBe(coordinator.revision);
   });
 

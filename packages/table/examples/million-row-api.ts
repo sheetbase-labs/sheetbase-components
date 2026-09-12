@@ -317,7 +317,7 @@ const server = Bun.serve({
           else if (body.summary === "median") {
             const sorted = [...bucket.values].sort((a, b) => a - b);
             const middle = Math.floor(sorted.length / 2);
-            value = sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
+            value = sorted.length % 2 ? (sorted[middle] ?? null) : ((sorted[middle - 1] ?? Number.NaN) + (sorted[middle] ?? Number.NaN)) / 2;
           }
         }
         return { key: bucket.key, ...(bucket.series ? { series: bucket.series } : {}), count: bucket.count, value };

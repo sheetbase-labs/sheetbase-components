@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState, type DragEvent, type FocusEvent, type MouseEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type DragEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
 import type { ColumnPresentation } from "./presentation-state";
@@ -38,7 +38,7 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
   const dragSource = useRef<{ index: number; fieldId: string } | null>(null);
 
   const close = useCallback(() => setOpen(undefined), []);
-  const popover = usePortalPopover(open !== undefined, close, { popover: popoverRef, root: rootRef, trigger: triggerElement });
+  usePortalPopover(open !== undefined, close, { popover: popoverRef, root: rootRef, trigger: triggerElement });
 
   const toggle = useCallback((panel: PanelId, event: MouseEvent<HTMLButtonElement>) => {
     triggerElement.current = event.currentTarget;
@@ -76,7 +76,8 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
     if (from === to || from < 0 || to < 0 || from >= columns.length || to >= columns.length) return;
     const next = [...columns];
     const [moving] = next.splice(from, 1);
-    next.splice(to, 0, moving!);
+    if (moving === undefined) return;
+    next.splice(to, 0, moving);
     onColumnsChange(next);
   }, [columns, onColumnsChange]);
 
@@ -115,15 +116,13 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
     className: `sheetbase-scope toolbar-popover ${panel === "filters" ? "filter-builder" : "column-picker column-manager"}`,
     "data-theme": theme,
     style: position,
-    onKeyDown: popover.onKeyDown,
-    onBlur: (event: FocusEvent) => popover.onBlurOut(event),
   });
 
   return <div className="view-controls" ref={rootRef}>
-    <button className={open === "filters" ? "active" : ""} aria-expanded={open === "filters"} aria-haspopup="dialog" aria-controls="table-controls-filters" onClick={(event) => toggle("filters", event)}>
+    <button type="button" className={open === "filters" ? "active" : ""} aria-expanded={open === "filters"} aria-haspopup="dialog" aria-controls="table-controls-filters" onClick={(event) => toggle("filters", event)}>
       Filters{filters.length > 0 && <small>{filters.length}</small>}
     </button>
-    <button className={open === "columns" ? "active" : ""} aria-expanded={open === "columns"} aria-haspopup="dialog" aria-controls="table-controls-columns" onClick={(event) => toggle("columns", event)}>
+    <button type="button" className={open === "columns" ? "active" : ""} aria-expanded={open === "columns"} aria-haspopup="dialog" aria-controls="table-controls-columns" onClick={(event) => toggle("columns", event)}>
       Columns
     </button>
     {open && typeof document !== "undefined" && createPortal(
@@ -136,15 +135,18 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
               <option value="or">Match any</option>
             </select>}
           </header>
-          {filters.length > 0 && <div className="active-filters" aria-label="Active filters">
-            {filters.map((filter, index) => <FilterChip key={`${filter.fieldId}-${index}`} filter={filter} label={fieldLabels[filter.fieldId] ?? filter.fieldId} onRemove={() => removeFilter(index)} />)}
-          </div>}
+          {filters.length > 0 && <ul className="active-filters" aria-label="Active filters">
+            {filters.map((filter, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: filters carry no stable identity and duplicate clauses are allowed; FilterChip is stateless so positional keys reconcile correctly
+              <FilterChip key={`${filter.fieldId}-${index}`} filter={filter} label={fieldLabels[filter.fieldId] ?? filter.fieldId} onRemove={() => removeFilter(index)} />
+            ))}
+          </ul>}
           <FilterBuilder fields={fields} builder={builder} onBuilder={setBuilder} pending={addFilter} />
         </div>
         : <div {...popoverProps("columns", "Columns", "table-controls-columns")}>
           <header>
             <span>Columns</span>
-            <button onClick={resetColumns}>Reset</button>
+            <button type="button" onClick={resetColumns}>Reset</button>
           </header>
           <input aria-label="Search columns" placeholder="Search fields…" value={columnSearch} onChange={(event) => setColumnSearch(event.target.value)} />
           <ul className="column-manager-list" aria-label="Column order">
@@ -171,11 +173,11 @@ export const TableControls = memo(function TableControls({ fields, query, onQuer
 
 function FilterChip({ filter, label, onRemove }: Readonly<{ filter: FilterClause; label: string; onRemove(): void }>) {
   const summary = filterValueSummary(filter);
-  return <div className="filter-chip">
+  return <li className="filter-chip">
     <span>{label}</span>
     <small>{operatorLabel(filter.operator)}{summary ? ` ${summary}` : ""}</small>
-    <button aria-label={`Remove filter ${label}`} onClick={onRemove}>×</button>
-  </div>;
+    <button type="button" aria-label={`Remove filter ${label}`} onClick={onRemove}>×</button>
+  </li>;
 }
 
 function FilterBuilder({ fields, builder, onBuilder, pending }: Readonly<{
@@ -204,7 +206,7 @@ function FilterBuilder({ fields, builder, onBuilder, pending }: Readonly<{
       {operators.map((operator) => <option key={operator} value={operator}>{operatorLabel(operator, field)}</option>)}
     </select>
     <FilterValueControls field={field} operator={builder.operator} builder={builder} onBuilder={onBuilder} />
-    <button className="filter-add" disabled={!built} onClick={add}>Add filter</button>
+    <button type="button" className="filter-add" disabled={!built} onClick={add}>Add filter</button>
   </div>;
 }
 
@@ -266,6 +268,7 @@ function ColumnRow({ column, index, last, label, dragOver, onToggleVisibility, o
   onDrop(event: DragEvent<HTMLLIElement>): void;
   onDragEnd(): void;
 }>) {
+  // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drag is a pointer affordance; the move buttons below provide the keyboard path
   return <li
     className={`column-manager-row${dragOver ? " drag-over" : ""}`}
     draggable
@@ -280,7 +283,7 @@ function ColumnRow({ column, index, last, label, dragOver, onToggleVisibility, o
       <span>{label}</span>
     </label>
     <small>{column.width ? `${Math.round(column.width)}px` : "Auto"}</small>
-    <button aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
-    <button aria-label={`Move ${label} down`} disabled={last} onClick={() => onMove(1)}>↓</button>
+    <button type="button" aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
+    <button type="button" aria-label={`Move ${label} down`} disabled={last} onClick={() => onMove(1)}>↓</button>
   </li>;
 }

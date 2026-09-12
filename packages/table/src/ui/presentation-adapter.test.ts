@@ -12,7 +12,7 @@ describe("http presentation adapter", () => {
     };
     const adapter = createHttpPresentationAdapter("/api/presentation", fetcher);
     await expect(adapter.load("sheetbase:one")).resolves.toMatchObject({ theme: "dark" });
-    expect(calls[0]!.input).toBe("/api/presentation?key=sheetbase%3Aone");
+    expect(calls[0]?.input).toBe("/api/presentation?key=sheetbase%3Aone");
   });
 
   it("treats a missing saved state as absent", async () => {
@@ -29,8 +29,8 @@ describe("http presentation adapter", () => {
     };
     const adapter = createHttpPresentationAdapter("/api/presentation", fetcher);
     await adapter.save("sheetbase:one", saved as never);
-    expect(calls[0]!.init?.method).toBe("PUT");
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ key: "sheetbase:one", state: saved });
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ key: "sheetbase:one", state: saved });
   });
 
   it("raises load and save failures instead of swallowing them", async () => {

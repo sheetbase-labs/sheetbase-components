@@ -55,7 +55,7 @@ export function getRelations(graph: SchemaGraph): SchemaRelation[] {
   for (const model of graph.models) {
     for (const field of model.fields) {
       if (!field.references) continue;
-      const target = graph.models.find((m) => m.name === field.references!.model);
+      const target = graph.models.find((m) => m.name === field.references?.model);
       if (!target) continue; // dangling — surfaced by validateGraph, not drawn
       out.push({
         id: `${model.name}.${field.key}->${target.name}.${field.references.field ?? primaryKeyOf(target) ?? target.fields[0]?.key ?? ""}`,
@@ -95,9 +95,9 @@ export function validateGraph(graph: SchemaGraph): string[] {
       else if (keys.has(field.key)) errors.push(`${model.name}.${field.key} is defined twice.`);
       else keys.add(field.key);
       if (field.references) {
-        const target = graph.models.find((m) => m.name === field.references!.model);
+        const target = graph.models.find((m) => m.name === field.references?.model);
         if (!target) errors.push(`${model.name}.${field.key} references missing model "${field.references.model}".`);
-        else if (field.references.field && !target.fields.some((f) => f.key === field.references!.field)) {
+        else if (field.references.field && !target.fields.some((f) => f.key === field.references?.field)) {
           errors.push(`${model.name}.${field.key} references missing field "${field.references.field}" on "${field.references.model}".`);
         }
       }
@@ -127,7 +127,8 @@ export function graphBounds(graph: SchemaGraph): { x: number; y: number; w: numb
   if (positioned.length === 0) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const m of positioned) {
-    const p = m.position!;
+    const p = m.position;
+    if (!p) continue;
     minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
     maxX = Math.max(maxX, p.x + NODE_WIDTH); maxY = Math.max(maxY, p.y + nodeHeight(m));
   }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cycleAbsoluteReference } from "../grid/model";
 import { FormulaTokens } from "./FormulaTokens";
 
@@ -32,6 +32,18 @@ export type FormulaBarProps = Readonly<{
 
 export function FormulaBar({ address, value, onChange, onCommit, onCancel, error, readOnly = false }: FormulaBarProps) {
   const [showError, setShowError] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showError) return;
+    errorRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setShowError(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showError]);
   return <div className="formula-bar" role="toolbar" aria-label="Formula bar">
     <span className="address">{address}</span>
     <span className="fx" aria-hidden="true">ƒx</span>
@@ -55,8 +67,8 @@ export function FormulaBar({ address, value, onChange, onCommit, onCancel, error
         }}
       />
     </span>
-    {error && <button className="formula-error" aria-label="Explain formula error" aria-expanded={showError} onClick={() => setShowError((visible) => !visible)}>!</button>}
-    {error && showError && <div className="formula-error-popover" role="status" tabIndex={-1} autoFocus onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setShowError(false); } }}>{error}</div>}
+    {error && <button type="button" className="formula-error" aria-label="Explain formula error" aria-expanded={showError} onClick={() => setShowError((visible) => !visible)}>!</button>}
+    {error && showError && <div ref={errorRef} className="formula-error-popover" role="status" tabIndex={-1}>{error}</div>}
   </div>;
 }
 
@@ -74,10 +86,10 @@ export type SheetBarProps = Readonly<{
 export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onDelete, onMove }: SheetBarProps) {
   const [menuSheetId, setMenuSheetId] = useState<string>();
   const menuIndex = sheets.findIndex((sheet) => sheet.id === menuSheetId);
-  return <footer className="sheet-bar" aria-label="Sheets">
-    {onAdd && <button className="sheet-action" aria-label="Add sheet" onClick={onAdd}>＋</button>}
+  return <nav className="sheet-bar" aria-label="Sheets">
+    {onAdd && <button type="button" className="sheet-action" aria-label="Add sheet" onClick={onAdd}>＋</button>}
     <div className="sheet-tabs" role="tablist">
-      {sheets.map((sheet) => <button
+      {sheets.map((sheet) => <button type="button"
         role="tab"
         aria-selected={sheet.id === activeSheetId}
         className={sheet.id === activeSheetId ? "sheet-tab active" : "sheet-tab"}
@@ -92,12 +104,12 @@ export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onD
       >{sheet.kind === "dataset" ? "◆ " : ""}{sheet.label}</button>)}
     </div>
     {menuSheetId && <div className="sheet-menu" role="menu">
-      <button disabled={!onRename} onClick={() => { const sheet = sheets[menuIndex]; const label = window.prompt("Rename sheet", sheet.label)?.trim(); if (label) onRename?.(sheet.id, label); setMenuSheetId(undefined); }}>Rename</button>
-      <button disabled={menuIndex <= 0 || !onMove} onClick={() => { onMove?.(menuSheetId, menuIndex - 1); setMenuSheetId(undefined); }}>Move left</button>
-      <button disabled={menuIndex < 0 || menuIndex >= sheets.length - 1 || !onMove} onClick={() => { onMove?.(menuSheetId, menuIndex + 1); setMenuSheetId(undefined); }}>Move right</button>
-      <button disabled={sheets.length === 1 || !onDelete} onClick={() => { onDelete?.(menuSheetId); setMenuSheetId(undefined); }}>Delete</button>
+      <button type="button" disabled={!onRename} onClick={() => { const sheet = sheets[menuIndex]; const label = window.prompt("Rename sheet", sheet.label)?.trim(); if (label) onRename?.(sheet.id, label); setMenuSheetId(undefined); }}>Rename</button>
+      <button type="button" disabled={menuIndex <= 0 || !onMove} onClick={() => { onMove?.(menuSheetId, menuIndex - 1); setMenuSheetId(undefined); }}>Move left</button>
+      <button type="button" disabled={menuIndex < 0 || menuIndex >= sheets.length - 1 || !onMove} onClick={() => { onMove?.(menuSheetId, menuIndex + 1); setMenuSheetId(undefined); }}>Move right</button>
+      <button type="button" disabled={sheets.length === 1 || !onDelete} onClick={() => { onDelete?.(menuSheetId); setMenuSheetId(undefined); }}>Delete</button>
     </div>}
-  </footer>;
+  </nav>;
 }
 
 type TableLayoutProps = Readonly<{

@@ -121,7 +121,7 @@ function updateNode(root: GroupNode, id: string, fn: (node: FilterNode) => Filte
     return node;
   }
   const next = walk(root);
-  if (!next || next.type !== "group") return root;
+  if (next?.type !== "group") return root;
   return next;
 }
 
@@ -167,16 +167,16 @@ function GroupEditor({ node, depth, fields, onPatch }: {
   return (
     <div className="sb-group" style={{ marginLeft: depth === 0 ? 0 : 14 }}>
       <div className="sb-group-bar">
-        <div className="sb-segmented" role="group" aria-label="Group combinator">
+        <fieldset className="sb-segmented" aria-label="Group combinator">
           {(["AND", "OR", "NOT"] as Combinator[]).map((c) => (
-            <button key={c} className={node.combinator === c ? "active" : ""} onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, combinator: c } : n))}>{c}</button>
+            <button type="button" key={c} className={node.combinator === c ? "active" : ""} onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, combinator: c } : n))}>{c}</button>
           ))}
-        </div>
+        </fieldset>
         <span className="sb-muted">{node.combinator === "NOT" ? "matches rows where none of the children match" : node.combinator === "OR" ? "any child matches" : "every child matches"}</span>
         <span className="sb-group-btns">
-          <button className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { ...emptyCondition(fieldIdOf(fields[0] ?? "")), id: uid("cnd") }] } : n))}>+ Condition</button>
-          <button className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { type: "group", id: uid("grp"), combinator: "AND", children: [] }] } : n))}>+ Group</button>
-          {depth > 0 && <button className="sb-remove" title="Remove group" onClick={() => onPatch(node.id, () => null)}>×</button>}
+          <button type="button" className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { ...emptyCondition(fieldIdOf(fields[0] ?? "")), id: uid("cnd") }] } : n))}>+ Condition</button>
+          <button type="button" className="sb-link-btn" onClick={() => onPatch(node.id, (n) => (n.type === "group" ? { ...n, children: [...n.children, { type: "group", id: uid("grp"), combinator: "AND", children: [] }] } : n))}>+ Group</button>
+          {depth > 0 && <button type="button" className="sb-remove" title="Remove group" onClick={() => onPatch(node.id, () => null)}>×</button>}
         </span>
       </div>
       <div className="sb-group-children">
@@ -238,7 +238,7 @@ function ConditionRow({ node, fields, onPatch }: {
           onChange={(e) => patch({ value: parseValueInput(e.target.value, canon) })}
         />
       )}
-      <button className="sb-remove" title="Remove condition" onClick={() => onPatch(node.id, () => null)}>×</button>
+      <button type="button" className="sb-remove" title="Remove condition" onClick={() => onPatch(node.id, () => null)}>×</button>
     </div>
   );
 }
@@ -310,8 +310,8 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
-              <button className={showPreview ? "sb-btn" : "sb-btn subtle"} aria-pressed={showPreview} onClick={togglePreview}>Preview</button>
-              <button className="sb-btn" onClick={clear}>Clear</button>
+              <button type="button" className={showPreview ? "sb-btn" : "sb-btn subtle"} aria-pressed={showPreview} onClick={togglePreview}>Preview</button>
+              <button type="button" className="sb-btn" onClick={clear}>Clear</button>
             </div>
           </div>
         )}
@@ -344,7 +344,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
                 </label>
                 {spec.sort && (
                   <label className="sb-compact"><span>Direction</span>
-                    <select className="sb-select" value={spec.sort.direction} onChange={(e) => commit({ ...spec, sort: { field: spec.sort!.field, direction: e.target.value as "asc" | "desc" } })}>
+                    <select className="sb-select" value={spec.sort.direction} onChange={(e) => commit({ ...spec, sort: spec.sort ? { ...spec.sort, direction: e.target.value as "asc" | "desc" } : undefined })}>
                       <option value="asc">Ascending</option><option value="desc">Descending</option>
                     </select>
                   </label>

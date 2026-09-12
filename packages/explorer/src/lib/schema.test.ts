@@ -16,7 +16,8 @@ describe('inferColumns', () => {
 
   it('unions keys and tracks nullability and cardinality', () => {
     const columns = inferColumns([{ a: 1 }, { a: null, b: '' }, { a: 1, b: 'x' }])
-    const a = columns.find((column) => column.key === 'a')!
+    const a = columns.find((column) => column.key === 'a')
+    if (!a) throw new Error('expected column a')
     expect(a.nullable).toBe(true)
     expect(a.uniqueCount).toBe(2)
     expect(columns.map((column) => column.key).sort()).toEqual(['a', 'b'])

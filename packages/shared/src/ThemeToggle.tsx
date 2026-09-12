@@ -97,7 +97,7 @@ export function SunIcon() {
 export function ThemeToggleButton({ theme, onToggle }: { theme: ThemeMode; onToggle(): void }) {
   const dark = useResolvedTheme(theme) === "dark";
   return (
-    <button
+    <button type="button"
       className="sb-icon-btn sb-theme-btn"
       title={dark ? "Light mode" : "Dark mode"}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}

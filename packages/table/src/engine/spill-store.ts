@@ -20,9 +20,11 @@ export class SpillStore {
     if (values.some((row) => row.length !== width)) throw new Error("#CALC!");
     const origin = parseAddress(anchor);
     const next = new Map<string, Scalar>();
-    values.forEach((row, rowOffset) => row.forEach((value, columnOffset) => {
-      next.set(addressKey({ row: origin.row + rowOffset, column: origin.column + columnOffset }), value);
-    }));
+    values.forEach((row, rowOffset) => {
+      row.forEach((value, columnOffset) => {
+        next.set(addressKey({ row: origin.row + rowOffset, column: origin.column + columnOffset }), value);
+      });
+    });
     for (const address of next.keys()) {
       const existingOwner = this.#owners.get(address);
       if (address !== anchor && existingOwner !== anchor && blocked(address)) throw new Error("#SPILL!");

@@ -32,7 +32,9 @@ export class TableWorkbook<T> {
   }
 
   get activeSheet(): TableWorkbookSheet<T> {
-    return this.#sheets.find((sheet) => sheet.id === this.#activeSheetId)!;
+    const sheet = this.#sheets.find((candidate) => candidate.id === this.#activeSheetId);
+    if (!sheet) throw new Error("No active sheet");
+    return sheet;
   }
 
   select(sheetId: string): void {

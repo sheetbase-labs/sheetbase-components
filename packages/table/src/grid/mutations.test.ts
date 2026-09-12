@@ -44,9 +44,9 @@ describe("mutation audit sink", () => {
     emitMutationAudit((mutation) => { seen.push(mutation); }, forward, "r7");
     expect(seen).toHaveLength(2);
     expect(seen[0]).toMatchObject({ label: "Edit cell", revision: "r7" });
-    expect(seen[0]!.cells).toEqual([{ address: "A1", before: "one", after: "two" }]);
+    expect(seen[0]?.cells).toEqual([{ address: "A1", before: "one", after: "two" }]);
     for (const record of seen) expect(typeof record.at).toBe("string");
-    expect(new Date(seen[0]!.at).getTime()).not.toBeNaN();
+    expect(new Date(seen[0]?.at).getTime()).not.toBeNaN();
   });
 
   it("never blocks the commit when the sink throws or is absent", () => {

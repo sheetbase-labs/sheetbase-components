@@ -33,7 +33,7 @@ export const TEXT_FUNCTIONS: Record<string, FunctionImpl> = {
       .toLowerCase()
       .replace(/(^|[^a-z])([a-z])/g, (_, prefix, letter) => prefix + letter.toUpperCase()),
   TRIM: (args) => text(scalarOf(args[0])).trim().replace(/\s+/g, " "),
-  CLEAN: (args) => text(scalarOf(args[0])).replace(/[\u0000-\u001f]/g, ""),
+  CLEAN: (args) => text(scalarOf(args[0])).split("").filter((char) => char.charCodeAt(0) > 31).join(""),
   REPT: (args) => {
     const count = Math.trunc(number(scalarOf(args[1])));
     if (count < 0) throw new Error("#VALUE!");

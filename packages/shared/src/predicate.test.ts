@@ -9,12 +9,17 @@ const rows = [
   { status: "blocked", amount: 50, region: "eu" },
 ];
 
+const must = <T>(value: T | null | undefined): T => {
+  if (value === null || value === undefined) throw new Error("expected a defined value");
+  return value;
+};
+
 describe("testCondition", () => {
   it("accepts table, explorer and rules clause shapes", () => {
-    const table = toFilterClause({ fieldId: "amount", operator: "gt", value: 1000 })!;
-    const explorer = toFilterClause({ field: "amount", operator: "between", value: "15", value2: "100" })!;
-    const rules = toFilterClause({ field: "status", operator: "isEmpty" })!;
-    expect(testCondition(rows[0]!, table)).toBe(true);
+    const table = must(toFilterClause({ fieldId: "amount", operator: "gt", value: 1000 }));
+    const explorer = must(toFilterClause({ field: "amount", operator: "between", value: "15", value2: "100" }));
+    const rules = must(toFilterClause({ field: "status", operator: "isEmpty" }));
+    expect(testCondition(must(rows[0]), table)).toBe(true);
     expect(testCondition({ amount: 50 }, explorer)).toBe(true);
     expect(testCondition({ status: "" }, rules)).toBe(true);
     expect(toFilterClause({ field: "x", operator: "nope" })).toBeUndefined();
@@ -22,8 +27,8 @@ describe("testCondition", () => {
 
   it("filters with AND/OR like the table query contract", () => {
     const clauses = [
-      toFilterClause({ fieldId: "region", operator: "eq", value: "eu" })!,
-      toFilterClause({ fieldId: "amount", operator: "gt", value: 1000 })!,
+      must(toFilterClause({ fieldId: "region", operator: "eq", value: "eu" })),
+      must(toFilterClause({ fieldId: "amount", operator: "gt", value: 1000 })),
     ];
     expect(filterRows(rows, clauses, "and")).toHaveLength(1);
     expect(filterRows(rows, clauses, "or")).toHaveLength(2);
@@ -38,11 +43,11 @@ describe("date comparisons", () => {
   ];
 
   it("compares ISO date strings with gt/lt/gte/lte", () => {
-    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
-    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "lt", value: "2026-01-01" })).toBe(false);
-    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gte", value: "2026-01-15" })).toBe(true);
-    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "lte", value: "2026-01-14" })).toBe(false);
-    expect(testCondition(dated[0]!, { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
+    expect(testCondition(must(dated[0]), { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
+    expect(testCondition(must(dated[0]), { fieldId: "run_date", operator: "lt", value: "2026-01-01" })).toBe(false);
+    expect(testCondition(must(dated[0]), { fieldId: "run_date", operator: "gte", value: "2026-01-15" })).toBe(true);
+    expect(testCondition(must(dated[0]), { fieldId: "run_date", operator: "lte", value: "2026-01-14" })).toBe(false);
+    expect(testCondition(must(dated[0]), { fieldId: "run_date", operator: "gt", value: "2026-01-01" })).toBe(true);
   });
 
   it("matches dates between array and object bounds", () => {

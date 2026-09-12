@@ -39,6 +39,7 @@ import { scalePoint } from '@tanstack/charts/scales/point'
 import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
 import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
 import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
+import type { ChartMark } from '@tanstack/charts'
 import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
 
 function visibleRows(rows: DataRow[], spec: ChartSpec) {
@@ -54,7 +55,10 @@ export function decimatePoints(rows: DataRow[], max: number): DataRow[] {
   if (rows.length <= max) return rows
   const step = rows.length / max
   const sampled: DataRow[] = []
-  for (let index = 0; index < max; index++) sampled.push(rows[Math.floor(index * step)]!)
+  for (let index = 0; index < max; index++) {
+    const row = rows[Math.floor(index * step)]
+    if (row !== undefined) sampled.push(row)
+  }
   return sampled
 }
 
@@ -115,14 +119,19 @@ function chartSpec(
 ) {
   if (!spec.x) return null
   if (spec.kind !== 'histogram' && !spec.y) return null
+  // `spec.y` is required for every kind except histogram; locals carry that
+  // narrowing into the mark callbacks below (`''` is only seen by histograms,
+  // which never read yField).
+  const xField = spec.x
+  const yField = spec.y ?? ''
 
   const xMeta = dataset.columns.find((column) => column.key === spec.x)
   const yMeta = dataset.columns.find((column) => column.key === spec.y)
   if (!xMeta || (spec.kind !== 'histogram' && !yMeta)) return null
 
-  const marks: any[] = []
+  const marks: ChartMark<DataRow>[] = []
   const semanticColour = spec.color ?? spec.group
-  const grouping: any = spec.group ? { z: spec.group, ...(spec.color ? { color: spec.color } : {}) } : spec.color ? { color: spec.color } : {}
+  const grouping: { z?: string; color?: string } = spec.group ? { z: spec.group, ...(spec.color ? { color: spec.color } : {}) } : spec.color ? { color: spec.color } : {}
   const markColour = spec.markColor ?? spec.primaryColor ?? spec.palette[0] ?? '#7652ef'
 
   const errorMode = spec.errorMode ?? (spec.errorLow && spec.errorHigh ? 'explicit' : 'none')
@@ -136,7 +145,7 @@ function chartSpec(
       fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour,
       fillOpacity: Math.min(0.36, spec.pointOpacity * 0.42), strokeOpacity: Math.min(0.28, spec.pointOpacity * 0.35),
       ...grouping,
-    }) as any))
+    }) as never))
   }
 
   if (spec.showRibbon && lowField && highField && ['line', 'area'].includes(spec.kind)) {
@@ -144,14 +153,14 @@ function chartSpec(
       id: 'uncertainty-ribbon', x: spec.x, y1: lowField, y2: highField,
       fill: semanticColour ? undefined : markColour, fillOpacity: Math.min(0.18, spec.fillOpacity * 0.3),
       strokeOpacity: 0, ...grouping,
-    }) as any))
+    }) as never))
   }
 
   if (errorMode !== 'none' && lowField && highField && !['histogram', 'box', 'horizontal-bar'].includes(spec.kind)) {
     marks.push(
-      link(rows, ({ id: 'error-range', x1: spec.x, x2: spec.x, y1: lowField, y2: highField, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.6), strokeWidth: Math.max(1, spec.lineWidth * 0.7), ...grouping }) as any),
-      tickY(rows, ({ id: 'error-low-cap', x: spec.x, y: lowField, length: 7, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.8), ...grouping }) as any),
-      tickY(rows, ({ id: 'error-high-cap', x: spec.x, y: highField, length: 7, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.8), ...grouping }) as any),
+      link(rows, ({ id: 'error-range', x1: spec.x, x2: spec.x, y1: lowField, y2: highField, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.6), strokeWidth: Math.max(1, spec.lineWidth * 0.7), ...grouping }) as never),
+      tickY(rows, ({ id: 'error-low-cap', x: spec.x, y: lowField, length: 7, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.8), ...grouping }) as never),
+      tickY(rows, ({ id: 'error-high-cap', x: spec.x, y: highField, length: 7, stroke: semanticColour ? undefined : markColour, strokeOpacity: Math.min(1, spec.lineOpacity * 0.8), ...grouping }) as never),
     )
   }
 
@@ -169,24 +178,26 @@ function chartSpec(
 
   if (spec.kind === 'histogram') {
     if (xMeta.kind !== 'number') return null
-    const bins = binX(rows, ({ value: (row: DataRow) => Number(row[spec.x!]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as any)
-    marks.push(rect(bins as any, ({ id: 'histogram', x1: 'x1', x2: 'x2', y1: () => 0, y2: 'count', inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, ...(spec.color ? { color: spec.color } : {}) }) as any))
+    const bins = binX(rows, ({ value: (row: DataRow) => Number(row[xField]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as never)
+    marks.push(rect(bins as never, ({ id: 'histogram', x1: 'x1', x2: 'x2', y1: () => 0, y2: 'count', inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, ...(spec.color ? { color: spec.color } : {}) }) as never))
   } else if (spec.kind === 'box') {
     if (!spec.y || yMeta?.kind !== 'number') return null
-    marks.push(boxY(rows, ({ id: 'box', x: spec.x, y: spec.y, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, ...(semanticColour ? { color: semanticColour } : {}), r: Math.max(2, spec.pointSize - 1), fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity }) as any))
+    // boxY synthesises its own datum (quartiles), so the mark type is a
+    // transformed-datum mark the array can't name; the runtime accepts it.
+    marks.push(boxY(rows, ({ id: 'box', x: spec.x, y: spec.y, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, ...(semanticColour ? { color: semanticColour } : {}), r: Math.max(2, spec.pointSize - 1), fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity }) as never) as never)
   } else if (spec.kind === 'horizontal-bar') {
-    marks.push(barX(rows, ({ id: 'horizontal-bars', y: spec.x, x: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+    marks.push(barX(rows, ({ id: 'horizontal-bars', y: spec.x, x: yField, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as never))
   } else if (spec.kind === 'bar') {
-    marks.push(barY(rows, ({ id: 'bars', x: spec.x, y: spec.y!, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
+    marks.push(barY(rows, ({ id: 'bars', x: spec.x, y: yField, inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as never))
   } else if (spec.kind === 'lollipop') {
     // Thin stem plus a dot head; preparedRows has already summarised y.
-    marks.push(barY(rows, ({ id: 'lollipop-stem', x: spec.x, y: spec.y!, maxThickness: Math.max(2, Math.round(spec.lineWidth + 1)), radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as any))
-    marks.push(dot(rows, ({ id: 'lollipop-head', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, ...grouping }) as any))
+    marks.push(barY(rows, ({ id: 'lollipop-stem', x: spec.x, y: yField, maxThickness: Math.max(2, Math.round(spec.lineWidth + 1)), radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, layout: barLayout, ...grouping }) as never))
+    marks.push(dot(rows, ({ id: 'lollipop-head', x: spec.x, y: yField, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.pointSize, ...grouping }) as never))
   } else if (spec.kind === 'violin') {
     if (!spec.y || yMeta?.kind !== 'number') return null
-    const bins = binY(rows, { value: spec.y, by: spec.x, thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } } as any) as any[]
-    const profiles = normalize(bins, { value: 'count', by: spec.x, basis: 'max', as: 'width' } as any) as any[]
-    marks.push(violinY(profiles, ({ id: 'violin', x: spec.x, y: 'y', width: 'width', span: 0.8, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity, ...(semanticColour ? { color: semanticColour } : {}), curve: d3AreaXCurve(curveBasis) }) as any))
+    const bins = binY(rows, { value: spec.y, by: spec.x, thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } } as never) as never[]
+    const profiles = normalize(bins, { value: 'count', by: spec.x, basis: 'max', as: 'width' } as never) as never[]
+    marks.push(violinY(profiles, ({ id: 'violin', x: spec.x, y: 'y', width: 'width', span: 0.8, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeOpacity: spec.lineOpacity, ...(semanticColour ? { color: semanticColour } : {}), curve: d3AreaXCurve(curveBasis) }) as never))
   } else if (spec.kind === 'waterfall') {
     if (!spec.y) return null
     // Sum contributions per category, then let the transform lay them out as
@@ -196,8 +207,8 @@ function chartSpec(
       const key = String(row[spec.x] ?? '')
       buckets.set(key, (buckets.get(key) ?? 0) + (Number(row[spec.y]) || 0))
     }
-    const steps = waterfall([...buckets].map(([x, value]) => ({ x, value })) as any, { value: 'value' } as any) as any[]
-    marks.push(barY(steps, ({ id: 'waterfall', x: 'x', y: 'end', y1: 'start', y2: 'end', fill: semanticColour ? undefined : markColour, stroke: markColour, strokeWidth: 1, fillOpacity: spec.fillOpacity, ...(semanticColour ? { color: semanticColour } : {}) }) as any))
+    const steps = waterfall([...buckets].map(([x, value]) => ({ x, value })) as never, { value: 'value' } as never) as never[]
+    marks.push(barY(steps, ({ id: 'waterfall', x: 'x', y: 'end', y1: 'start', y2: 'end', fill: semanticColour ? undefined : markColour, stroke: markColour, strokeWidth: 1, fillOpacity: spec.fillOpacity, ...(semanticColour ? { color: semanticColour } : {}) }) as never))
   } else if (spec.kind === 'heatmap') {
     if (!spec.x || !spec.y) return null
     const buckets = new Map<string, { x: string; y: string; sum: number; n: number; min: number; max: number }>()
@@ -216,27 +227,27 @@ function chartSpec(
     }
     const mode = !spec.size ? 'count' : spec.aggregate === 'mean' ? 'mean' : spec.aggregate === 'min' ? 'min' : spec.aggregate === 'max' ? 'max' : spec.aggregate === 'count' ? 'count' : 'sum'
     const cells = [...buckets.values()].map((bucket) => ({ x: bucket.x, y: bucket.y, value: mode === 'count' ? bucket.n : mode === 'mean' ? bucket.sum / bucket.n : mode === 'min' ? bucket.min : mode === 'max' ? bucket.max : bucket.sum }))
-    marks.push(cell(cells, ({ id: 'heatmap', x: 'x', y: 'y', color: 'value', inset: spec.barGap, radius: spec.barRadius }) as any))
+    marks.push(cell(cells, ({ id: 'heatmap', x: 'x', y: 'y', color: 'value', inset: spec.barGap, radius: spec.barRadius }) as never))
   } else if (spec.kind === 'area') {
-    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
-    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
+    marks.push(areaY(rows, ({ id: 'area', x: spec.x, y: yField, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as never))
+    marks.push(lineY(rows, ({ id: 'area-line', x: spec.x, y: yField, stroke: semanticColour ? undefined : markColour, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as never))
   } else if (spec.kind === 'line') {
-    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: spec.y!, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as any))
+    marks.push(lineY(rows, ({ id: 'line', x: spec.x, y: yField, stroke: semanticColour ? undefined : markColour, points: spec.showPoints, strokeWidth: spec.lineWidth, strokeOpacity: spec.lineOpacity, ...grouping, ...lineCurve }) as never))
   } else {
     const rendered = spec.kind === 'scatter' ? decimatePoints(rows, MAX_SCATTER_POINTS) : rows
-    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: spec.y!, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.kind === 'scatter' && spec.size ? spec.size : spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as any))
+    marks.push(dot(rendered, ({ id: 'points', x: spec.x, y: yField, fill: semanticColour ? undefined : markColour, stroke: semanticColour ? undefined : markColour, r: spec.kind === 'scatter' && spec.size ? spec.size : spec.pointSize, fillOpacity: spec.pointOpacity, strokeOpacity: spec.pointOpacity, ...grouping }) as never))
   }
 
   if (spec.labels && spec.x && spec.y && ['scatter', 'line', 'area', 'bar', 'lollipop'].includes(spec.kind)) {
     const labelField = spec.labelField
-    marks.push(text(rows as any, ({
+    marks.push(text(rows as never, ({
       id: 'data-labels', x: spec.x, y: spec.y,
       text: labelField
         ? (row: DataRow) => String(row[labelField] ?? '')
-        : (row: DataRow) => { const value = Number(row[spec.y!]); return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '' },
+        : (row: DataRow) => { const value = Number(row[yField]); return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '' },
       dy: spec.kind === 'bar' || spec.kind === 'lollipop' ? -6 : -8,
       anchor: 'middle', fill: '#52525b', fontSize: 10, fontWeight: 600,
-    } as any) as any))
+    } as never) as never))
   }
 
   if (spec.y2) {
@@ -255,32 +266,34 @@ function chartSpec(
     }
     const secondaryRows = rows.map((row) => {
       const bucket = sums.get(JSON.stringify(dims.map((dim) => row[dim])))
-      return { ...row, __secondary: bucket && bucket.n ? bucket.sum / bucket.n : undefined }
+      return { ...row, __secondary: bucket?.n ? bucket.sum / bucket.n : undefined }
     })
-    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? '#07956a', strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as any) as any))
+    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? '#07956a', strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as never) as never))
   }
 
   if (spec.refLines?.length) {
     for (const line of spec.refLines) {
       const guide = [{ x: line.value, y: line.value }]
-      if (line.axis === 'x') marks.push(ruleX(guide, { id: `ref-x-${line.id}`, x: 'x', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
-      else marks.push(ruleY(guide, { id: `ref-y-${line.id}`, y: 'y', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as any)
+      if (line.axis === 'x') marks.push(ruleX(guide, { id: `ref-x-${line.id}`, x: 'x', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as never)
+      else marks.push(ruleY(guide, { id: `ref-y-${line.id}`, y: 'y', stroke: markColour, strokeOpacity: 0.55, strokeWidth: 1, strokeDasharray: '4 4' }) as never)
       if (line.label) {
-        marks.push(text(guide, ({ id: `ref-label-${line.id}`, ...(line.axis === 'x' ? { x: 'x' } : { y: 'y' }), text: line.label, fill: markColour, fontSize: 10, fontWeight: 600 } as any) as any))
+        marks.push(text(guide, ({ id: `ref-label-${line.id}`, ...(line.axis === 'x' ? { x: 'x' } : { y: 'y' }), text: line.label, fill: markColour, fontSize: 10, fontWeight: 600 } as never) as never))
       }
     }
   }
 
   if (spec.showRegression && spec.kind === 'scatter' && xMeta.kind === 'number' && yMeta?.kind === 'number') {
+    // linearRegressionY emits fitted-line rows — a transformed-datum mark the
+    // marks array can't name; the runtime accepts it.
     marks.push(linearRegressionY(rawRows, ({
-      id: 'regression', x: spec.x, y: spec.y!, z: spec.group ?? spec.color,
+      id: 'regression', x: spec.x, y: yField, z: spec.group ?? spec.color,
       ci: 0.95, strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: Math.min(1, spec.lineOpacity), fillOpacity: 0.08,
-    }) as any))
+    }) as never) as never)
   }
 
   if (selectedRowId !== undefined && spec.kind === 'scatter') {
     const selected = rawRows.filter((row) => row[ROW_ID] === selectedRowId)
-    if (selected.length) marks.push(dot(selected, ({ id: 'selected-point', x: spec.x, y: spec.y!, r: spec.pointSize + 4, fillOpacity: 0, stroke: '#171717', strokeWidth: 2 }) as any))
+    if (selected.length) marks.push(dot(selected, ({ id: 'selected-point', x: spec.x, y: yField, r: spec.pointSize + 4, fillOpacity: 0, stroke: '#171717', strokeWidth: 2 }) as never))
   }
 
   const horizontal = spec.kind === 'horizontal-bar'
@@ -298,8 +311,8 @@ function chartSpec(
     }
     return found
   }
-  const xField = horizontal ? spec.y! : spec.x
-  const xExtents = xValueNumeric && xField ? extentsFor(xField) : undefined
+  const xExtentField = horizontal ? yField : spec.x
+  const xExtents = xValueNumeric && xExtentField ? extentsFor(xExtentField) : undefined
   const yExtents = yValueNumeric && spec.y ? extentsFor(spec.y) : undefined
 
   const extent = !horizontal && xMeta.kind === 'number' ? xExtents?.numeric : undefined
@@ -376,7 +389,7 @@ function chartSpec(
     && (spec.colorScale === 'continuous' || (spec.colorScale !== 'categorical' && colourMeta?.kind === 'number'))
   const gradient = heatmap || continuousColour
   const colourStops = spec.palette.length >= 2
-    ? [spec.palette[0]!, spec.palette[Math.floor(spec.palette.length / 2)]!, spec.palette[spec.palette.length - 1]!]
+    ? [spec.palette[0], spec.palette[Math.floor(spec.palette.length / 2)], spec.palette[spec.palette.length - 1]].filter((stop): stop is string => stop !== undefined)
     : spec.palette
   const color = semanticColour || heatmap
     ? {
@@ -392,21 +405,21 @@ function chartSpec(
     : xKind === 'log' && xLogExtent
       ? xLogExtent
       : horizontal && xValueNumeric && (spec.yMin !== undefined || spec.yMax !== undefined)
-        ? [spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? 0)), 0))]
+        ? [spec.yMin ?? 0, spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[yField] ?? 0)), 0))]
         : !horizontal && xMeta.kind === 'number' && (spec.xMin !== undefined || spec.xMax !== undefined)
           ? [spec.xMin ?? extent?.[0] ?? 0, spec.xMax ?? extent?.[1] ?? 1]
           : undefined
   const yDomain: readonly [number, number] | undefined = yKind === 'log' && yLogExtent
     ? yLogExtent
     : yValueNumeric && spec.y && (spec.yMin !== undefined || spec.yMax !== undefined)
-      ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[spec.y!] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[spec.y!] ?? max)), -Infinity))]
+      ? [spec.yMin ?? Number(rawRows.reduce((min, row) => Math.min(min, Number(row[yField] ?? min)), Infinity)), spec.yMax ?? Number(rawRows.reduce((max, row) => Math.max(max, Number(row[yField] ?? max)), -Infinity))]
       : undefined
   const configuredX = xDomain ? numericScale(xKind)().domain(xDomain) : undefined
   const configuredY = yDomain ? numericScale(yKind)().domain(yDomain) : undefined
 
   const controls = spec.zoomEnabled && extent && onZoom && xMeta.kind === 'number' && !horizontal
     ? [zoomX({
-        window: controlledSignal<ZoomXWindow<number>, any>(
+        window: controlledSignal<ZoomXWindow<number>>(
           { start: zoomDomain?.[0] ?? extent[0], end: zoomDomain?.[1] ?? extent[1] },
           (next) => onZoom({ start: next.start, end: next.end }),
         ),
@@ -419,9 +432,9 @@ function chartSpec(
   return {
     marks,
     scales: {
-      x: { scale: (configuredX ?? xScale) as any, reverse: spec.xReverse ?? false, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
-      y: { scale: (configuredY ?? yScale) as any, reverse: spec.yReverse ?? false, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
-      ...(spec.y2 ? { y2: { channel: 'y' as const, scale: scaleLinear as any, nice: true, grid: false, axis: { label: spec.y2, side: 'right' as const } } } : {}),
+      x: { scale: (configuredX ?? xScale) as never, reverse: spec.xReverse ?? false, nice: configuredX ? false : horizontal ? yMeta?.kind === 'number' : xMeta.kind === 'number', grid: horizontal ? spec.showGrid : false, axis: { label: horizontal ? (spec.yLabel || spec.y) : (spec.xLabel || spec.x) } },
+      y: { scale: (configuredY ?? yScale) as never, reverse: spec.yReverse ?? false, nice: configuredY ? false : horizontal ? false : spec.kind === 'histogram' || yMeta?.kind === 'number', grid: horizontal ? false : spec.showGrid, axis: { label: horizontal ? (spec.xLabel || spec.x) : spec.kind === 'histogram' ? (spec.yLabel || 'Count') : (spec.yLabel || spec.y) } },
+      ...(spec.y2 ? { y2: { channel: 'y' as const, scale: scaleLinear as never, nice: true, grid: false, axis: { label: spec.y2, side: 'right' as const } } } : {}),
     },
     ...(color ? { color } : {}),
     ...(controls ? { controls } : {}),
@@ -447,7 +460,7 @@ export function buildChart(
       const value = Number(row[spec.y] ?? 0)
       totals.set(key, (totals.get(key) ?? 0) + (Number.isFinite(value) ? value : 0))
     }
-    const slices = pie([...totals].map(([category, value]) => ({ category, value })), { value: 'value' } as any)
+    const slices = pie([...totals].map(([category, value]) => ({ category, value })), { value: 'value' } as never)
     return defineChart({
       marks: [polar({
         inset: 8,
@@ -458,15 +471,16 @@ export function buildChart(
           color: 'category',
           key: 'category',
           fillOpacity: spec.fillOpacity,
-        } as any) as any)],
+        } as never) as never)],
         scales: { angle: null, radius: null },
-      } as any) as any],
+      } as never) as never],
       scales: { x: null, y: null },
       color: { scale: () => scaleOrdinal<string, string>().range(spec.palette), legend: colorLegend({ label: spec.x }) },
-    } as any) as any
+    } as never) as never
   }
 
   if (spec.facet) {
+    const facetField = spec.facet
     const facetMeta = dataset.columns.find((column) => column.key === spec.facet)
     // Faceting a field the chart can't render (e.g. histogram over a date) would
     // hand `null` to facetChart and crash; and a high-cardinality facet would
@@ -481,17 +495,17 @@ export function buildChart(
         axes: 'cell',
         label: (value: unknown) => String(value),
         chart(groupRows: readonly DataRow[]) {
-          const facetValue = String(groupRows[0]?.[spec.facet!] ?? '')
-          const rawFacet = raw.filter((row) => String(row[spec.facet!] ?? '') === facetValue)
-          return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as any
+          const facetValue = String(groupRows[0]?.[facetField] ?? '')
+          const rawFacet = raw.filter((row) => String(row[facetField] ?? '') === facetValue)
+          return chartSpec([...groupRows], rawFacet, dataset, { ...spec, facet: undefined }, selectedRowId, onZoom) as never
         },
-      }) as any) as any
-      return defineChart(faceted as any, interactionOptions(spec) as any)
+      }) as never) as never
+      return defineChart(faceted as never, interactionOptions(spec) as never)
     }
   }
 
   const specification = chartSpec(prepared, raw, dataset, spec, selectedRowId, onZoom)
-  return specification ? defineChart(specification as any, interactionOptions(spec) as any) : null
+  return specification ? defineChart(specification as never, interactionOptions(spec) as never) : null
 }
 
 /**
@@ -501,7 +515,7 @@ export function buildChart(
  */
 export function describeChart(spec: ChartSpec, rowCount: number): string {
   const aggregate = spec.aggregate && spec.aggregate !== 'none' ? `${spec.aggregate} of ` : ''
-  const head = `${spec.kind[0]!.toUpperCase()}${spec.kind.slice(1)} chart`
+  const head = `${spec.kind.slice(0, 1).toUpperCase()}${spec.kind.slice(1)} chart`
   const mapping = spec.x && spec.y ? ` of ${aggregate}${spec.y} by ${spec.x}` : spec.x ? ` of ${aggregate}${spec.x}` : ''
   const parts = [`${head}${mapping}`]
   const series = spec.group ?? spec.color

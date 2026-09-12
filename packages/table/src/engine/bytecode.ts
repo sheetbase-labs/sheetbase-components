@@ -91,7 +91,7 @@ function emit(node: FormulaNode, output: FormulaInstruction[], ctx: EmitContext)
       emitOp(output, ctx, { op: "push", value: true });
     });
   } else {
-    node.arguments.forEach((argument) => emit(argument, output, ctx));
+    node.arguments.forEach((argument) => { emit(argument, output, ctx); });
     emitOp(output, ctx, { op: "call", name: node.name, argumentCount: node.arguments.length });
   }
 }

@@ -43,7 +43,9 @@ export function transformWrite(action: RuleAction): { field: string; value: unkn
   const raw = action.target ?? action.detail ?? "";
   const match = raw.match(/^([\w.]+)\s*(?:=|to)\s*(.+)$/i) ?? raw.match(/^([\w.]+)\s+(.+)$/);
   if (!match) return undefined;
-  return { field: match[1]!, value: coerceTransformValue(match[2]!) };
+  const [, field, value] = match;
+  if (!field || !value) return undefined;
+  return { field, value: coerceTransformValue(value) };
 }
 
 /** Apply matched-rule actions in priority order. Later transforms overwrite earlier ones. */

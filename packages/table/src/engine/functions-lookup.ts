@@ -34,7 +34,7 @@ export const LOOKUP_FUNCTIONS: Record<string, FunctionImpl> = {
     const rows = matrixOf(args[1], ctx);
     const rowIndex = Math.trunc(number(scalarOf(args[2])));
     const header = rows[0] ?? [];
-    const index = header.findIndex((value) => value === lookup);
+    const index = header.indexOf(lookup);
     return index >= 0 ? rows[rowIndex - 1]?.[index] ?? null : "#N/A";
   },
   INDEX: (args, ctx) => {

@@ -29,7 +29,7 @@ describe("createHttpAdapter", () => {
       calls.push({ input, init });
       const route = Object.keys(routes).find((prefix) => input.startsWith(prefix));
       if (!route) return { ok: false, status: 500, json: async () => ({}) };
-      return routes[route]!(init);
+      return routes[route]?.(init);
     };
     return { fn, calls };
   }
@@ -41,10 +41,10 @@ describe("createHttpAdapter", () => {
     });
     const adapter = createHttpAdapter<{ n: number }>("http://h/state", fn);
     await expect(adapter.load("my key")).resolves.toEqual({ n: 4 });
-    expect(calls[0]!.input).toBe("http://h/state?key=my%20key");
+    expect(calls[0]?.input).toBe("http://h/state?key=my%20key");
     await adapter.save("my key", { n: 4 });
-    expect(calls[1]!.init?.method).toBe("PUT");
-    expect(JSON.parse(String(calls[1]!.init?.body))).toEqual({ key: "my key", state: { n: 4 } });
+    expect(calls[1]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({ key: "my key", state: { n: 4 } });
   });
 
   it("treats 404 as nothing saved", async () => {

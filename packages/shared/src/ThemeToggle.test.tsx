@@ -30,12 +30,11 @@ describe("resolveTheme", () => {
 
 describe("usePersistedTheme", () => {
   function Probe(props: { theme?: ThemeMode; defaultTheme?: ThemeMode; storageKey?: string; onThemeChange?: (next: ThemeMode) => void }) {
-    const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme(props);
+    const { activeTheme, resolvedTheme } = usePersistedTheme(props);
     return (
       <output
         data-active={activeTheme}
         data-resolved={resolvedTheme}
-        onClick={toggleTheme}
       />
     );
   }

@@ -48,9 +48,9 @@ export function App() {
   return (
     <>
       <nav className="sb-demo-switch" aria-label="Demo view">
-        <button className={view === "panes" ? "active" : ""} onClick={() => setView("panes")}>Pane layout</button>
-        <button className={view === "stacked" ? "active" : ""} onClick={() => setView("stacked")}>Stacked</button>
-        <button className={view === "docs" ? "active" : ""} onClick={() => setView("docs")}>Docs</button>
+        <button type="button" className={view === "panes" ? "active" : ""} onClick={() => setView("panes")}>Pane layout</button>
+        <button type="button" className={view === "stacked" ? "active" : ""} onClick={() => setView("stacked")}>Stacked</button>
+        <button type="button" className={view === "docs" ? "active" : ""} onClick={() => setView("docs")}>Docs</button>
       </nav>
       {view === "panes" ? <Workbench /> : view === "stacked" ? <StackedDemo /> : <DocsSite />}
     </>

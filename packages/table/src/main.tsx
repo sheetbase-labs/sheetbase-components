@@ -4,6 +4,8 @@ import "sheetbase-shared/theme.css";
 import { App } from "./ui/App";
 import "./ui/styles.css";
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("missing #root element");
+createRoot(rootElement).render(
   <StrictMode><App /></StrictMode>,
 );

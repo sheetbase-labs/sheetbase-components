@@ -187,7 +187,7 @@ export function useTablePresentationState(
       (error) => { if (active) console.error("Presentation load failed", error); },
     );
     return () => { active = false; };
-  }, [adapter, fallback, key, loaded]);
+  }, [fallback, loaded]);
   useEffect(() => {
     const idle = typeof window.requestIdleCallback === "function";
     const schedule: number = idle

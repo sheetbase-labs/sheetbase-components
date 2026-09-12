@@ -31,19 +31,20 @@ test("sort control cycles the query sort without moving bound rows locally", asy
   const statusCell = () => page.getByRole("gridcell").nth(6);
   await expect(statusCell()).toContainText(/Complete|Review|Flagged/);
   const baseline = await statusCell().textContent();
+  if (baseline === null) throw new Error("expected status cell text");
   const sort = page.getByRole("button", { name: "Sort status" });
   // The demo grid is bound (datasetHeader.recordIdForRow): row order is
   // server-owned, so the control cycles query.sort via onQueryChange and the
   // local rows stay put.
   await sort.click();
   await expect(sort).toHaveText(/▲/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline!);
+  await expect(statusCell()).toContainText(baseline);
   await sort.click();
   await expect(sort).toHaveText(/▼/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline!);
+  await expect(statusCell()).toContainText(baseline);
   await sort.click();
   await expect(sort).toHaveText(/↕/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline!);
+  await expect(statusCell()).toContainText(baseline);
 });
 
 test("opens keyboard shortcut help from the grid", async ({ page }) => {

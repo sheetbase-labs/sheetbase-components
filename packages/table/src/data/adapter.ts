@@ -61,7 +61,7 @@ export function recordWritesForMutation(
   const writes: RecordFieldWrite[] = [];
   for (const change of mutation.cells) {
     const binding = bindings.get(change.address);
-    if (!binding || binding.kind !== "record-field") continue;
+    if (binding?.kind !== "record-field") continue;
     writes.push({
       datasetId: binding.datasetId,
       recordId: binding.recordId,

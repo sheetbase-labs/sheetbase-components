@@ -246,6 +246,7 @@ export function App(props: AppProps = {}) {
   }, [datasetColumnsKey])
 
   useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataset/panelCollapsed/panelHeight are deliberate re-measure triggers, not captures
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
     const stage = chartStageRef.current
@@ -253,7 +254,6 @@ export function App(props: AppProps = {}) {
     const resize = () => setMeasuredHeight(Math.max(260, Math.floor(stage.clientHeight)))
     resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
     // Re-measure when the dataset or panel chrome changes the stage's size.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: panelHeight/panelCollapsed/dataset drive layout, not effect inputs.
   }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
 
   // The shared analysis view, when the host provides one, overrides the
@@ -356,6 +356,7 @@ export function App(props: AppProps = {}) {
   const [remoteResult, setRemoteResult] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const [remoteRetry, setRemoteRetry] = useState(0)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: remoteRetry is a manual re-fetch trigger bumped by the retry UI
   useEffect(() => {
     if (!remote || !remoteQuery || !dataset) return
     const controller = new AbortController()
@@ -378,6 +379,7 @@ export function App(props: AppProps = {}) {
   const [remotePage, setRemotePage] = useState<{ dataset: Dataset; rows: DataRow[]; totalRows: number } | null>(null)
   const [remotePageError, setRemotePageError] = useState<string | null>(null)
   const [remotePageRetry, setRemotePageRetry] = useState(0)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: remotePageRetry is a manual re-fetch trigger bumped by the retry UI
   useEffect(() => {
     if (!remote?.page || !dataset) return
     const controller = new AbortController()
@@ -576,7 +578,7 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onAutoKind={() => { const inferred = smartKindFor(dataset, chartSpec.x, chartSpec.y); if (inferred) setSpec((current) => ({ ...current, kind: inferred })) }} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
     {crossFilterActive && crossFilter && (
       <div className="remote-note remote-note--strip">Cross-filtered by {crossFilter.map((match) => `${match.field} = ${String(match.value)}`).join(', ')}
         <button type="button" className="sb-btn" onClick={clearCrossFilter}>Clear</button>
@@ -600,7 +602,7 @@ export function App(props: AppProps = {}) {
       </details>
     )}
   </section></main>
-  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
+  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button type="button" className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button type="button" className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)
   return <ExplorerFrame framed={props.frame} rootRef={rootRef} panel={showPanel} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }

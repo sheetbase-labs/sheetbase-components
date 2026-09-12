@@ -9,6 +9,11 @@ const graph: SchemaGraph = {
   ],
 };
 
+const must = <T>(value: T | undefined): T => {
+  if (value === undefined) throw new Error("expected a defined value");
+  return value;
+};
+
 describe("getRelations", () => {
   it("extracts FK edges with primary-key default", () => {
     expect(getRelations(graph)).toEqual([
@@ -69,7 +74,7 @@ describe("withAutoLayout", () => {
 
 describe("sheetbaseFieldsOf", () => {
   it("normalises schema fields onto the shared contract", () => {
-    expect(sheetbaseFieldsOf(graph.models[0]!).map((f) => f.dataType)).toEqual(["text", "text"]);
+    expect(sheetbaseFieldsOf(must(graph.models[0])).map((f) => f.dataType)).toEqual(["text", "text"]);
   });
 });
 
@@ -93,7 +98,7 @@ describe("rewriteReferences", () => {
 
 describe("tableHeaderFields", () => {
   it("assigns column indices for DatasetHeader", () => {
-    expect(tableHeaderFields(graph.models[1]!).map((f) => [f.id, f.column, f.dataType])).toEqual([
+    expect(tableHeaderFields(must(graph.models[1])).map((f) => [f.id, f.column, f.dataType])).toEqual([
       ["id", 0, "text"],
       ["customer_id", 1, "relationship"],
     ]);

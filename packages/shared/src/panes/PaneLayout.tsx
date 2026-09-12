@@ -276,6 +276,7 @@ export function PaneLayout({
   const rawLayout = controlledLayout !== undefined ? controlledLayout : innerLayout;
   // Always drop panes the host no longer offers — controlled or not. Additions
   // are handled at load time (reconcile), so a closed pane stays closed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: paneIdsKey is the content signature of paneIds, so the memo tracks pane identity changes, not array identity
   const layout = useMemo(() => pruneLayout(rawLayout, paneIds), [rawLayout, paneIdsKey]);
   // Which panes are currently grouped, so content can hide its own top bar.
   const tabbedByPane = useMemo(() => {
@@ -665,7 +666,7 @@ export function PaneLayout({
 
   function renderStack(node: StackNode): ReactNode {
     const tabbed = node.panes.length > 1;
-    const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0]!) : paneMap.get(node.active);
+    const activePane = tabbed ? paneMap.get(node.active) ?? paneMap.get(node.panes[0] ?? "") : paneMap.get(node.active);
     // The tab strip is multiplexer chrome on the stack background; every
     // component keeps its own plate and top bar underneath it.
     const showHead = tabbed;
@@ -687,6 +688,8 @@ export function PaneLayout({
       />
     );
     return (
+      // biome-ignore lint/a11y/noNoninteractiveElementInteractions: delegated keydown delivers pane commands (Delete, Alt+Arrow) wherever focus lands inside the stack
+      // biome-ignore lint/a11y/useSemanticElements: a focusable pane stack has no semantic element; role="group" is the correct ARIA pattern
       <div
         className={cx("sb-pane-stack", tabbed && "is-tabbed")}
         key={node.id}
@@ -750,9 +753,7 @@ export function PaneLayout({
               key={paneId}
               hidden={paneId !== node.active}
               data-pane-id={paneId}
-              role={tabbed ? "tabpanel" : undefined}
-              id={tabbed ? `sb-pane-panel-${node.id}-${paneId}` : undefined}
-              aria-labelledby={tabbed ? `sb-pane-tab-${node.id}-${paneId}` : undefined}
+              {...(tabbed ? { role: "tabpanel", id: `sb-pane-panel-${node.id}-${paneId}`, "aria-labelledby": `sb-pane-tab-${node.id}-${paneId}` } : {})}
               data-drag-handle={paneMap.get(paneId)?.dragHandle === undefined ? undefined : String(paneMap.get(paneId)?.dragHandle)}
               ref={(element) => attachHost(element, paneId)}
             >
@@ -767,6 +768,7 @@ export function PaneLayout({
 
   function renderNode(node: LayoutNode): ReactNode {
     if (node.kind === "stack") return renderStack(node);
+    const sizesTotal = node.children.reduce((sum, _child, index) => sum + (node.sizes[index] ?? 1), 0);
     return (
       <div className={cx("sb-split", node.direction === "row" ? "is-row" : "is-column")} key={node.id}>
         {node.children.map((child, index) => (
@@ -775,12 +777,14 @@ export function PaneLayout({
               {renderNode(child)}
             </div>
             {index < node.children.length - 1 && (
-              <div
+              <hr
                 className="sb-resizer"
-                role="separator"
                 tabIndex={0}
                 aria-label="Resize panes"
                 aria-orientation={node.direction === "row" ? "vertical" : "horizontal"}
+                aria-valuenow={Math.round(((node.sizes[index] ?? 1) / Math.max(sizesTotal, 0.001)) * 100)}
+                aria-valuemin={0}
+                aria-valuemax={100}
                 onPointerDown={(event) => beginResize(event, node, index)}
                 onKeyDown={(event) => onResizerKeyDown(event, node, index)}
               />

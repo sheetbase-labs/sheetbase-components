@@ -65,7 +65,7 @@ export interface RulesEngineProps {
   onApplyWrites?: (
     writes: readonly RuleWrite[],
     context: Readonly<{ matched: number; skipped: number; rejected: number }>,
-  ) => Promise<RuleApplyResult | void>;
+  ) => Promise<RuleApplyResult | undefined>;
   /** Host-declared action vocabulary. Empty (default) keeps kinds as free text; the component wires no predefined actions. */
   actions?: readonly RuleActionDef[];
   /** Controlled theme. Omit for uncontrolled (toggle manages it). */
@@ -327,7 +327,7 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
-              <button className="sb-btn primary" onClick={addRule}>+ Rule</button>
+              <button type="button" className="sb-btn primary" onClick={addRule}>+ Rule</button>
             </div>
           </div>
         )}
@@ -364,18 +364,19 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                   <div className="sb-rule-head">
                     <span className={rule.enabled ? "sb-dot on" : "sb-dot"} />
                     <input className="sb-name" aria-label="Rule name" value={rule.name} onChange={(e) => patchRule(rule.id, { name: e.target.value })} />
-                    <div className="sb-segmented" role="group" aria-label="Match mode">
-                      <button className={rule.when === "all" ? "active" : ""} onClick={() => patchRule(rule.id, { when: "all" })}>All</button>
-                      <button className={rule.when === "any" ? "active" : ""} onClick={() => patchRule(rule.id, { when: "any" })}>Any</button>
-                    </div>
+                    <fieldset className="sb-segmented" aria-label="Match mode">
+                      <button type="button" className={rule.when === "all" ? "active" : ""} onClick={() => patchRule(rule.id, { when: "all" })}>All</button>
+                      <button type="button" className={rule.when === "any" ? "active" : ""} onClick={() => patchRule(rule.id, { when: "any" })}>Any</button>
+                    </fieldset>
                     <label className="sb-muted sb-check"><input type="checkbox" checked={rule.enabled} onChange={(e) => patchRule(rule.id, { enabled: e.target.checked })} /> on</label>
-                    <button className="sb-remove" title="Delete rule" onClick={() => removeRule(rule.id)}>×</button>
+                    <button type="button" className="sb-remove" title="Delete rule" onClick={() => removeRule(rule.id)}>×</button>
                   </div>
                   <div className="sb-sentence">
                     <span className="sb-kw">When</span>
                     {rule.conditions.map((c, i) => {
                       const canon = normaliseOperator(c.operator) ?? "eq";
                       return (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: conditions have no stable id and identical clauses are valid; positional keys match the edit-by-index semantics
                         <span className="sb-clause" key={i}>
                           {i > 0 && <span className="sb-join">{rule.when === "any" ? "or" : "and"}</span>}
                           {fields.length > 0 ? (
@@ -405,17 +406,18 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                           ) : !isEmptyOp(c.operator) && (
                             <input aria-label="Value" placeholder={canon === "in" ? "a, b, c" : "value"} value={valueText(c.value)} onChange={(e) => patchCondition(rule, i, { value: canon === "in" ? e.target.value.split(",").map((s) => s.trim()).filter(Boolean) : e.target.value })} />
                           )}
-                          <button className="sb-remove" title="Remove condition" onClick={() => patchRule(rule.id, { conditions: rule.conditions.filter((_, j) => j !== i) })}>×</button>
+                          <button type="button" className="sb-remove" title="Remove condition" onClick={() => patchRule(rule.id, { conditions: rule.conditions.filter((_, j) => j !== i) })}>×</button>
                         </span>
                       );
                     })}
-                    <button className="sb-link-btn" onClick={() => patchRule(rule.id, { conditions: [...rule.conditions, { field: fields[0] ?? "status", operator: "eq", value: "" }] })}>+ condition</button>
+                    <button type="button" className="sb-link-btn" onClick={() => patchRule(rule.id, { conditions: [...rule.conditions, { field: fields[0] ?? "status", operator: "eq", value: "" }] })}>+ condition</button>
                   </div>
                   <div className="sb-sentence">
                     <span className="sb-kw">Then</span>
                     {rule.actions.map((a, i) => {
                       const def = actions.find((d) => d.kind === a.kind);
                       return (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: actions have no stable id and identical actions are valid; positional keys match the edit-by-index semantics
                       <span className="sb-clause" key={i}>
                         {i > 0 && <span className="sb-join">and</span>}
                         {def ? (
@@ -428,11 +430,11 @@ export function RulesEngine({ value, initialRules, onChange, fields = [], action
                         {def?.needsTarget !== false && (
                           <input aria-label="Action target" placeholder={def?.placeholder ?? "detail…"} value={a.target ?? a.detail ?? ""} onChange={(e) => patchRule(rule.id, { actions: rule.actions.map((x, j) => (j === i ? { ...x, target: e.target.value || undefined } : x)) })} />
                         )}
-                        <button className="sb-remove" title="Remove action" onClick={() => patchRule(rule.id, { actions: rule.actions.filter((_, j) => j !== i) })}>×</button>
+                        <button type="button" className="sb-remove" title="Remove action" onClick={() => patchRule(rule.id, { actions: rule.actions.filter((_, j) => j !== i) })}>×</button>
                       </span>
                       );
                     })}
-                    <button className="sb-link-btn" onClick={() => patchRule(rule.id, { actions: [...rule.actions, { kind: actions[0]?.kind ?? "" }] })}>+ action</button>
+                    <button type="button" className="sb-link-btn" onClick={() => patchRule(rule.id, { actions: [...rule.actions, { kind: actions[0]?.kind ?? "" }] })}>+ action</button>
                     <label className="sb-muted sb-priority">p<input type="number" aria-label="Priority" value={rule.priority} onChange={(e) => patchRule(rule.id, { priority: Number(e.target.value) || 0 })} /></label>
                   </div>
                 </li>

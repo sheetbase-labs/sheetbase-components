@@ -31,7 +31,9 @@ const experimentsRemote = createHttpExplorerAdapter({
   ],
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')
+if (!rootElement) throw new Error("missing #root element")
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <div className="sb-demo-stage">
       <App sources={[sampleAdapter, experimentsRemote]} />

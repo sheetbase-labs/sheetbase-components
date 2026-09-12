@@ -33,7 +33,7 @@ export function ConflictPanel({
   onClose,
 }: ConflictPanelProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const popover = usePortalPopover(true, onClose, { popover: popoverRef, trigger });
+  usePortalPopover(true, onClose, { popover: popoverRef, trigger });
   const rows = conflictRows(conflicts.map((entry) => entry.conflict), fieldLabels);
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -43,16 +43,16 @@ export function ConflictPanel({
       aria-label="Save conflicts"
       className="conflict-panel"
       tabIndex={-1}
-      onKeyDown={popover.onKeyDown}
     >
       <header>
         <strong>Save conflicts</strong>
         <small>{conflicts.length}</small>
-        <button aria-label="Close conflicts" onClick={onClose}>×</button>
+        <button type="button" aria-label="Close conflicts" onClick={onClose}>×</button>
       </header>
       <ul>
         {rows.map((row, index) => {
-          const entry = conflicts[index]!;
+          const entry = conflicts[index];
+          if (!entry) return null;
           return <li key={conflictKey(entry.conflict)}>
             <div className="conflict-field">
               <strong title={row.fieldId}>{row.fieldLabel}</strong>
@@ -63,16 +63,16 @@ export function ConflictPanel({
               <div><dt>Server</dt><dd title={row.server ?? ""}>{row.server ?? "—"}</dd></div>
             </dl>
             <div className="conflict-actions">
-              <button onClick={() => onKeepMine(entry, index)}>Keep mine</button>
-              <button onClick={() => onTakeServer(entry, index)}>Take server</button>
+              <button type="button" onClick={() => onKeepMine(entry, index)}>Keep mine</button>
+              <button type="button" onClick={() => onTakeServer(entry, index)}>Take server</button>
             </div>
           </li>;
         })}
       </ul>
       <footer>
         <span>Resolve all</span>
-        <button onClick={onKeepAll}>Keep all mine</button>
-        <button onClick={onTakeAll}>Take all server</button>
+        <button type="button" onClick={onKeepAll}>Keep all mine</button>
+        <button type="button" onClick={onTakeAll}>Take all server</button>
       </footer>
     </div>,
     document.body,

@@ -6,9 +6,9 @@
 .filter-builder { width: 278px; }
 .filter-builder header, .column-manager header { display: flex; align-items: center; justify-content: space-between; }
 .filter-builder header select { width: auto; height: 25px; }
-.active-filters { display: grid; gap: 3px; padding: 4px 0 7px; }
+.active-filters { display: grid; gap: 3px; margin: 0; padding: 4px 0 7px; list-style: none; }
 .active-filters p { margin: 5px 7px; color: #8a8790; font-size: 11px; }
-.filter-chip { display: grid; grid-template-columns: 70px minmax(0, 1fr) 22px; gap: 5px; align-items: center; min-height: 29px; padding: 3px 4px 3px 8px; border-radius: 6px; background: #f2f2f3; }
+.filter-chip { display: grid; grid-template-columns: 70px minmax(0, 1fr) 22px; gap: 5px; align-items: center; min-height: 29px; padding: 3px 4px 3px 8px; border-radius: 6px; background: #f2f2f3; list-style: none; }
 .filter-chip span { overflow: hidden; font-weight: 500; text-overflow: ellipsis; }
 .filter-chip small { overflow: hidden; color: #77737d; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .filter-chip button { height: 22px; border-radius: 4px; color: #88838e; }

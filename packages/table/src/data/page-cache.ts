@@ -40,7 +40,11 @@ export class DataPageCache {
     const key = pageKey(page.request);
     this.#pages.delete(key);
     this.#pages.set(key, page);
-    while (this.#pages.size > this.maxPages) this.#pages.delete(this.#pages.keys().next().value!);
+    while (this.#pages.size > this.maxPages) {
+      const oldest = this.#pages.keys().next().value;
+      if (oldest === undefined) break;
+      this.#pages.delete(oldest);
+    }
   }
 
   async getOrLoad(request: PageRequest, load: () => Promise<DatasetPage>): Promise<DatasetPage> {

@@ -148,7 +148,7 @@ export function removePane(layout: Layout, paneId: PaneId, fromStackId?: string)
     if (!layout.panes.includes(paneId)) return layout;
     const panes = layout.panes.filter((id) => id !== paneId);
     if (panes.length === 0) return null;
-    return { ...layout, panes, active: layout.active === paneId ? panes[0]! : layout.active };
+    return { ...layout, panes, active: layout.active === paneId ? (panes[0] ?? "") : layout.active };
   }
   const children: LayoutNode[] = [];
   const sizes: number[] = [];
@@ -160,7 +160,7 @@ export function removePane(layout: Layout, paneId: PaneId, fromStackId?: string)
     }
   });
   if (children.length === 0) return null;
-  if (children.length === 1) return children[0]!;
+  if (children.length === 1 && children[0]) return children[0];
   return { ...layout, children, sizes: normaliseSizes(sizes) };
 }
 
@@ -248,7 +248,7 @@ export function pruneLayout(layout: Layout, paneIds: Iterable<PaneId>): Layout {
     if (isStack(node)) {
       const panes = node.panes.filter((id) => allowed.has(id));
       if (panes.length === 0) return null;
-      return { ...node, panes, active: panes.includes(node.active) ? node.active : panes[0]! };
+      return { ...node, panes, active: panes.includes(node.active) ? node.active : (panes[0] ?? "") };
     }
     const children: LayoutNode[] = [];
     const sizes: number[] = [];
@@ -260,7 +260,7 @@ export function pruneLayout(layout: Layout, paneIds: Iterable<PaneId>): Layout {
       }
     });
     if (children.length === 0) return null;
-    if (children.length === 1) return children[0]!;
+    if (children.length === 1 && children[0]) return children[0];
     return { ...node, children, sizes: normaliseSizes(sizes) };
   };
   return walk(layout);

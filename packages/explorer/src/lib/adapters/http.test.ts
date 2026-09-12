@@ -33,12 +33,13 @@ describe('createHttpExplorerAdapter', () => {
     const adapter = createHttpExplorerAdapter({ baseUrl: 'http://api.test', datasetId: 'experiments', fields, fetcher })
     const dataset = await adapter.load()
     const filter: GroupNode = { type: 'group', id: 'g1', combinator: 'AND', children: [{ type: 'condition', id: 'c1', field: 'assay', operator: 'eq', value: 'BCA' }] }
-    const response = await dataset.remote!.aggregate({ filter, groupBy: 'status', seriesBy: ['reviewer'], summary: 'mean', valueField: 'result', limit: 5 })
+    if (!dataset.remote) throw new Error("expected remote capability")
+    const response = await dataset.remote.aggregate({ filter, groupBy: 'status', seriesBy: ['reviewer'], summary: 'mean', valueField: 'result', limit: 5 })
     expect(response.buckets).toHaveLength(1)
     expect(calls).toHaveLength(1)
-    expect(calls[0]!.url).toBe('http://api.test/api/explorer/aggregate')
-    expect(calls[0]!.init?.method).toBe('POST')
-    const body = JSON.parse(String(calls[0]!.init?.body)) as Record<string, unknown>
+    expect(calls[0]?.url).toBe('http://api.test/api/explorer/aggregate')
+    expect(calls[0]?.init?.method).toBe('POST')
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>
     expect(body.datasetId).toBe('experiments')
     expect(body.groupBy).toBe('status')
     expect(body.seriesBy).toEqual(['reviewer'])
@@ -53,15 +54,15 @@ describe('createHttpExplorerAdapter', () => {
     const adapter = createHttpExplorerAdapter({ baseUrl: 'http://api.test', datasetId: 'experiments', fields, fetcher })
     const dataset = await adapter.load()
     const controller = new AbortController()
-    await dataset.remote!.aggregate({ groupBy: 'status', summary: 'count' }, controller.signal)
-    expect(calls[0]!.init?.signal).toBe(controller.signal)
+    await dataset.remote?.aggregate({ groupBy: 'status', summary: 'count' }, controller.signal)
+    expect(calls[0]?.init?.signal).toBe(controller.signal)
 
     const failing = createHttpExplorerAdapter({
       baseUrl: 'http://api.test', datasetId: 'experiments', fields,
       fetcher: (async () => new Response('nope', { status: 500 })) as typeof fetch,
     })
     const failingDataset = await failing.load()
-    await expect(failingDataset.remote!.aggregate({ groupBy: 'status', summary: 'count' })).rejects.toThrow('500')
+    await expect(failingDataset.remote?.aggregate({ groupBy: 'status', summary: 'count' })).rejects.toThrow('500')
   })
 
   it('fetches a page of raw rows for the Data-tab preview', async () => {
@@ -80,13 +81,14 @@ describe('createHttpExplorerAdapter', () => {
     const adapter = createHttpExplorerAdapter({ baseUrl: 'http://api.test', datasetId: 'experiments', fields, fetcher })
     const dataset = await adapter.load()
     const filter: GroupNode = { type: 'group', id: 'g1', combinator: 'AND', children: [{ type: 'condition', id: 'c1', field: 'assay', operator: 'eq', value: 'BCA' }] }
-    const page = await dataset.remote!.page!({ offset: 40, limit: 200, fields: ['status', 'result'], filter })
-    const url = new URL(calls[0]!.url)
+    if (!dataset.remote?.page) throw new Error("expected remote page capability")
+    const page = await dataset.remote.page({ offset: 40, limit: 200, fields: ['status', 'result'], filter })
+    const url = new URL(calls[0]?.url)
     expect(url.origin + url.pathname).toBe('http://api.test/api/table/pages')
     expect(url.searchParams.get('rowStart')).toBe('40')
     expect(url.searchParams.get('rowCount')).toBe('200')
     expect(url.searchParams.get('fieldIds')).toBe('status,result')
-    expect(JSON.parse(url.searchParams.get('filterTree')!)).toEqual(filter)
+    expect(JSON.parse(url.searchParams.get('filterTree') ?? '')).toEqual(filter)
     expect(page.rows).toEqual([
       { status: 'Complete', result: 4.2, [ROW_ID]: 40 },
       { status: 'Review', result: null, [ROW_ID]: 41 },

@@ -68,8 +68,10 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
   const point: GridPoint = { row, column };
   const context: SpreadsheetCellRenderContext = { address, point, display, field, selected, active, loading };
   return (
+    // biome-ignore lint/a11y/useSemanticElements: virtualised grid — cells are absolutely positioned divs; the ARIA gridcell role is the sanctioned pattern
     <div
       role="gridcell"
+      tabIndex={-1}
       aria-selected={selected}
       className={className}
       title={title}
@@ -89,7 +91,7 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       onDoubleClick={() => handlers.current?.doubleClick(point)}
     >
       {loading ? <span className="loading-placeholder" /> : renderCell?.(context) ?? <span className={`${isFormula ? "formula-value" : ""}${display.includes("\n") ? " multiline" : ""}`}>{display}</span>}
-      {writeState && <button className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handlers.current?.badgeClick(address, writeState, event)} />}
+      {writeState && <button type="button" className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handlers.current?.badgeClick(address, writeState, event)} />}
     </div>
   );
 }, (prev, next) =>

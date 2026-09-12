@@ -74,7 +74,7 @@
   --ts-chart-tooltip-border: 1px solid #4c4c54;
   --ts-chart-tooltip-shadow: 0 12px 34px rgb(0 0 0 / 42%);
 }
-.panel-resizer { position:absolute; top:-4px; left:0; right:0; z-index:20; height:8px; cursor:ns-resize; }
+.panel-resizer { position:absolute; top:-4px; left:0; right:0; z-index:20; height:8px; margin:0; padding:0; border:0; cursor:ns-resize; }
 .panel-resizer::after { content:""; position:absolute; top:3px; left:0; right:0; height:1px; background:transparent; }
 .panel-resizer:hover::after { background:var(--accent); }
 .bottom-panel-v3.collapsed .panel-resizer { display:none; }

@@ -238,7 +238,8 @@ export class Worksheet {
   value(address: string, stack = new Set<string>()): Scalar {
     const key = addressKey(parseAddress(address));
     if (stack.has(key)) throw new Error(`Circular reference at ${key}`);
-    if (!this.#dirty.has(key) && this.#cache.has(key)) return this.#cache.get(key)!;
+    const cached = this.#cache.get(key);
+    if (!this.#dirty.has(key) && cached !== undefined) return cached;
     const spilled = this.spills.value(key);
     if (spilled !== undefined) return spilled;
     const binding = this.#cells.get(key);
@@ -297,7 +298,8 @@ export class Worksheet {
     const queue = [key];
     const visited = new Set<string>();
     while (queue.length) {
-      const current = queue.shift()!;
+      const current = queue.shift();
+      if (current === undefined) break;
       if (visited.has(current)) continue;
       visited.add(current);
       this.#cache.delete(current);

@@ -160,6 +160,9 @@ function writeFailureStatus(error: unknown, write: FieldWrite): WriteStatus {
   return keys.has(JSON.stringify([write.recordId, write.fieldId])) ? "conflict" : "failed";
 }
 
+/** Focus an element once when it mounts — the autoFocus behaviour without the attribute. */
+const focusOnMount = (element: HTMLElement | null) => { element?.focus(); };
+
 /** Checkbox editor for option fields marked `multiple`; commits a comma-joined value. */
 function MultiOptionPicker({ options, current, onCommit, onCancel }: Readonly<{
   options: readonly string[];
@@ -170,7 +173,7 @@ function MultiOptionPicker({ options, current, onCommit, onCancel }: Readonly<{
   const validOptions = new Set(options);
   const selected = new Set(current.split(",").map((entry) => entry.trim()).filter((entry) => validOptions.has(entry)));
   const [picked, setPicked] = useState<Set<string>>(selected);
-  return <div className="typed-options multi" role="group" aria-label="Choose values">
+  return <fieldset className="typed-options multi" aria-label="Choose values">
     {options.map((option) => <label key={option}>
       <input
         type="checkbox"
@@ -183,9 +186,9 @@ function MultiOptionPicker({ options, current, onCommit, onCancel }: Readonly<{
       />
       <span>{option}</span>
     </label>)}
-    <button className="multi-apply" onClick={() => onCommit([...picked].join(", "))}>Apply</button>
-    <button onClick={onCancel}>Cancel</button>
-  </div>;
+    <button type="button" className="multi-apply" onClick={() => onCommit([...picked].join(", "))}>Apply</button>
+    <button type="button" onClick={onCancel}>Cancel</button>
+  </fieldset>;
 }
 
 /** "client": the engine parses and evaluates "=..." formulas locally (default). "host": the host owns calculation, so "=..." inputs are kept as inert text and computed values arrive through hydration. */
@@ -276,7 +279,7 @@ function menuKeys(onClose: () => void) {
     if (current < 0) return;
     event.preventDefault();
     const next = event.key === "ArrowDown" ? (current + 1) % items.length : (current - 1 + items.length) % items.length;
-    items[next]!.focus();
+    items[next]?.focus();
   };
 }
 
@@ -344,14 +347,14 @@ function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFi
     role="menu"
     aria-label={`${field?.label ?? columnLabel(column)} column menu`}
     tabIndex={-1}
-    autoFocus
+    ref={focusOnMount}
     onKeyDown={menuKeys(onClose)}
     onPointerDown={(event) => event.stopPropagation()}
   >
-    <header><div><strong>{field?.label ?? columnLabel(column)}</strong><small>{field?.dataType ?? "column"}{sortIndex >= 0 ? ` · sort ${sortIndex + 1}` : ""}</small></div><button aria-label="Close menu" onClick={onClose}>×</button></header>
+    <header><div><strong>{field?.label ?? columnLabel(column)}</strong><small>{field?.dataType ?? "column"}{sortIndex >= 0 ? ` · sort ${sortIndex + 1}` : ""}</small></div><button type="button" aria-label="Close menu" onClick={onClose}>×</button></header>
     {field && <>
-      <section><label>Sort</label><div className="column-menu-segment"><button className={sorts[sortIndex]?.direction === "asc" ? "active" : ""} onClick={() => setSort("asc")}>↑ Asc</button><button className={sorts[sortIndex]?.direction === "desc" ? "active" : ""} onClick={() => setSort("desc")}>↓ Desc</button><button onClick={() => setSort()}>Clear</button></div></section>
-      <section><div className="column-menu-label"><label>Filter</label>{(query.filters?.length ?? 0) > 1 && <select aria-label="Filter logic" value={query.filterLogic ?? "and"} onChange={(event) => onQueryChange?.({ ...query, filterLogic: event.target.value as "and" | "or" })}><option value="and">Match all</option><option value="or">Match any</option></select>}</div>
+      <section><div className="column-menu-label"><span className="column-menu-title">Sort</span></div><div className="column-menu-segment"><button type="button" className={sorts[sortIndex]?.direction === "asc" ? "active" : ""} onClick={() => setSort("asc")}>↑ Asc</button><button type="button" className={sorts[sortIndex]?.direction === "desc" ? "active" : ""} onClick={() => setSort("desc")}>↓ Desc</button><button type="button" onClick={() => setSort()}>Clear</button></div></section>
+      <section><div className="column-menu-label"><span className="column-menu-title">Filter</span>{(query.filters?.length ?? 0) > 1 && <select aria-label="Filter logic" value={query.filterLogic ?? "and"} onChange={(event) => onQueryChange?.({ ...query, filterLogic: event.target.value as "and" | "or" })}><option value="and">Match all</option><option value="or">Match any</option></select>}</div>
         <select aria-label="Filter condition" value={operator} onChange={(event) => setOperator(event.target.value as FilterOperator)}>{operators.map((entry) => <option key={entry} value={entry}>{operatorLabel(entry, field)}</option>)}</select>
         {(operator === "isNull" || operator === "notNull") ? null
           : operator === "in" && field.options ? <select multiple aria-label="Filter values" size={Math.min(4, field.options.length)} value={[...values]} onChange={(event) => setValues(Array.from(event.target.selectedOptions, (option) => option.value))}>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
@@ -363,10 +366,10 @@ function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFi
           : field.options && (operator === "eq" || operator === "neq") ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="">Choose…</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select>
           : field.dataType === "boolean" ? <select aria-label="Filter value" value={value} onChange={(event) => setValue(event.target.value)}><option value="true">True</option><option value="false">False</option></select>
           : <input aria-label="Filter value" type={field.dataType === "number" ? "number" : field.dataType === "date" ? "date" : field.dataType === "datetime" ? "datetime-local" : "text"} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === "Enter" && applyFilter()} />}
-        <div className="column-menu-actions"><button className="primary" onClick={applyFilter}>Apply</button>{existing && <button onClick={clearFilter}>Remove</button>}</div>
+        <div className="column-menu-actions"><button type="button" className="primary" onClick={applyFilter}>Apply</button>{existing && <button type="button" onClick={clearFilter}>Remove</button>}</div>
       </section>
     </>}
-    <section className="column-menu-list"><button onClick={onAutoFit}>Auto-fit width</button>{onMove && <><button onClick={() => onMove(-1)}>Move left</button><button onClick={() => onMove(1)}>Move right</button></>}{onHide && <button onClick={onHide}>Hide column</button>}<button onClick={onFreeze}>Freeze through column</button>{onUnfreeze && <button onClick={onUnfreeze}>Unfreeze columns</button>}{onFormat && <button onClick={onFormat}>Conditional formatting…</button>}{actions?.map((action) => <button key={action.label} onClick={() => { action.onSelect({ axis: "column", index: column, fieldId: field?.id }); onClose(); }}>{action.label}</button>)}</section>
+    <section className="column-menu-list"><button type="button" onClick={onAutoFit}>Auto-fit width</button>{onMove && <><button type="button" onClick={() => onMove(-1)}>Move left</button><button type="button" onClick={() => onMove(1)}>Move right</button></>}{onHide && <button type="button" onClick={onHide}>Hide column</button>}<button type="button" onClick={onFreeze}>Freeze through column</button>{onUnfreeze && <button type="button" onClick={onUnfreeze}>Unfreeze columns</button>}{onFormat && <button type="button" onClick={onFormat}>Conditional formatting…</button>}{actions?.map((action) => <button type="button" key={action.label} onClick={() => { action.onSelect({ axis: "column", index: column, fieldId: field?.id }); onClose(); }}>{action.label}</button>)}</section>
   </div>;
 }
 
@@ -500,6 +503,52 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (clickTimingFrame.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(clickTimingFrame.current);
   }, []);
   const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  const shortcutHelpRef = useRef<HTMLElement | null>(null);
+  // Find panel and the shortcut-help modal both close on Escape no matter
+  // which of their controls holds focus — handle it at document level while
+  // they are open rather than delegating on a static container.
+  useEffect(() => {
+    if (!findPanel) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setFindPanel(undefined);
+      viewportRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [findPanel]);
+  useEffect(() => {
+    if (!showShortcutHelp) return;
+    const dialog = shortcutHelpRef.current;
+    dialog?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setShowShortcutHelp(false);
+        viewportRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog?.contains(document.activeElement)) return;
+      const focusables = Array.from(dialog.querySelectorAll<HTMLElement>("button"));
+      if (focusables.length === 0) return;
+      event.preventDefault();
+      focusables[0]?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (dialog && !dialog.contains(event.target as Node)) {
+        setShowShortcutHelp(false);
+        viewportRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [showShortcutHelp]);
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -579,6 +628,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const preview = formulaReferenceRanges(`=${suggestion.previewRange ?? suggestion.replacement}`)[0];
     return preview ?? null;
   }, [editing, formulaReference, referencedRanges.length, suggestions]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: structuredRangeSignature is the content signature of the structuredRanges map, which keeps a stable identity
   const semanticReferences = useMemo(() => {
     if (!editing) return [];
     return [...draft.matchAll(/\[([^\]]+)\]/g)].flatMap((match) => {
@@ -751,7 +801,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return;
     }
     for (const entry of immediate) {
-      Promise.resolve(onFieldWrite!(entry.write)).then(
+      Promise.resolve(onFieldWrite?.(entry.write)).then(
         () => settle(entry, undefined),
         (error) => settle(entry, error),
       );
@@ -914,6 +964,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (bindingResolver) worksheet.setBindingResolver(bindingResolver);
   }, [bindingResolver, worksheet]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: structuredRangeSignature is the content signature of the structuredRanges map; it is the renormalisation trigger, not a capture
   useEffect(() => {
     worksheet.renormalizeFormulas();
   }, [structuredRangeSignature, worksheet]);
@@ -956,10 +1007,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return () => window.removeEventListener("pointerup", finishDrag);
   }, [canEdit, columnCount, commit, data, readOnly, rowCount]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: columnWidths is a deliberate re-measure trigger, not a capture
   useEffect(() => {
     columnVirtualizer.measure();
   }, [columnVirtualizer, columnWidths]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rowHeights is a deliberate re-measure trigger, not a capture
   useEffect(() => {
     rowVirtualizer.measure();
   }, [rowHeights, rowVirtualizer]);
@@ -971,12 +1024,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return () => window.removeEventListener("pointerdown", close);
   }, [contextMenu]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initial scroll restore is mount-only by design
   useEffect(() => {
     if (!initialState || !viewportRef.current) return;
     viewportRef.current.scrollTop = initialState.scroll.top;
     viewportRef.current.scrollLeft = initialState.scroll.left;
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewportRange is rebuilt every render; its numeric fields are the meaningful deps
   useEffect(() => {
     onViewportChange?.(viewportRange);
   }, [
@@ -1224,7 +1279,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       heldWritesRef.current = empty;
       setHeldWrites(empty);
       onHeldFieldWritesChange?.([]);
-      held.forEach(({ write, before }) => emitFieldWrite(write, before));
+      held.forEach(({ write, before }) => { emitFieldWrite(write, before); });
     },
     discardHeldFieldWrites: () => {
       const empty = new Map<string, HeldFieldWrite>();
@@ -1405,6 +1460,33 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     window.addEventListener("pointerup", onUp);
   };
 
+  const resizeColumnWithKeys = (column: number, event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const before = columnWidths[column];
+    const after = Math.max(72, Math.min(480, before + (event.key === "ArrowRight" ? 8 : -8)));
+    if (after === before) return;
+    const next = [...columnWidths];
+    next[column] = after;
+    setColumnWidths(next);
+    pushHistory(columnWidthMutation({ column, before, after }));
+    onColumnWidthsChange?.(next);
+  };
+
+  const resizeRowWithKeys = (row: number, event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const before = rowHeights[row] ?? ROW_HEIGHT;
+    const after = Math.max(20, Math.min(240, before + (event.key === "ArrowDown" ? 8 : -8)));
+    if (after === before) return;
+    const next = [...rowHeights];
+    next[row] = after;
+    setRowHeights(next);
+    onRowHeightsChange?.(next);
+  };
+
   const resizeRow = (row: number, event: React.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -1496,6 +1578,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     },
   };
 
+  // biome-ignore lint/a11y/useSemanticElements: virtualised grid — rows and cells are absolutely positioned divs, so the ARIA grid pattern on divs (single tab stop on the container) is the sanctioned approach; table elements are incompatible with virtualisation
   return <div
     className={`sheetbase-scope spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
     data-theme={theme}
@@ -1571,8 +1654,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         />;
       }))}
 
-      {visibleRows.map((row) => <div
+      {visibleRows.map((row) => (
+        // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
+        <div
         role="rowheader"
+        tabIndex={-1}
         aria-selected={row >= range.top && row <= range.bottom}
         className={`row-header${row >= range.top && row <= range.bottom ? " selected-header" : ""}`}
         key={`row-${row}`}
@@ -1583,10 +1669,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           viewportRef.current?.focus({ preventScroll: true });
         }}
         onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
-      >{row + 1}<span className="row-resizer" onPointerDown={(event) => resizeRow(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>)}
+      >{row + 1}<hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? ROW_HEIGHT} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>))}
 
-      {renderColumns.map(({ index: column }) => <div
+      {renderColumns.map(({ index: column }) => (
+        // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
+        <div
         role="columnheader"
+        tabIndex={-1}
         aria-selected={column >= range.left && column <= range.right}
         className={`column-header${column >= range.left && column <= range.right ? " selected-header" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}`}
         key={`column-${column}`}
@@ -1615,13 +1704,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       >
         <span className="column-coordinate">{columnLabel(column)}</span>
         <span className="column-name">{datasetHeader?.fields.find((field) => field.column === column)?.label ?? columnLabel(column)}</span>
-        {fieldIds[column] && <button
+        {fieldIds[column] && <button type="button"
           className={`column-sort${query.sort?.some((sort) => sort.fieldId === fieldIds[column]) ? " active" : ""}`}
           aria-label={`Sort ${fieldIds[column]}`}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            const fieldId = fieldIds[column]!;
+            const fieldId = fieldIds[column];
+            if (!fieldId) return;
             const current = query.sort?.find((sort) => sort.fieldId === fieldId)?.direction;
             const next = current === undefined ? "asc" : current === "asc" ? "desc" : undefined;
             if (sortMode === "local" && !bound) {
@@ -1640,28 +1730,28 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             onQueryChange?.({ ...query, sort: next ? [...otherSorts, { fieldId, direction: next }] : otherSorts });
           }}
         >{query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "asc" ? "▲" : query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "desc" ? "▼" : "↕"}</button>}
-        <span className="column-resizer" onPointerDown={(event) => resizeColumn(column, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitColumn(column); }} />
-      </div>)}
+        <hr className="column-resizer" aria-orientation="vertical" aria-label={`Resize column ${columnLabel(column)}`} aria-valuenow={columnWidths[column]} aria-valuemin={72} aria-valuemax={480} tabIndex={0} onPointerDown={(event) => resizeColumn(column, event)} onKeyDown={(event) => resizeColumnWithKeys(column, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitColumn(column); }} />
+      </div>))}
 
-      {findPanel && <search className="find-panel" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }}>
-        <input autoFocus aria-label="Find" placeholder="Find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }} />
-        {findPanel === "replace" && <input aria-label="Replace with" placeholder="Replace with" value={replacement} onChange={(event) => setReplacement(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); if (event.key === "Escape") { event.preventDefault(); setFindPanel(undefined); viewportRef.current?.focus(); } }} />}
-        <button onClick={() => findText(findQuery)}>Find</button>
-        {findPanel === "find" && !readOnly && <button onClick={() => setFindPanel("replace")}>Replace…</button>}
-        {findPanel === "replace" && !readOnly && <button onClick={() => replaceAll(findQuery, replacement)}>Replace all</button>}
-        <button aria-label="Close find" onClick={() => { setFindPanel(undefined); viewportRef.current?.focus(); }}>×</button>
+      {findPanel && <search className="find-panel">
+        <input ref={focusOnMount} aria-label="Find" placeholder="Find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); }} />
+        {findPanel === "replace" && <input aria-label="Replace with" placeholder="Replace with" value={replacement} onChange={(event) => setReplacement(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); }} />}
+        <button type="button" onClick={() => findText(findQuery)}>Find</button>
+        {findPanel === "find" && !readOnly && <button type="button" onClick={() => setFindPanel("replace")}>Replace…</button>}
+        {findPanel === "replace" && !readOnly && <button type="button" onClick={() => replaceAll(findQuery, replacement)}>Replace all</button>}
+        <button type="button" aria-label="Close find" onClick={() => { setFindPanel(undefined); viewportRef.current?.focus(); }}>×</button>
       </search>}
-      {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={onQueryChange} actions={contextMenuActions} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { onColumnVisibilityChange(fieldIds[contextMenu.index]!, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
-      {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} autoFocus onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
-        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
-        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
-        {!readOnly && !bound && <button onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
-        {contextMenu.axis === "row" && <button onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
-        {contextMenu.axis === "row" && <button onClick={() => { const next = [...rowHeights]; next[contextMenu.index] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
-        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = ROW_HEIGHT; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
-        {contextMenu.axis === "row" && <button onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
-        {(frozenRowCount > 0 || frozenColumnCount > 0) && <button onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
-        {contextMenuActions?.map((action) => <button key={action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
+      {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={onQueryChange} actions={contextMenuActions} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { const fieldId = fieldIds[contextMenu.index]; if (!fieldId) return; onColumnVisibilityChange(fieldId, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
+      {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} ref={focusOnMount} onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
+        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
+        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
+        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
+        {contextMenu.axis === "row" && <button type="button" onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
+        {contextMenu.axis === "row" && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
+        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = ROW_HEIGHT; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
+        {contextMenu.axis === "row" && <button type="button" onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
+        {(frozenRowCount > 0 || frozenColumnCount > 0) && <button type="button" onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
+        {contextMenuActions?.map((action) => <button type="button" key={action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
       </div>}
 
 
@@ -1672,7 +1762,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         width: columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left],
         height: rowOffsets[previewRange.bottom + 1] - rowOffsets[previewRange.top],
       }}>
-        {!readOnly && <button
+        {!readOnly && <button type="button"
           className="fill-handle"
           aria-label="Fill selection"
           onPointerDown={(event) => {
@@ -1722,7 +1812,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       }} />}
       {editing && !activeCustomEditor && <input
         className={`cell-editor${draft.startsWith("=") ? " tokenised-input" : ""}`}
-        autoFocus
+        ref={focusOnMount}
         type={!draft.startsWith("=") && editingField?.dataType === "number" ? "number" : !draft.startsWith("=") && editingField?.dataType === "date" ? "date" : editingField?.dataType === "datetime" ? "datetime-local" : "text"}
         aria-invalid={validationError ? true : undefined}
         aria-activedescendant={suggestions.length > 0 ? `formula-suggestion-${suggestionIndex}` : undefined}
@@ -1813,32 +1903,40 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         onCommit={(value) => finishEdit(true, undefined, value)}
         onCancel={() => finishEdit(false)}
       />}
-      {editing && !(editingField?.multiple && editingField.options) && !activeCustomEditor && !draft.startsWith("=") && (editingField?.dataType === "boolean" || editingField?.dataType === "relationship" || editingField?.options?.length) && <div
-        className={`typed-options ${editingField.dataType ?? "text"}`}
-        role={editingField.dataType === "boolean" ? "radiogroup" : "listbox"}
+      {editing && !(editingField?.multiple && editingField.options) && !activeCustomEditor && !draft.startsWith("=") && (editingField?.dataType === "boolean" || editingField?.dataType === "relationship" || Boolean(editingField?.options?.length)) && (editingField?.dataType === "boolean" ? <div
+        className="typed-options boolean"
+        role="radiogroup"
         aria-label={`Choose ${editingField.label}`}
         style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
       >
-        {(editingField.options ?? (editingField.dataType === "boolean" ? ["true", "false"] : [])).flatMap((option) => editingField.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()) ? [<button
-            role={editingField.dataType === "boolean" ? "radio" : "option"}
-            aria-checked={editingField.dataType === "boolean" ? draft.toLocaleLowerCase() === option.toLocaleLowerCase() : undefined}
-            aria-selected={editingField.dataType !== "boolean" ? draft === option : undefined}
+        {(editingField?.options ?? ["true", "false"]).map((option) => (
+            // biome-ignore lint/a11y/useSemanticElements: button-as-radio inside a radiogroup is the intended pattern; a native input would not preserve editor focus or the button styling
+            <button type="button"
+            role="radio"
+            aria-checked={draft.toLocaleLowerCase() === option.toLocaleLowerCase()}
             className={draft.toLocaleLowerCase() === option.toLocaleLowerCase() ? "active" : ""}
             key={option}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => finishEdit(true, undefined, option)}
-          >{editingField.dataType === "boolean" ? (option === "true" ? "✓ Yes" : "No") : option}</button>] : [])}
-      </div>}
+          >{option === "true" ? "✓ Yes" : "No"}</button>))}
+      </div> : <div
+        className={`typed-options ${editingField?.dataType ?? "text"}`}
+        role="listbox"
+        aria-label={`Choose ${editingField?.label}`}
+        style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+      >
+        {(editingField?.options ?? []).flatMap((option) => editingField?.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()) ? [<button type="button"
+            role="option"
+            aria-selected={draft === option}
+            className={draft.toLocaleLowerCase() === option.toLocaleLowerCase() ? "active" : ""}
+            key={option}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => finishEdit(true, undefined, option)}
+          >{option}</button>] : [])}
+      </div>)}
       {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3 }}>{validationError}</div>}
-      {showShortcutHelp && <div className="shortcut-backdrop" role="presentation" onPointerDown={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }} onKeyDown={(event) => {
-        if (event.key === "Escape") { event.preventDefault(); setShowShortcutHelp(false); viewportRef.current?.focus(); return; }
-        if (event.key !== "Tab") return;
-        const focusables = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button"));
-        if (focusables.length === 0) return;
-        event.preventDefault();
-        focusables[0]!.focus();
-      }}><section className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1} autoFocus onPointerDown={(event) => event.stopPropagation()}>
-        <header><strong>Keyboard shortcuts</strong><button aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
+      {showShortcutHelp && <div className="shortcut-backdrop"><section ref={shortcutHelpRef} className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}>
+        <header><strong>Keyboard shortcuts</strong><button type="button" aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
         <dl><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Fill down</dt><dd>Ctrl/Cmd D</dd><dt>Fill right</dt><dd>Ctrl/Cmd R</dd><dt>Edit cell</dt><dd>Enter or F2</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
       </section></div>}
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
@@ -1846,7 +1944,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 4,
         width: Math.max(290, columnWidths[editing.column]),
       }}>
-        {suggestions.map((suggestion, index) => <button
+        {suggestions.map((suggestion, index) => <button type="button"
           role="option"
           aria-selected={index === suggestionIndex}
           id={`formula-suggestion-${index}`}

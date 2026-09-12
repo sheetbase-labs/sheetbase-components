@@ -12,7 +12,7 @@ export function formulaTokenParts(value: string): readonly FormulaTokenPart[] {
     if (start > cursor) parts.push({ text: value.slice(cursor, start) });
     const key = match[0].toUpperCase();
     if (!indexes.has(key)) indexes.set(key, indexes.size);
-    parts.push({ text: match[0], colour: colours[indexes.get(key)! % colours.length] });
+    parts.push({ text: match[0], colour: colours[(indexes.get(key) ?? 0) % colours.length] });
     cursor = start + match[0].length;
   }
   if (cursor < value.length) parts.push({ text: value.slice(cursor) });
@@ -21,6 +21,8 @@ export function formulaTokenParts(value: string): readonly FormulaTokenPart[] {
 
 export function FormulaTokens({ value, className = "formula-tokens", style }: Readonly<{ value: string; className?: string; style?: CSSProperties }>) {
   const parts = formulaTokenParts(value);
-  return <span className={className} style={style} aria-hidden="true">{parts.map((part, index) => <span className={part.colour} key={index}>{part.text}</span>)}</span>;
+  return <span className={className} style={style} aria-hidden="true">{parts.map((part, index) =>
+    // biome-ignore lint/suspicious/noArrayIndexKey: token parts are positional fragments recomputed wholesale on each value change; they never reorder
+    <span className={part.colour} key={index}>{part.text}</span>)}</span>;
 }
 import type { CSSProperties } from "react";

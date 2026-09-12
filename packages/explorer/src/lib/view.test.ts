@@ -59,7 +59,8 @@ describe('filtersFromTree', () => {
 
   it('round-trips a flat tree through treeFromFilters', () => {
     const flat = group('OR', [condition('a', 1), condition('b', 2)])
-    const out = filtersFromTree(flat)!
+    const out = filtersFromTree(flat)
+    if (!out) throw new Error('expected flat rules')
     const back = treeFromFilters(out.rules, out.logic)
     expect(back.combinator).toBe('OR')
     expect(back.children.map((child) => (child as { field: string }).field)).toEqual(['a', 'b'])

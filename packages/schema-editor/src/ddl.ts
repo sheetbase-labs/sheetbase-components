@@ -41,7 +41,7 @@ function referencedField(graph: SchemaGraph, field: SchemaField): SchemaField | 
   return key ? model.fields.find((f) => f.key === key) : undefined;
 }
 
-function columnType(graph: SchemaGraph, model: SchemaModel, field: SchemaField): string {
+function columnType(graph: SchemaGraph, field: SchemaField): string {
   if (field.type !== "relationship") return COLUMN_TYPES[field.type] ?? "text";
   // FK column takes the referenced PK's SQL type; text when unresolvable.
   const target = referencedField(graph, field);
@@ -49,8 +49,8 @@ function columnType(graph: SchemaGraph, model: SchemaModel, field: SchemaField):
   return COLUMN_TYPES[target.type] ?? "text";
 }
 
-function columnDdl(graph: SchemaGraph, model: SchemaModel, field: SchemaField): string {
-  const parts = [`  ${quoteIdent(field.key)} ${columnType(graph, model, field)}`];
+function columnDdl(graph: SchemaGraph, field: SchemaField): string {
+  const parts = [`  ${quoteIdent(field.key)} ${columnType(graph, field)}`];
   if (field.primaryKey) parts.push("primary key");
   else if (field.nullable === false) parts.push("not null");
   if (field.type === "relationship" && field.references) {
@@ -67,7 +67,7 @@ function columnDdl(graph: SchemaGraph, model: SchemaModel, field: SchemaField): 
 
 /** `create table` for a single model — shared by graphToDdl and diff emission. */
 function createTableDdl(graph: SchemaGraph, model: SchemaModel): string {
-  return `create table ${quoteIdent(model.name)} (\n${model.fields.map((field) => columnDdl(graph, model, field)).join(",\n")}\n);`;
+  return `create table ${quoteIdent(model.name)} (\n${model.fields.map((field) => columnDdl(graph, field)).join(",\n")}\n);`;
 }
 
 /**
@@ -171,10 +171,10 @@ function refKey(graph: SchemaGraph, field: SchemaField): string | null {
   return `${ref.model}.${key ?? ""}`;
 }
 
-function fieldChanges(prevGraph: SchemaGraph, prevModel: SchemaModel, prev: SchemaField, nextGraph: SchemaGraph, nextModel: SchemaModel, field: SchemaField): FieldChanges | null {
+function fieldChanges(prevGraph: SchemaGraph, prev: SchemaField, nextGraph: SchemaGraph, field: SchemaField): FieldChanges | null {
   const changes: FieldChanges = {};
-  const from = columnType(prevGraph, prevModel, prev);
-  const to = columnType(nextGraph, nextModel, field);
+  const from = columnType(prevGraph, prev);
+  const to = columnType(nextGraph, field);
   if (from !== to) changes.type = { from, to };
   if ((prev.nullable !== false) !== (field.nullable !== false)) changes.nullable = field.nullable !== false;
   if (Boolean(prev.primaryKey) !== Boolean(field.primaryKey)) {
@@ -219,7 +219,7 @@ export function diffGraphs(previous: SchemaGraph, next: SchemaGraph): SchemaDiff
     for (const field of nextModel.fields) {
       const prev = prevFields.get(field.key);
       if (!prev) continue;
-      const changes = fieldChanges(previous, prevModel, prev, next, nextModel, field);
+      const changes = fieldChanges(previous, prev, next, field);
       if (changes) change.push({ field, previous: prev });
       if (changes?.type) destructive.push(`alters type of "${field.key}" on "${nextModel.name}" (${changes.type.from} → ${changes.type.to})`);
     }
@@ -253,10 +253,10 @@ export function graphDiffToDdl(previous: SchemaGraph, next: SchemaGraph, options
     const prevModel = previous.models.find((m) => m.name === alter.model);
     if (!nextModel || !prevModel) continue;
     const clauses: string[] = [];
-    for (const field of alter.add) clauses.push(`add column ${columnDdl(next, nextModel, field).trim()}`);
+    for (const field of alter.add) clauses.push(`add column ${columnDdl(next, field).trim()}`);
     if (options?.drops) for (const key of alter.drop) clauses.push(`drop column ${quoteIdent(key)}`);
     for (const { field, previous: prevField } of alter.change) {
-      const changes = fieldChanges(previous, prevModel, prevField, next, nextModel, field);
+      const changes = fieldChanges(previous, prevField, next, field);
       if (!changes) continue;
       const key = quoteIdent(field.key);
       if (changes.type) clauses.push(`alter column ${key} type ${changes.type.to}`);
@@ -438,7 +438,7 @@ export function ddlToGraph(sql: string): SchemaGraph {
   for (const model of models) {
     for (const field of model.fields) {
       if (!field.references?.field) continue;
-      const target = models.find((m) => m.name === field.references!.model);
+      const target = models.find((m) => m.name === field.references?.model);
       if (target && field.references.field === primaryKeyOf(target)) {
         field.references = { model: field.references.model };
       }

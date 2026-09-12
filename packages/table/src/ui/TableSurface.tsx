@@ -63,8 +63,8 @@ export function TableSurface({ table, companion, companionWidth = 292, className
   >
     <div className="table-surface-table">{table}</div>
     {resolvedObjects.length === 0 && action && <div className="table-surface-action">{action}</div>}
-    {rightObject && <aside className="table-surface-companion table-surface-object" data-object-id={rightObject.id}><div className="surface-resizer horizontal" role="separator" aria-orientation="vertical" aria-label="Resize panel" tabIndex={0} onPointerDown={(event) => startResize(event, rightObject)} onKeyDown={resizeWithKeys(rightObject)} />{rightObject.content}</aside>}
-    {bottomObject && <aside className="table-surface-bottom table-surface-object" data-object-id={bottomObject.id}><div className="surface-resizer vertical" role="separator" aria-orientation="horizontal" aria-label="Resize panel" tabIndex={0} onPointerDown={(event) => startResize(event, bottomObject)} onKeyDown={resizeWithKeys(bottomObject)} />{bottomObject.content}</aside>}
+    {rightObject && <aside className="table-surface-companion table-surface-object" data-object-id={rightObject.id}><hr className="surface-resizer horizontal" aria-orientation="vertical" aria-label="Resize panel" aria-valuenow={rightObject.size} aria-valuemin={220} aria-valuemax={520} tabIndex={0} onPointerDown={(event) => startResize(event, rightObject)} onKeyDown={resizeWithKeys(rightObject)} />{rightObject.content}</aside>}
+    {bottomObject && <aside className="table-surface-bottom table-surface-object" data-object-id={bottomObject.id}><hr className="surface-resizer vertical" aria-orientation="horizontal" aria-label="Resize panel" aria-valuenow={bottomObject.size} aria-valuemin={220} aria-valuemax={520} tabIndex={0} onPointerDown={(event) => startResize(event, bottomObject)} onKeyDown={resizeWithKeys(bottomObject)} />{bottomObject.content}</aside>}
   </section>;
 }
 
@@ -90,15 +90,15 @@ export type TableFormattingToolbarProps = Readonly<{
 const builtInLightColours = ["#242424", "#7652ef", "#167a59", "#3e67af", "#a23131", "#8a5a00", "#ffffff", "#f2efff", "#e8f6ef", "#fff1f1"];
 const builtInDarkColours = ["#e7e5ec", "#a997ff", "#68d5ae", "#82aaff", "#ff8f8f", "#f0bd63", "#17161a", "#302a43", "#18382e", "#442526"];
 
-function onSwatchKeys(event: React.KeyboardEvent) {
-  const swatches = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button"));
+function onSwatchKeys(event: React.KeyboardEvent<HTMLButtonElement>) {
+  const swatches = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("button") ?? []);
   const columns = 5;
   const current = swatches.indexOf(document.activeElement as HTMLElement);
   if (current < 0 || !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
   event.preventDefault();
   const offsets: Record<string, number> = { ArrowDown: columns, ArrowUp: -columns, ArrowLeft: -1, ArrowRight: 1 };
   const next = Math.max(0, Math.min(swatches.length - 1, current + (offsets[event.key] ?? 0)));
-  swatches[next]!.focus();
+  swatches[next]?.focus();
 }
 
 function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ label: string; value?: string; colours: readonly string[]; theme: "light" | "dark"; onChange(value: string): void }>) {
@@ -106,7 +106,7 @@ function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ la
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
-  const popover = usePortalPopover(open, () => setOpen(false), { popover: paletteRef, trigger: buttonRef });
+  usePortalPopover(open, () => setOpen(false), { popover: paletteRef, trigger: buttonRef });
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
@@ -128,10 +128,8 @@ function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ la
     aria-label={`${label} palette`}
     data-theme={theme}
     style={position}
-    onKeyDown={(event) => { popover.onKeyDown(event); onSwatchKeys(event); }}
-    onBlur={(event) => popover.onBlurOut(event)}
-  >{colours.map((colour) => <button aria-label={`${label} ${colour}`} key={colour} style={{ background: colour }} onClick={() => { onChange(colour); setOpen(false); buttonRef.current?.focus(); }} />)}</div>;
-  return <div className="format-palette"><button ref={buttonRef} className={open ? "active" : ""} aria-label={label} title={label} aria-expanded={open} aria-haspopup="dialog" onClick={toggle}><span>{label === "Text colour" ? "A" : "▧"}</span><i style={value ? { background: value } : undefined} /></button>{open && typeof document !== "undefined" && createPortal(palette, document.body)}</div>;
+  >{colours.map((colour) => <button type="button" aria-label={`${label} ${colour}`} key={colour} style={{ background: colour }} onKeyDown={onSwatchKeys} onClick={() => { onChange(colour); setOpen(false); buttonRef.current?.focus(); }} />)}</div>;
+  return <div className="format-palette"><button type="button" ref={buttonRef} className={open ? "active" : ""} aria-label={label} title={label} aria-expanded={open} aria-haspopup="dialog" onClick={toggle}><span>{label === "Text colour" ? "A" : "▧"}</span><i style={value ? { background: value } : undefined} /></button>{open && typeof document !== "undefined" && createPortal(palette, document.body)}</div>;
 }
 
 export function TableFormattingToolbar({ selection, onFormat, format = {}, mixedFormats = [], theme = "light", themeMode = theme, onThemeChange, viewControls, colours, darkColours, defaultTextColour = "#242424", defaultFillColour = "#ffffff" }: TableFormattingToolbarProps) {
@@ -146,20 +144,20 @@ export function TableFormattingToolbar({ selection, onFormat, format = {}, mixed
   return <div className="table-formatting-toolbar" role="toolbar" aria-label="Format selection">
     <span className="format-selection" title={selection}>{selection}</span>
     <span className="format-divider" />
-    <button className={`${format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? "active" : ""}${mixed("fontWeight") ? " mixed" : ""}`} aria-label="Bold" title="Bold" onClick={() => onFormat({ fontWeight: format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? 400 : 600 })}>B</button>
+    <button type="button" className={`${format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? "active" : ""}${mixed("fontWeight") ? " mixed" : ""}`} aria-label="Bold" title="Bold" onClick={() => onFormat({ fontWeight: format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? 400 : 600 })}>B</button>
     <ColourPalette label="Text colour" value={mixed("foreground") ? undefined : format.foreground ?? defaultTextColour} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("foreground", colour)} />
     <ColourPalette label="Fill colour" value={mixed("background") ? undefined : format.background ?? defaultFillColour} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("background", colour)} />
     <span className="format-divider" />
-    <button className={format.horizontalAlign === "left" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align left" title="Align left" onClick={() => onFormat({ horizontalAlign: "left" })}>≡</button>
-    <button className={format.horizontalAlign === "center" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align centre" title="Align centre" onClick={() => onFormat({ horizontalAlign: "center" })}>≣</button>
-    <button aria-label="Align right" title="Align right" className={`align-right${format.horizontalAlign === "right" && !mixed("horizontalAlign") ? " active" : ""}`} onClick={() => onFormat({ horizontalAlign: "right" })}>≡</button>
+    <button type="button" className={format.horizontalAlign === "left" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align left" title="Align left" onClick={() => onFormat({ horizontalAlign: "left" })}>≡</button>
+    <button type="button" className={format.horizontalAlign === "center" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align centre" title="Align centre" onClick={() => onFormat({ horizontalAlign: "center" })}>≣</button>
+    <button type="button" aria-label="Align right" title="Align right" className={`align-right${format.horizontalAlign === "right" && !mixed("horizontalAlign") ? " active" : ""}`} onClick={() => onFormat({ horizontalAlign: "right" })}>≡</button>
     <select aria-label="Number format" value={mixed("numberFormat") ? "mixed" : format.numberFormat ?? "general"} onChange={(event) => onFormat({ numberFormat: event.target.value as CellFormat["numberFormat"] })}>
       <option value="mixed" disabled>Mixed</option><option value="general">General</option><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option><option value="date">Date</option>
     </select>
     <span className="format-divider" />
-    <button className="clear-format" onClick={() => onFormat({ foreground: undefined, background: undefined, fontWeight: undefined, horizontalAlign: undefined, numberFormat: "general" })}>Clear</button>
+    <button type="button" className="clear-format" onClick={() => onFormat({ foreground: undefined, background: undefined, fontWeight: undefined, horizontalAlign: undefined, numberFormat: "general" })}>Clear</button>
     {(viewControls || onThemeChange) && <span className="format-spacer" />}{viewControls}
-    {onThemeChange && <button className="theme-toggle" aria-label={`Use ${themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light"} mode`} title={`Theme: ${themeMode}`} onClick={() => onThemeChange(themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light")}>{themeMode === "dark" ? "◑" : themeMode === "system" ? "☀" : "◐"}</button>}
+    {onThemeChange && <button type="button" className="theme-toggle" aria-label={`Use ${themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light"} mode`} title={`Theme: ${themeMode}`} onClick={() => onThemeChange(themeMode === "light" ? "dark" : themeMode === "dark" ? "system" : "light")}>{themeMode === "dark" ? "◑" : themeMode === "system" ? "☀" : "◐"}</button>}
   </div>;
 }
 
@@ -219,6 +217,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
     return visible;
   }, [fieldId, rules]);
   const [activeIndex, setActiveIndex] = useState<number | undefined>(() => fieldRules.at(-1)?.index);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset selection only when the inspected field changes; the effect below reconciles a stale index when the rules list itself changes
   useEffect(() => setActiveIndex(fieldRules.at(-1)?.index), [fieldId]);
   useEffect(() => {
     if (activeIndex !== undefined && !fieldRules.some(({ index }) => index === activeIndex)) setActiveIndex(fieldRules.at(-1)?.index);
@@ -269,15 +268,17 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
         ? "Choose or enter a comparison value."
         : undefined;
 
-  return <div className="conditional-inspector" aria-label="Conditional formatting">
-    <header><strong>Conditional formatting</strong><span className="rule-history"><button aria-label="Undo rule change" disabled={pastRules.current.length === 0} onClick={undoRules}>↶</button><button aria-label="Redo rule change" disabled={futureRules.current.length === 0} onClick={redoRules}>↷</button></span><button aria-label="Close conditional formatting" onClick={onClose}>×</button></header>
+  return <section className="conditional-inspector" aria-label="Conditional formatting">
+    <header><strong>Conditional formatting</strong><span className="rule-history"><button type="button" aria-label="Undo rule change" disabled={pastRules.current.length === 0} onClick={undoRules}>↶</button><button type="button" aria-label="Redo rule change" disabled={futureRules.current.length === 0} onClick={redoRules}>↷</button></span><button type="button" aria-label="Close conditional formatting" onClick={onClose}>×</button></header>
     <div className="conditional-inspector-body">
-      <label>When field{fields.length > 0 ? <select aria-label="Condition field" value={fieldId} onChange={(event) => onFieldChange?.(event.target.value)}>{fields.map((field) => <option value={field.id} key={field.id}>{field.label}</option>)}</select> : <input value={fieldId} readOnly />}</label>
+      {fields.length > 0
+        ? <label>When field<select aria-label="Condition field" value={fieldId} onChange={(event) => onFieldChange?.(event.target.value)}>{fields.map((field) => <option value={field.id} key={field.id}>{field.label}</option>)}</select></label>
+        : <label>When field<input aria-label="Condition field" value={fieldId} readOnly /></label>}
       <label>Apply format to<select aria-label="Format target" value={active.rule.applyTo ?? "cell"} onChange={(event) => { const applyTo = event.target.value as "cell" | "column" | "row" | "range"; updateActive({ ...active.rule, applyTo, targetFieldId: applyTo === "column" ? active.rule.targetFieldId ?? fieldId : undefined, range: applyTo === "range" ? selectionRange : undefined }); }}><option value="cell">Cell</option><option value="column">Column</option><option value="row">Row</option><option value="range" disabled={!selectionRange}>Current selection{selectionLabel ? ` · ${selectionLabel}` : ""}</option></select></label>
       {active.rule.applyTo === "column" && <label>Target column<select aria-label="Target column" value={active.rule.targetFieldId ?? fieldId} onChange={(event) => updateActive({ ...active.rule, targetFieldId: event.target.value })}>{fields.map((field) => <option value={field.id} key={field.id}>{field.label}</option>)}</select></label>}
-      <div className="conditional-mode" role="group" aria-label="Formatting mode">
-        <button className={active.rule.colorScale ? "active" : ""} onClick={() => setMode("scale")}>Color scale</button><button className={!active.rule.colorScale ? "active" : ""} onClick={() => setMode("highlight")}>Highlight cell</button>
-      </div>
+      <fieldset className="conditional-mode" aria-label="Formatting mode">
+        <button type="button" className={active.rule.colorScale ? "active" : ""} onClick={() => setMode("scale")}>Color scale</button><button type="button" className={!active.rule.colorScale ? "active" : ""} onClick={() => setMode("highlight")}>Highlight cell</button>
+      </fieldset>
       {active.rule.colorScale ? <section>
         <h3>Scale</h3>
         <div className="scale-stops">
@@ -294,15 +295,15 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
       {!active.rule.colorScale && <section>
         <h3>Formatting style</h3>
         <div className="format-controls">
-          <button className={active.rule.format.fontWeight ? "active" : ""} aria-label="Bold" onClick={() => updateFormat({ fontWeight: active.rule.format.fontWeight ? undefined : 600 })}>B</button>
+          <button type="button" className={active.rule.format.fontWeight ? "active" : ""} aria-label="Bold" onClick={() => updateFormat({ fontWeight: active.rule.format.fontWeight ? undefined : 600 })}>B</button>
           <label aria-label="Text colour"><span>A</span><input type="color" value={active.rule.format.foreground ?? "#a23131"} onChange={(event) => updateFormat({ foreground: event.target.value })} /></label>
           <label aria-label="Fill colour"><span>▧</span><input type="color" value={active.rule.format.background ?? "#fff1f1"} onChange={(event) => updateFormat({ background: event.target.value })} /></label>
         </div>
         <div className="conditional-preview" style={{ color: active.rule.format.foreground, background: active.rule.format.background, fontWeight: active.rule.format.fontWeight }}>{String(active.rule.value || "Preview")}</div>
       </section>}
       {validation && <p className="rule-validation" role="alert">{validation}</p>}
-      <section className="conditional-rules"><h3>Rules</h3>{fieldRules.map(({ rule, index }) => <div className={`conditional-rule${index === active.index ? " active" : ""}${rule.enabled === false ? " disabled" : ""}`} key={rule.id ?? `${rule.operator}-${index}`}><input aria-label={`Enable ${String(rule.value ?? operatorLabels[rule.operator])} rule`} type="checkbox" checked={rule.enabled !== false} onChange={(event) => { const updated = [...rules]; updated[index] = { ...rule, enabled: event.target.checked }; commitRules(updated); }} /><button onClick={() => setActiveIndex(index)}><span style={{ background: rule.format.background ?? rule.format.foreground }} />{String(rule.value ?? operatorLabels[rule.operator])}<small>{rule.applyTo === "row" ? "row" : rule.applyTo === "column" ? "column" : rule.applyTo === "range" ? "selection" : "cell"}</small></button></div>)}</section>
+      <section className="conditional-rules"><h3>Rules</h3>{fieldRules.map(({ rule, index }) => <div className={`conditional-rule${index === active.index ? " active" : ""}${rule.enabled === false ? " disabled" : ""}`} key={rule.id ?? `${rule.operator}-${index}`}><input aria-label={`Enable ${String(rule.value ?? operatorLabels[rule.operator])} rule`} type="checkbox" checked={rule.enabled !== false} onChange={(event) => { const updated = [...rules]; updated[index] = { ...rule, enabled: event.target.checked }; commitRules(updated); }} /><button type="button" onClick={() => setActiveIndex(index)}><span style={{ background: rule.format.background ?? rule.format.foreground }} />{String(rule.value ?? operatorLabels[rule.operator])}<small>{rule.applyTo === "row" ? "row" : rule.applyTo === "column" ? "column" : rule.applyTo === "range" ? "selection" : "cell"}</small></button></div>)}</section>
     </div>
-    <footer><button className="conditional-delete" disabled={active.index >= rules.length} onClick={deleteActive}>Delete</button><button aria-label="Move rule up" disabled={fieldRules[0]?.index === active.index} onClick={() => moveActive(-1)}>↑</button><button aria-label="Move rule down" disabled={fieldRules.at(-1)?.index === active.index} onClick={() => moveActive(1)}>↓</button><button aria-label="Duplicate rule" onClick={duplicateActive}>Duplicate</button><button className="conditional-add" onClick={() => { const next = [...rules, { id: `rule-${Date.now()}`, fieldId, operator: "equals" as const, value: "", format: { foreground: "#35277f", background: "#f2efff" } }]; commitRules(next); setActiveIndex(next.length - 1); }}>+ Add</button><button className="conditional-save" disabled={Boolean(validation)} onClick={onClose}>Done</button></footer>
-  </div>;
+    <footer><button type="button" className="conditional-delete" disabled={active.index >= rules.length} onClick={deleteActive}>Delete</button><button type="button" aria-label="Move rule up" disabled={fieldRules[0]?.index === active.index} onClick={() => moveActive(-1)}>↑</button><button type="button" aria-label="Move rule down" disabled={fieldRules.at(-1)?.index === active.index} onClick={() => moveActive(1)}>↓</button><button type="button" aria-label="Duplicate rule" onClick={duplicateActive}>Duplicate</button><button type="button" className="conditional-add" onClick={() => { const next = [...rules, { id: `rule-${Date.now()}`, fieldId, operator: "equals" as const, value: "", format: { foreground: "#35277f", background: "#f2efff" } }]; commitRules(next); setActiveIndex(next.length - 1); }}>+ Add</button><button type="button" className="conditional-save" disabled={Boolean(validation)} onClick={onClose}>Done</button></footer>
+  </section>;
 }

@@ -105,16 +105,18 @@ export function applyTsvRows(
   const next = new Map(data);
   let bottom = start.row;
   let right = start.column;
-  rows.forEach((values, rowOffset) => values.forEach((value, columnOffset) => {
-    const row = start.row + rowOffset;
-    const column = start.column + columnOffset;
-    if (row >= rowCount || column >= columnCount) return;
-    if (!canEdit({ row, column })) return;
-    const key = cellKey({ row, column });
-    if (value === "") next.delete(key); else next.set(key, value);
-    bottom = Math.max(bottom, row);
-    right = Math.max(right, column);
-  }));
+  rows.forEach((values, rowOffset) => {
+    values.forEach((value, columnOffset) => {
+      const row = start.row + rowOffset;
+      const column = start.column + columnOffset;
+      if (row >= rowCount || column >= columnCount) return;
+      if (!canEdit({ row, column })) return;
+      const key = cellKey({ row, column });
+      if (value === "") next.delete(key); else next.set(key, value);
+      bottom = Math.max(bottom, row);
+      right = Math.max(right, column);
+    });
+  });
   return { data: next, selection: { anchor: start, focus: { row: bottom, column: right } } };
 }
 
@@ -157,7 +159,8 @@ export function shiftFormulaReferences(formula: string, rowDelta: number, column
     const column = source.column + (absoluteColumn ? 0 : columnDelta);
     if (row < 0 || column < 0) return `${sheet}#REF!`;
     const shifted = addressKey({ row, column });
-    const parts = /^([A-Z]+)(\d+)$/.exec(shifted)!;
+    const parts = /^([A-Z]+)(\d+)$/.exec(shifted);
+    if (!parts) return reference;
     return `${sheet}${absoluteColumn}${parts[1]}${absoluteRow}${parts[2]}`;
   });
 }
@@ -331,7 +334,11 @@ export function sortGridRows(data: GridSnapshot, column: number, direction: "asc
     return (direction === "asc" ? comparison : -comparison) || leftRow - rightRow;
   });
   const output = new Map<string, string>();
-  sourceRows.forEach(([, row], targetRow) => row.forEach((value, targetColumn) => output.set(cellKey({ row: targetRow, column: targetColumn }), value)));
+  sourceRows.forEach(([, row], targetRow) => {
+    row.forEach((value, targetColumn) => {
+      output.set(cellKey({ row: targetRow, column: targetColumn }), value);
+    });
+  });
   return output;
 }
 
@@ -354,7 +361,8 @@ function adjustFormulaForStructure(input: string, change: GridStructureChange): 
       : (coordinate >= change.index + change.count ? -change.count : 0);
     if (shift === 0) return reference;
     const moved = change.axis === "row" ? { ...point, row: point.row + shift } : { ...point, column: point.column + shift };
-    const address = /^([A-Z]+)(\d+)$/.exec(addressKey(moved))!;
+    const address = /^([A-Z]+)(\d+)$/.exec(addressKey(moved));
+    if (!address) return reference;
     return `${sheet}${absoluteColumn}${address[1]}${absoluteRow}${address[2]}`;
   });
 }

@@ -111,7 +111,7 @@ export function DataGrid({
             {columns.map((column) => {
               const active = sort?.id === column.id;
               return (
-                <th key={column.id} aria-sort={active ? (sort!.direction === "asc" ? "ascending" : "descending") : undefined}>
+                <th key={column.id} aria-sort={active ? (sort?.direction === "asc" ? "ascending" : "descending") : undefined}>
                   {sortable ? (
                     <button
                       type="button"
@@ -120,7 +120,7 @@ export function DataGrid({
                       onClick={() => toggleSort(column.id)}
                     >
                       {column.label}
-                      <span>{active ? (sort!.direction === "asc" ? "↑" : "↓") : column.kind}</span>
+                      <span>{active ? (sort?.direction === "asc" ? "↑" : "↓") : column.kind}</span>
                     </button>
                   ) : (
                     <>{column.label}{column.kind && <span>{column.kind}</span>}</>
@@ -137,6 +137,7 @@ export function DataGrid({
             </tr>
           )}
           {start > 0 && (
+            // biome-ignore lint/a11y/noAriaHiddenOnFocusable: spacer row is phantom height for virtualization; hiding it from AT is the intent
             <tr aria-hidden="true">
               <td colSpan={Math.max(1, columnCount)} style={{ height: start * ROW_HEIGHT, padding: 0, border: 0 }} />
             </tr>
@@ -161,6 +162,7 @@ export function DataGrid({
             );
           })}
           {end < total && (
+            // biome-ignore lint/a11y/noAriaHiddenOnFocusable: spacer row is phantom height for virtualization; hiding it from AT is the intent
             <tr aria-hidden="true">
               <td colSpan={Math.max(1, columnCount)} style={{ height: (total - end) * ROW_HEIGHT, padding: 0, border: 0 }} />
             </tr>

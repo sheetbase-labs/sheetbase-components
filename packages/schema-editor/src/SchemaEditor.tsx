@@ -1,4 +1,4 @@
-import { useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { ThemeToggleButton, PaneLayout, loadInitialState, toFieldDataType, useIdleSave, usePersistedTheme, type FieldDataType, type Layout, type PaneSpec, type PersistenceAdapter, type SheetbaseField, type ThemeMode } from "sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 import {
@@ -94,6 +94,17 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  const importBackdropRef = useRef<HTMLDivElement>(null);
+  const importTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!importOpen) return;
+    importTextareaRef.current?.focus();
+    const backdrop = importBackdropRef.current;
+    const onPointerDown = (event: MouseEvent) => { if (event.target === backdrop) setImportOpen(false); };
+    backdrop?.addEventListener("mousedown", onPointerDown);
+    return () => backdrop?.removeEventListener("mousedown", onPointerDown);
+  }, [importOpen]);
 
   function importDdl() {
     try {
@@ -157,10 +168,10 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
   }
 
   function patchModel(name: string, patch: Partial<SchemaModel>) {
-    const renamed = typeof patch.name === "string" && patch.name !== name;
+    const newName = typeof patch.name === "string" && patch.name !== name ? patch.name : undefined;
     let next: SchemaGraph = { models: graph.models.map((m) => (m.name === name ? { ...m, ...patch } : m)) };
-    if (renamed) next = rewriteReferences(next, { kind: "rename-model", from: name, to: patch.name! });
-    commit(next, renamed ? patch.name : undefined);
+    if (newName) next = rewriteReferences(next, { kind: "rename-model", from: name, to: newName });
+    commit(next, newName);
   }
 
   function removeModel(name: string) {
@@ -231,36 +242,36 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
         {chrome !== "none" && (
           <div className="sb-topbar">
             <div className="sb-toolbar-group">
-              <button className="sb-icon-btn" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}>−</button>
+              <button type="button" className="sb-icon-btn" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}>−</button>
               <span className="sb-stat" style={{ minWidth: 44, textAlign: "center", fontFamily: "var(--font-sans)" }}>{Math.round(zoom * 100)}%</span>
-              <button className="sb-icon-btn" title="Zoom in" onClick={() => setZoom((z) => Math.min(2, +(z + 0.15).toFixed(2)))}>+</button>
+              <button type="button" className="sb-icon-btn" title="Zoom in" onClick={() => setZoom((z) => Math.min(2, +(z + 0.15).toFixed(2)))}>+</button>
               <span className="sb-divider" />
-              <button className="sb-btn" onClick={fitView}>Fit</button>
-              <button className="sb-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
+              <button type="button" className="sb-btn" onClick={fitView}>Fit</button>
+              <button type="button" className="sb-btn" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset</button>
               <span className="sb-divider" />
               <span className="sb-stat">{graph.models.length} models · {relations.length} relations</span>
             </div>
             <div className="sb-topbar-actions">
               {exportNote && <span className="sb-stat">{exportNote}</span>}
-              <button
+              <button type="button"
                 className="sb-btn"
                 title="Paste create-table DDL to replace the graph"
                 onClick={() => { setImportOpen(true); setImportError(null); }}
               >Import SQL</button>
-              <button
+              <button type="button"
                 className="sb-btn"
                 disabled={errors.length > 0}
                 title={errors.length > 0 ? `Fix validation first: ${errors.join("; ")}` : "Copy create-table DDL (Postgres-flavoured)"}
                 onClick={exportDdl}
               >Export SQL</button>
-              <button
+              <button type="button"
                 className="sb-btn"
                 disabled={errors.length > 0}
                 title={errors.length > 0 ? `Fix validation first: ${errors.join("; ")}` : "Copy the provisioning payload as JSON"}
                 onClick={exportPayload}
               >Export payload</button>
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
-              <button className="sb-btn primary" onClick={addModel}>+ Model</button>
+              <button type="button" className="sb-btn primary" onClick={addModel}>+ Model</button>
             </div>
           </div>
         )}
@@ -277,7 +288,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                   <div className="sb-panel-heading"><span>Models</span><span>{graph.models.length}</span></div>
                   <div className="sb-schema-list-items">
                     {graph.models.map((m) => (
-                      <button key={m.name} className={m.name === selected ? "sb-schema-row active" : "sb-schema-row"} onClick={() => selectModel(m.name)}>
+                      <button type="button" key={m.name} className={m.name === selected ? "sb-schema-row active" : "sb-schema-row"} onClick={() => selectModel(m.name)}>
                         <span className="sb-database-dot" />
                         <span className="sb-schema-row-copy"><strong>{m.label || m.name}</strong><small>{m.fields.length} fields</small></span>
                         {m.fields.some((f) => f.references) && <span className="sb-chip">linked</span>}
@@ -300,10 +311,12 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
               content: (
                 <div className="sb-plate">
                   <div className="sb-panel-heading"><span>Canvas</span></div>
+                {/* biome-ignore lint/a11y/useSemanticElements lint/a11y/noNoninteractiveElementInteractions: keyboard-driven pan/zoom canvas is a custom widget; no semantic element covers it */}
                 <div
                   ref={canvasRef}
                   className="sb-schema-canvas"
                   role="group"
+                  // biome-ignore lint/a11y/noNoninteractiveTabindex: the canvas is the keyboard focus target for pan/zoom; roving focus requires tabindex
                   tabIndex={0}
                   aria-label="Schema canvas. Tab to a model, press Enter to move it. Plus and minus zoom, arrow keys pan, 0 resets the view."
                   onKeyDown={(e) => {
@@ -328,8 +341,10 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                 >
                   <div data-pane="1" className="sb-schema-pane" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}>
                     <svg className="sb-schema-edges" data-pane="1">
+                      <title>Schema relationships</title>
                       {relations.map((r) => {
-                        const a = posByModel[r.fromModel]!, b = posByModel[r.toModel]!;
+                        const a = posByModel[r.fromModel], b = posByModel[r.toModel];
+                        if (!a || !b) return null;
                         const x1 = a.x + NODE_WIDTH, y1 = a.y + 44, x2 = b.x, y2 = b.y + 44;
                         const mx = (x1 + x2) / 2;
                         return <path key={r.id} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} markerEnd="url(#sb-arrow)" />;
@@ -341,13 +356,16 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                       </defs>
                     </svg>
                     {graph.models.map((m) => {
-                      const p = posByModel[m.name]!;
+                      const p = posByModel[m.name];
+                      if (!p) return null;
                       const moving = moveTarget === m.name;
                       return (
+                        // biome-ignore lint/a11y/useSemanticElements lint/a11y/noNoninteractiveElementInteractions: movable canvas node is a custom widget; Enter-to-move plus arrow-key nudge have no semantic equivalent
                         <div
                           key={m.name}
                           ref={(el) => { if (el) nodeRefs.current.set(m.name, el); else nodeRefs.current.delete(m.name); }}
                           role="group"
+                          // biome-ignore lint/a11y/noNoninteractiveTabindex: nodes participate in roving focus so arrows can move between models
                           tabIndex={0}
                           aria-label={`${m.label || m.name}, ${m.fields.length} field${m.fields.length === 1 ? "" : "s"}${moving ? ", moving" : ""}`}
                           className={`sb-node${m.name === selected ? " active" : ""}${moving ? " moving" : ""}`}
@@ -388,7 +406,8 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                               e.preventDefault();
                               e.stopPropagation();
                               const index = graph.models.findIndex((x) => x.name === m.name);
-                              const next = graph.models[(index + delta + graph.models.length) % graph.models.length]!;
+                              const next = graph.models[(index + delta + graph.models.length) % graph.models.length];
+                              if (!next) return;
                               selectModel(next.name);
                               nodeRefs.current.get(next.name)?.focus();
                             }
@@ -421,7 +440,7 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                           <ul>
                             {m.fields.map((f) => (
                               <li key={f.key}>
-                                <span className={`sb-type type-${f.type}`}>{f.type[0]!.toUpperCase()}</span>
+                                <span className={`sb-type type-${f.type}`}>{f.type[0]?.toUpperCase()}</span>
                                 <span className="sb-node-field">{f.key}</span>
                                 {f.primaryKey && <span className="sb-chip">PK</span>}
                                 {f.references && <span className="sb-chip link">→ {f.references.model}</span>}
@@ -453,17 +472,18 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
                         <label className="sb-compact"><span>Table</span><input className="sb-input sb-mono" value={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { name: e.target.value.replace(/\s+/g, "_") })} /></label>
                         <label className="sb-compact"><span>Label</span><input className="sb-input" value={selectedModel.label ?? ""} placeholder={selectedModel.name} onChange={(e) => patchModel(selectedModel.name, { label: e.target.value || undefined })} /></label>
                         <div className="sb-row-btns">
-                          <button className="sb-link-btn" onClick={() => addField(selectedModel.name)}>+ Field</button>
-                          <button className="sb-link-btn danger" onClick={() => removeModel(selectedModel.name)}>Delete model</button>
+                          <button type="button" className="sb-link-btn" onClick={() => addField(selectedModel.name)}>+ Field</button>
+                          <button type="button" className="sb-link-btn danger" onClick={() => removeModel(selectedModel.name)}>Delete model</button>
                         </div>
                       </section>
                       <section>
                         <h3>Fields · {selectedModel.fields.length}</h3>
                         {selectedModel.fields.map((f, i) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: fields are edited positionally and their key is mutable while typing, so index is the stable ingredient
                           <div className="sb-field" key={`${f.key}-${i}`}>
                             <div className="sb-field-key">
                               <input className="sb-input sb-mono" aria-label="Field key" value={f.key} onChange={(e) => patchField(selectedModel.name, i, { key: e.target.value.replace(/\s+/g, "_") })} />
-                              <button className="sb-remove" title="Remove field" onClick={() => removeField(selectedModel.name, i)}>×</button>
+                              <button type="button" className="sb-remove" title="Remove field" onClick={() => removeField(selectedModel.name, i)}>×</button>
                             </div>
                             <label className="sb-compact"><span>Type</span>
                               <select
@@ -504,12 +524,12 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
           ] satisfies PaneSpec[]}
         />
         {importOpen && (
-          <div className="sb-import-backdrop" onClick={() => setImportOpen(false)}>
-            <div className="sb-import-panel" role="dialog" aria-label="Import SQL" onClick={(e) => e.stopPropagation()}>
+          <div className="sb-import-backdrop" ref={importBackdropRef}>
+            <div className="sb-import-panel" role="dialog" aria-label="Import SQL">
               <div className="sb-panel-heading"><span>Import DDL</span><span>replaces the graph</span></div>
               <textarea
+                ref={importTextareaRef}
                 className="sb-input sb-mono sb-import-sql"
-                autoFocus
                 spellCheck={false}
                 placeholder={'create table "samples" (\n  "id" text primary key,\n  …\n);'}
                 value={importText}
@@ -518,8 +538,8 @@ export function SchemaEditor({ value, initialGraph, onChange, theme, defaultThem
               />
               {importError && <p className="sb-import-error">{importError}</p>}
               <div className="sb-import-actions">
-                <button className="sb-btn" onClick={() => setImportOpen(false)}>Cancel</button>
-                <button className="sb-btn primary" disabled={!importText.trim()} onClick={importDdl}>Import</button>
+                <button type="button" className="sb-btn" onClick={() => setImportOpen(false)}>Cancel</button>
+                <button type="button" className="sb-btn primary" disabled={!importText.trim()} onClick={importDdl}>Import</button>
               </div>
             </div>
           </div>

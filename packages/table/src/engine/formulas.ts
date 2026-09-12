@@ -189,19 +189,6 @@ function evaluateNode(node: FormulaNode, resolve: ValueResolver): FormulaValue {
   return output as Scalar;
 }
 
-function expand(value: FormulaValue, resolve: ValueResolver): Scalar[] {
-  if (!isRange(value)) return [value];
-  if (value.start.sheet !== value.end.sheet) throw new Error("#REF!");
-  const start = parseAddress(value.start.address);
-  const end = parseAddress(value.end.address);
-  const values: Scalar[] = [];
-  for (let row = Math.min(start.row, end.row); row <= Math.max(start.row, end.row); row++) {
-    for (let column = Math.min(start.column, end.column); column <= Math.max(start.column, end.column); column++) {
-      values.push(resolve(referenceKey({ sheet: value.start.sheet, address: addressKey({ row, column }) })));
-    }
-  }
-  return values;
-}
 function scalar(value: FormulaValue): Scalar { if (isRange(value)) throw new Error("#VALUE!"); return value; }
 function isRange(value: FormulaValue): value is RangeValue {
   return typeof value === "object" && value !== null && !(value instanceof Date) && "kind" in value && value.kind === "range-value";

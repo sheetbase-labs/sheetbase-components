@@ -77,7 +77,9 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   const [status, setStatus] = useState({ loading: false, loadedRows: 0, totalRows: spreadsheet.rowCount ?? 0, apiMs: 0, hydrationMs: 0, renderMs: 0, cellClickMs: 0 });
   const stableQueryKey = queryKey(query);
   const fieldIdKey = fieldIds.join("\u0000");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fieldIdKey is the content signature of fieldIds; the memo keeps a stable array across renders with equal contents
   const stableFieldIds = useMemo(() => [...fieldIds], [fieldIdKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stableQueryKey is the content signature of query; the loader rebuilds only when the query's meaning changes
   const loader = useMemo(() => new ViewportPageLoader(adapter, cacheRef.current, {
     datasetId,
     query,
@@ -93,6 +95,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
   }, [forwardedRef]);
   useEffect(() => () => loader.dispose(), [loader]);
   const previousQueryKeyRef = useRef(stableQueryKey);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-runs only when the query changes; it deliberately calls the current loadViewport rather than re-running on loader config changes
   useEffect(() => {
     const queryChanged = previousQueryKeyRef.current !== stableQueryKey;
     previousQueryKeyRef.current = stableQueryKey;
@@ -102,7 +105,6 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
     setStatus((current) => ({ ...current, loadedRows: 0 }));
     // Re-run the current viewport for the new query without remounting the grid.
     if (queryChanged && lastViewportRef.current) void loadViewport(lastViewportRef.current);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: fires only on a stable query-key change; loadViewport reads latest refs.
   }, [stableQueryKey]);
   useEffect(() => () => {
     if (renderFrameRef.current !== undefined && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(renderFrameRef.current);
@@ -131,7 +133,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
         totalRows = page.totalRows;
         onTotalRowsChange?.(page.totalRows);
         loadedPagesRef.current.set(page.request.rowStart, page.records.length);
-        page.records.forEach((record, offset) => recordIdsRef.current.set(page.request.rowStart + offset, record.recordId));
+        page.records.forEach((record, offset) => { recordIdsRef.current.set(page.request.rowStart + offset, record.recordId); });
         for (const [address, cell] of materializeDatasetPage(page, stableFieldIds.map((fieldId, column) => ({ fieldId, column })))) cells.set(address, cell);
       }
       if (initial) tableRef.current?.replaceData(cells);
@@ -204,7 +206,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       mergeConflicts(result.conflicts.map((conflict) => ({ conflict, write: conflict.write, currentRevision: result.currentRevision })));
       throw Object.assign(new Error("Revision conflict"), { status: 409, conflict: result });
     }
-    if (result.result.rejected.length) throw new Error(result.result.rejected[0]!.reason);
+    if (result.result.rejected.length) throw new Error(result.result.rejected[0]?.reason);
     // Drop cached pages so the next viewport load can't serve pre-edit values
     // (and can't rewind the coordinator revision with a stale page).
     cacheRef.current.invalidateDataset(recordWrite.datasetId);
@@ -229,7 +231,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       mergeConflicts(result.conflicts.map((conflict) => ({ conflict, write: conflict.write, currentRevision: result.currentRevision })));
       throw Object.assign(new Error("Revision conflict"), { status: 409, conflict: result });
     }
-    if (result.result.rejected.length) throw new Error(result.result.rejected[0]!.reason);
+    if (result.result.rejected.length) throw new Error(result.result.rejected[0]?.reason);
     for (const id of new Set(recordWrites.map((write) => write.datasetId))) cacheRef.current.invalidateDataset(id);
   };
 
@@ -324,7 +326,7 @@ export const PagedSpreadsheet = memo(forwardRef<SpreadsheetHandle, PagedSpreadsh
       <span>{status.loading ? "Loading · " : ""}{status.loadedRows.toLocaleString()} / {status.totalRows.toLocaleString()} rows loaded</span>
       {showLoadTimings && (status.apiMs > 0 || status.hydrationMs > 0) && <small>API {status.apiMs.toFixed(0)} ms · hydrate {status.hydrationMs.toFixed(0)} ms · render {status.renderMs.toFixed(0)} ms{status.cellClickMs > 0 ? ` · click ${status.cellClickMs.toFixed(1)} ms` : ""}</small>}
     </output>}
-    {conflicts.length > 0 && <button
+    {conflicts.length > 0 && <button type="button"
       ref={conflictTriggerRef}
       className="conflict-toggle"
       aria-expanded={panelOpen}

@@ -235,7 +235,11 @@ function DefaultTable({ readOnly = false }: { readOnly?: boolean }) {
   const allColumns = useMemo(() => [...dataset.fields.map((field) => field.label), ...extraFields], []);
   const initialData = useMemo(() => {
     const data = new Map<string, string>();
-    rows.forEach((row, rowIndex) => row.forEach((value, column) => data.set(`${String.fromCharCode(65 + column)}${rowIndex + 1}`, value)));
+    rows.forEach((row, rowIndex) => {
+      row.forEach((value, column) => {
+        data.set(`${String.fromCharCode(65 + column)}${rowIndex + 1}`, value);
+      });
+    });
     return data;
   }, []);
   const workbookRef = useRef<TableWorkbook<DemoSheetState> | null>(null);

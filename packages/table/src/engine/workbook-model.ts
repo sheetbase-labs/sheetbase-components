@@ -131,7 +131,8 @@ export class Workbook {
     const queue = [key];
     const seen = new Set<string>();
     while (queue.length) {
-      const current = queue.shift()!;
+      const current = queue.shift();
+      if (current === undefined) break;
       if (seen.has(current)) continue;
       seen.add(current);
       const [sheet, address] = splitQualified(current);

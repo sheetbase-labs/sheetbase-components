@@ -99,7 +99,8 @@ describe('preparedRows', () => {
 
   it('centres calculated error bands on the group mean', () => {
     const out = preparedRows(dataset(rows()), spec({ x: 'group', y: 'value', aggregate: 'mean', errorMode: 'ci95' }))
-    const group = out.find((row) => row.group === 'a')!
+    const group = out.find((row) => row.group === 'a')
+    if (!group) throw new Error('expected group a')
     const low = Number(group[ERROR_LOW])
     const high = Number(group[ERROR_HIGH])
     expect(low).toBeLessThan(15)
