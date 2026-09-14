@@ -36,6 +36,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 .tokenised-input::selection { background: rgb(118 82 239 / 22%); color: transparent; }
 .reference-green { color: #008a68; }.reference-orange { color: #c95814; }.reference-blue { color: #286dcc; }.reference-purple { color: #9541b7; }
 .sheet-bar { position: relative; min-width: 0; height: 32px; display: flex; align-items: stretch; border-top: 1px solid #ddd; background: #fff; }
+.sheet-bar-stats { margin-left: auto; padding: 0 14px; display: flex; align-items: center; color: #6e6e6e; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sheet-action { width: 38px; flex: 0 0 38px; border-right: 1px solid #e1e1e1; font-size: 15px; }
 .sheet-action:hover { background: #f5f5f5; }
 .sheet-tabs { min-width: 0; display: flex; overflow-x: auto; }
@@ -79,6 +80,9 @@ button { border: 0; background: transparent; cursor: pointer; }
 .after-hidden-column { border-left: 2px double #8c7ab8 !important; }
 .grid-cell.dataset-field-header { z-index: 6; background: #fafafa; box-shadow: 0 1px 0 #d8d8d8; }
 .dataset-header-corner { z-index: 7; background: #fafafa; }
+/* Spilling text needs the cell unclipped and stacked above its empty neighbours. */
+.grid-cell.spills { overflow: visible; z-index: 2; }
+.grid-cell.frozen-row.spills, .grid-cell.frozen-column.spills { z-index: 5; }
 .grid-cell.read-only { cursor: default; }
 .formula-value { color: #4a37b8; }
 .cell-type { flex: 0 0 auto; color: #7251f3; font-size: 12px; font-weight: 600; }
@@ -92,7 +96,8 @@ button { border: 0; background: transparent; cursor: pointer; }
 .column-header:hover .column-sort, .column-sort:focus-visible, .column-sort.active { opacity: 1; }
 .column-sort:hover { background: #e5dfff; color: #4f38c6; }
 .row-header.selected-header, .column-header.selected-header { color: #3f2aab; background: #e3dcff; font-weight: 600; }
-.grid-corner { z-index: 8; background: #eee9ff; }
+.grid-corner { z-index: 8; background: #eee9ff; cursor: pointer; }
+.grid-corner:hover { background: #e3dcff; }
 .column-resizer { position: absolute; right: -3px; top: 0; width: 7px; height: 100%; margin: 0; padding: 0; border: 0; cursor: col-resize; z-index: 10; }
 .column-resizer:hover { background: rgb(118 82 239 / 25%); }
 .selection-outline { z-index: 3; border: 2px solid #7652ef; pointer-events: none; box-shadow: 0 0 0 1px rgb(118 82 239 / 8%); }
@@ -102,6 +107,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 .copy-outline rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: #7652ef; stroke-width: 2px; stroke-dasharray: 4px 4px; animation: copy-ants 0.4s linear infinite; }
 @keyframes copy-ants { to { stroke-dashoffset: -8px; } }
 @media (prefers-reduced-motion: reduce) { .copy-outline rect { animation: none; } }
+.move-outline { position: absolute; z-index: 4; border: 2px dashed #7652ef; background: rgb(118 82 239 / 6%); pointer-events: none; }
 .spill-range { position: absolute; z-index: 2; border: 1.5px dashed #7652ef; border-radius: 2px; pointer-events: none; }
 .fill-handle { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; padding: 0; border: 1px solid white; border-radius: 1px; background: #7652ef; cursor: crosshair; pointer-events: auto; }
 .fill-handle:hover { transform: scale(1.25); }

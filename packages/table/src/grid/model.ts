@@ -68,6 +68,67 @@ export function moveSelection(
   return { anchor: extend ? selection.anchor : focus, focus };
 }
 
+/**
+ * Excel Ctrl+Arrow semantics: when the next cell in `delta`'s direction is
+ * populated, land on the far edge of that contiguous populated block; when it
+ * is empty, skip the gap and land on the next populated cell — or the grid
+ * edge when nothing remains. `hasValue` decides whether an address counts as
+ * populated (raw input or a spill child).
+ */
+export function edgeOfData(
+  hasValue: (address: string) => boolean,
+  from: GridPoint,
+  delta: GridPoint,
+  rowCount: number,
+  columnCount: number,
+): GridPoint {
+  const stepRow = Math.sign(delta.row);
+  const stepColumn = Math.sign(delta.column);
+  const inside = (row: number, column: number) => row >= 0 && row < rowCount && column >= 0 && column < columnCount;
+  let { row, column } = from;
+  let nextRow = row + stepRow;
+  let nextColumn = column + stepColumn;
+  if (!inside(nextRow, nextColumn)) return from;
+  if (hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+    // Populated neighbour: run to the far edge of the block.
+    while (inside(nextRow, nextColumn) && hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+      row = nextRow;
+      column = nextColumn;
+      nextRow += stepRow;
+      nextColumn += stepColumn;
+    }
+    return { row, column };
+  }
+  // Empty neighbour: cross the gap and land on the first populated cell.
+  while (inside(nextRow, nextColumn) && !hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+    row = nextRow;
+    column = nextColumn;
+    nextRow += stepRow;
+    nextColumn += stepColumn;
+  }
+  return inside(nextRow, nextColumn) ? { row: nextRow, column: nextColumn } : { row, column };
+}
+
+/** Bounding box of every populated cell; undefined for an empty sheet. */
+export function usedRangeBounds(data: GridSnapshot): { top: number; left: number; bottom: number; right: number } | undefined {
+  let top = Infinity;
+  let left = Infinity;
+  let bottom = -1;
+  let right = -1;
+  for (const [address, value] of data) {
+    if (value === "") continue;
+    try {
+      const point = parseAddress(address);
+      if (point.row < 0 || point.column < 0) continue;
+      top = Math.min(top, point.row);
+      left = Math.min(left, point.column);
+      bottom = Math.max(bottom, point.row);
+      right = Math.max(right, point.column);
+    } catch { /* Ignore non-cell keys. */ }
+  }
+  return bottom >= top ? { top, left, bottom, right } : undefined;
+}
+
 export function selectionToTsv(data: GridSnapshot, selection: GridSelection): string {
   const range = normaliseSelection(selection);
   const lines: string[] = [];
@@ -144,6 +205,105 @@ export function clearSelection(
     }
   }
   return next;
+}
+
+/**
+ * Move a rectangular block of values to a new top-left origin (Excel's
+ * drag-the-border move). Values are snapshot first so overlapping source and
+ * destination stay consistent; uneditable source cells stay behind and
+ * uneditable targets are skipped. Returns undefined for a no-op drop.
+ */
+export function moveRange(
+  data: GridSnapshot,
+  source: GridSelection,
+  target: GridPoint,
+  rowCount: number,
+  columnCount: number,
+  canEdit: (point: GridPoint) => boolean = () => true,
+): { data: Map<string, string>; selection: GridSelection } | undefined {
+  const range = normaliseSelection(source);
+  const height = range.bottom - range.top + 1;
+  const width = range.right - range.left + 1;
+  const top = Math.max(0, Math.min(rowCount - height, target.row));
+  const left = Math.max(0, Math.min(columnCount - width, target.column));
+  if (top === range.top && left === range.left) return undefined;
+  const moved: { point: GridPoint; value: string }[] = [];
+  for (let row = range.top; row <= range.bottom; row++) {
+    for (let column = range.left; column <= range.right; column++) {
+      const point = { row, column };
+      const value = data.get(cellKey(point));
+      if (value === undefined || !canEdit(point)) continue;
+      moved.push({ point, value });
+    }
+  }
+  const next = new Map(data);
+  for (const { point } of moved) next.delete(cellKey(point));
+  for (const { point, value } of moved) {
+    const destination = { row: point.row + top - range.top, column: point.column + left - range.left };
+    if (canEdit(destination)) next.set(cellKey(destination), value);
+  }
+  return {
+    data: next,
+    selection: {
+      anchor: { row: top, column: left },
+      focus: { row: top + height - 1, column: left + width - 1 },
+    },
+  };
+}
+
+export type SelectionAggregates = Readonly<{
+  /** Non-empty cells in the selection. */
+  count: number;
+  /** Cells whose (evaluated) value parses as a finite number. */
+  numeric: number;
+  sum: number;
+  min: number;
+  max: number;
+}>;
+
+/** Status-bar aggregates over the populated cells of a selection. */
+export function selectionAggregates(
+  data: GridSnapshot,
+  selection: GridSelection,
+  evaluate?: (point: GridPoint) => string,
+): SelectionAggregates {
+  const range = normaliseSelection(selection);
+  const area = (range.bottom - range.top + 1) * (range.right - range.left + 1);
+  let count = 0;
+  let numeric = 0;
+  let sum = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  const add = (point: GridPoint, raw: string | undefined) => {
+    if (raw === undefined) return;
+    const text = raw.startsWith("=") && evaluate ? evaluate(point) : raw;
+    if (text === "") return;
+    count += 1;
+    const value = Number(text);
+    if (!Number.isFinite(value)) return;
+    numeric += 1;
+    sum += value;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  };
+  if (data.size <= area) {
+    // Fewer populated cells than selected cells: scan the data and filter.
+    for (const [address, raw] of data) {
+      let point: CellAddress;
+      try { point = parseAddress(address); } catch { continue; }
+      if (point.row < range.top || point.row > range.bottom || point.column < range.left || point.column > range.right) continue;
+      add(point, raw);
+    }
+  } else {
+    // Small selection over a large sheet: probe each cell address directly.
+    for (let row = range.top; row <= range.bottom; row++) {
+      for (let column = range.left; column <= range.right; column++) {
+        const point = { row, column };
+        add(point, data.get(cellKey(point)));
+      }
+    }
+  }
+  return { count, numeric, sum, min: numeric ? min : 0, max: numeric ? max : 0 };
 }
 
 export function shiftFormulaReferences(formula: string, rowDelta: number, columnDelta: number): string {

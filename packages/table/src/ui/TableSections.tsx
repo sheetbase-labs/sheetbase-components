@@ -81,9 +81,11 @@ export type SheetBarProps = Readonly<{
   onRename?(sheetId: string, label: string): void;
   onDelete?(sheetId: string): void;
   onMove?(sheetId: string, index: number): void;
+  /** Right-aligned status content — selection aggregates, sync state, etc. */
+  stats?: ReactNode;
 }>;
 
-export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onDelete, onMove }: SheetBarProps) {
+export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onDelete, onMove, stats }: SheetBarProps) {
   const [menuSheetId, setMenuSheetId] = useState<string>();
   const menuIndex = sheets.findIndex((sheet) => sheet.id === menuSheetId);
   return <nav className="sheet-bar" aria-label="Sheets">
@@ -103,6 +105,7 @@ export function SheetBar({ sheets, activeSheetId, onSelect, onAdd, onRename, onD
         onContextMenu={(event) => { event.preventDefault(); setMenuSheetId(sheet.id); }}
       >{sheet.kind === "dataset" ? "◆ " : ""}{sheet.label}</button>)}
     </div>
+    {stats && <output className="sheet-bar-stats" aria-label="Selection summary">{stats}</output>}
     {menuSheetId && <div className="sheet-menu" role="menu">
       <button type="button" disabled={!onRename} onClick={() => { const sheet = sheets[menuIndex]; const label = window.prompt("Rename sheet", sheet.label)?.trim(); if (label) onRename?.(sheet.id, label); setMenuSheetId(undefined); }}>Rename</button>
       <button type="button" disabled={menuIndex <= 0 || !onMove} onClick={() => { onMove?.(menuSheetId, menuIndex - 1); setMenuSheetId(undefined); }}>Move left</button>

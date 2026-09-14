@@ -129,6 +129,19 @@ function scalarInput(value: unknown): string {
   return String(value);
 }
 
+const formatStat = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+/** Excel status-bar summary: Average / Count / Sum for multi-cell selections. */
+function selectionStats(selection: SpreadsheetSelection): string | undefined {
+  const aggregates = selection.aggregates;
+  if (!aggregates || aggregates.count === 0) return undefined;
+  const parts: string[] = [];
+  if (aggregates.numeric > 0) parts.push(`Average: ${formatStat(aggregates.sum / aggregates.numeric)}`);
+  parts.push(`Count: ${aggregates.count}`);
+  if (aggregates.numeric > 0) parts.push(`Sum: ${formatStat(aggregates.sum)}`);
+  return parts.join("   ");
+}
+
 /** One workbook tab per function category: column A names it, column B calculates it live. */
 function FunctionsTable() {
   const tableRef = useRef<SpreadsheetHandle>(null);
@@ -204,6 +217,7 @@ function FunctionsTable() {
       sheets={workbook.tabs}
       activeSheetId={activeSheet.id}
       onSelect={selectSheet}
+      stats={selectionStats(selection)}
     />}
   />}
   />;
@@ -367,6 +381,7 @@ function DefaultTable({ readOnly = false }: { readOnly?: boolean }) {
       onRename={readOnly ? undefined : renameSheet}
       onDelete={readOnly ? undefined : deleteSheet}
       onMove={readOnly ? undefined : (sheetId, index) => { workbook.move(sheetId, index); renderWorkbook((version) => version + 1); }}
+      stats={selectionStats(selection)}
     />}
   />}
   />;

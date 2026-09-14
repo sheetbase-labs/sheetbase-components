@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test("renders one compact semantic header row", async ({ page }) => {
   await page.goto("/default", { waitUntil: "domcontentloaded" });
@@ -113,4 +113,117 @@ test("announces selection through a polite live region", async ({ page }) => {
   await page.keyboard.press("Shift+ArrowRight");
   await page.keyboard.press("Shift+ArrowDown");
   await expect(announcer).toContainText("cells selected");
+});
+
+/** 0-based row/column → the gridcell locator (aria indexes are 1-based). */
+const cellAt = (page: Page, row: number, column: number) =>
+  page.locator(`[role="gridcell"][aria-rowindex="${row + 1}"][aria-colindex="${column + 1}"]`);
+
+test("Ctrl+Arrow jumps to data edges and Shift extends", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  const announcer = page.locator(".grid-announcer");
+  await cellAt(page, 0, 0).click();
+  // The demo block is populated A1:G8.
+  await page.keyboard.press("ControlOrMeta+ArrowDown");
+  await expect(announcer).toContainText("A8");
+  await page.keyboard.press("ControlOrMeta+ArrowRight");
+  await expect(announcer).toContainText("G8");
+  await page.keyboard.press("ControlOrMeta+ArrowUp");
+  await expect(announcer).toContainText("G1");
+  await page.keyboard.press("Shift+ControlOrMeta+ArrowDown");
+  await expect(announcer).toContainText("8 cells selected");
+});
+
+test("Ctrl+A selects the used range, then the whole sheet", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  const announcer = page.locator(".grid-announcer");
+  await cellAt(page, 9, 0).click(); // A10, outside the used range
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(announcer).toContainText("56 cells selected");
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(announcer).toContainText("170,000 cells selected");
+});
+
+test("Shift+Space and Ctrl+Space select the row and column", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  const announcer = page.locator(".grid-announcer");
+  const cell = cellAt(page, 1, 1); // B2
+  await cell.click();
+  await page.keyboard.press("Shift+Space");
+  await expect(announcer).toContainText("17 cells selected");
+  await cell.click();
+  await page.keyboard.press("ControlOrMeta+Space");
+  await expect(announcer).toContainText("10,000 cells selected");
+});
+
+test("Enter moves the selection and pastes once when a marquee is live", async ({ page, browserName }) => {
+  // Playwright cannot synthesise clipboard shortcuts in Firefox.
+  test.skip(browserName === "firefox", "Firefox does not dispatch copy for synthesised shortcuts");
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  const announcer = page.locator(".grid-announcer");
+  await cellAt(page, 0, 0).click();
+  await page.keyboard.press("Enter");
+  await expect(announcer).toContainText("A2");
+  await page.keyboard.press("Shift+Enter");
+  await expect(announcer).toContainText("A1");
+  // Copy B1, move to B9, Enter pastes once and dismisses the marquee.
+  await cellAt(page, 0, 1).click();
+  await page.keyboard.press("ControlOrMeta+c");
+  await expect(page.locator(".copy-outline")).toBeVisible();
+  await cellAt(page, 8, 1).click(); // B9
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".copy-outline")).toHaveCount(0);
+  await expect(cellAt(page, 8, 1)).toContainText("SMP-2084");
+});
+
+test("double-clicking the fill handle fills to the adjacent data extent", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  await cellAt(page, 0, 6).click(); // G1 "Complete"
+  await page.locator(".fill-handle").dblclick();
+  // G3 was "Review"; the fill mirrors G1 down to row 8 alongside column F.
+  await expect(cellAt(page, 2, 6)).toContainText("Complete");
+});
+
+test("drags a selection border to move the cell", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  const source = cellAt(page, 0, 1); // B1 "SMP-2084"
+  const target = cellAt(page, 9, 1); // B10
+  await source.click();
+  const box = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!box || !targetBox) throw new Error("expected cell geometry");
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 10 });
+  await expect(page.locator(".move-outline")).toBeVisible();
+  await page.mouse.up();
+  await expect(source).toHaveText("");
+  await expect(target).toContainText("SMP-2084");
+});
+
+test("overflows text into empty neighbouring cells", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  // Column G is the last populated column; H is empty, so G cells spill right.
+  const cell = cellAt(page, 0, 6); // G1
+  await expect(cell).toHaveClass(/spills/);
+  await expect(cell).toHaveCSS("overflow", "visible");
+});
+
+test("shows selection aggregates in the sheet bar", async ({ page }) => {
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  // D1:D3 = 18.42, 0.034, 29.18 (the result column).
+  await cellAt(page, 0, 3).click();
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.keyboard.press("Shift+ArrowDown");
+  const stats = page.locator(".sheet-bar-stats");
+  await expect(stats).toContainText("Average: 15.88");
+  await expect(stats).toContainText("Count: 3");
+  await expect(stats).toContainText("Sum: 47.63");
+});
+
+test("Ctrl+; inserts today's date", async ({ page }) => {
+  await page.goto("/functions", { waitUntil: "domcontentloaded" });
+  await cellAt(page, 0, 2).click(); // C1, an empty cell on the unbound sheet
+  await page.keyboard.press("ControlOrMeta+;");
+  await expect(cellAt(page, 0, 2)).toContainText(/\d{4}-\d{2}-\d{2}/);
 });

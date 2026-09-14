@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveSelection, normaliseSelection, parseTsv, pasteTsv, populatedColumnSelection, renameSheetReferences, replaceAllText, selectionToTsv, shiftFormulaReferences, sortGridRows, validateTypedCell } from "./model";
+import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, edgeOfData, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveRange, moveSelection, normaliseSelection, parseTsv, pasteTsv, populatedColumnSelection, renameSheetReferences, replaceAllText, selectionAggregates, selectionToTsv, shiftFormulaReferences, sortGridRows, usedRangeBounds, validateTypedCell } from "./model";
 
 describe("grid model", () => {
   it("moves and extends a selection within bounds", () => {
@@ -241,6 +241,72 @@ describe("grid model", () => {
     expect(validateTypedCell("Complete", "text", false, options)).toBeUndefined();
     expect(validateTypedCell("Complete, Review", "text", false, options)).toBeUndefined();
     expect(validateTypedCell("Complete, Bogus", "text", false, options)).toContain("Choose one of");
+  });
+
+  it("jumps to the far edge of a populated run (Ctrl+Arrow)", () => {
+    // Column A: A1-A3 populated, A4 empty, A5-A6 populated, rest empty.
+    const hasValue = (address: string) => ["A1", "A2", "A3", "A5", "A6"].includes(address);
+    // Inside a run → last populated cell of that run.
+    expect(edgeOfData(hasValue, { row: 0, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 2, column: 0 });
+    // On the edge of a run, next cell empty → first populated cell of the next run.
+    expect(edgeOfData(hasValue, { row: 2, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 4, column: 0 });
+    // Inside the last run → its last populated cell; from there → grid edge.
+    expect(edgeOfData(hasValue, { row: 4, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 5, column: 0 });
+    expect(edgeOfData(hasValue, { row: 5, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 19, column: 0 });
+    // Upward out of the top run → row 0.
+    expect(edgeOfData(hasValue, { row: 2, column: 0 }, { row: -1, column: 0 }, 20, 5)).toEqual({ row: 0, column: 0 });
+    // From an empty cell over empty space → grid edge.
+    expect(edgeOfData(hasValue, { row: 9, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 19, column: 0 });
+    // At the edge already → stays put.
+    expect(edgeOfData(hasValue, { row: 19, column: 0 }, { row: 1, column: 0 }, 20, 5)).toEqual({ row: 19, column: 0 });
+  });
+
+  it("bounds the used range and ignores non-cell keys", () => {
+    const data = new Map([["B2", "x"], ["D5", "y"], ["meta:note", "nope"], ["A9", ""]]);
+    expect(usedRangeBounds(data)).toEqual({ top: 1, left: 1, bottom: 4, right: 3 });
+    expect(usedRangeBounds(new Map())).toBeUndefined();
+    expect(usedRangeBounds(new Map([["A1", ""]]))).toBeUndefined();
+  });
+
+  it("moves a range of values and reselects the destination", () => {
+    const data = new Map([["A1", "one"], ["B1", "two"], ["C3", "other"]]);
+    const moved = moveRange(
+      data,
+      { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 1 } },
+      { row: 2, column: 1 },
+      10,
+      10,
+    );
+    expect(moved).toBeDefined();
+    expect(moved?.data.get("A1")).toBeUndefined();
+    expect(moved?.data.get("B1")).toBeUndefined();
+    expect(moved?.data.get("B3")).toBe("one");
+    expect(moved?.data.get("C3")).toBe("two");
+    expect(moved?.selection).toEqual({ anchor: { row: 2, column: 1 }, focus: { row: 2, column: 2 } });
+    // Dropping on the origin is a no-op.
+    expect(moveRange(data, { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 1 } }, { row: 0, column: 0 }, 10, 10)).toBeUndefined();
+  });
+
+  it("keeps a move consistent when source and destination overlap", () => {
+    const data = new Map([["A1", "one"], ["A2", "two"]]);
+    const moved = moveRange(data, { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }, { row: 1, column: 0 }, 10, 10);
+    expect(moved?.data.get("A1")).toBeUndefined();
+    expect(moved?.data.get("A2")).toBe("one");
+    expect(moved?.data.get("A3")).toBe("two");
+  });
+
+  it("aggregates a selection for the status bar", () => {
+    const data = new Map([["A1", "10"], ["A2", "20"], ["B1", "text"], ["B2", ""], ["C1", "-5"]]);
+    const aggregates = selectionAggregates(data, { anchor: { row: 0, column: 0 }, focus: { row: 2, column: 2 } });
+    expect(aggregates.count).toBe(4);
+    expect(aggregates.numeric).toBe(3);
+    expect(aggregates.sum).toBe(25);
+    expect(aggregates.min).toBe(-5);
+    expect(aggregates.max).toBe(20);
+    // Cells outside the selection are excluded.
+    const partial = selectionAggregates(data, { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } });
+    expect(partial.count).toBe(1);
+    expect(partial.sum).toBe(10);
   });
 
 });

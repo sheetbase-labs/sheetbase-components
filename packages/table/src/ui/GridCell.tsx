@@ -38,6 +38,12 @@ export interface GridCellProps {
   title?: string;
   /** Resolved format (base merged with any conditional format). */
   format?: Partial<CellFormat>;
+  /**
+   * Pixels of empty neighbouring cells the display text may overflow into
+   * (Excel-style text spill). `left`/`right` are the extra widths per side;
+   * the span clips itself so it never paints over a populated cell.
+   */
+  overflow?: Readonly<{ left: number; right: number }>;
   field?: SpreadsheetCellRenderContext["field"];
   writeState?: GridCellWriteState;
   renderCell?(context: SpreadsheetCellRenderContext): ReactNode | undefined;
@@ -64,7 +70,7 @@ function sameFormat(a?: Partial<CellFormat>, b?: Partial<CellFormat>): boolean {
  * memo is not defeated by fresh closures each parent render.
  */
 export const GridCell = memo(function GridCell(props: GridCellProps) {
-  const { address, row, column, display, isFormula, selected, active, loading, className, title, format, field, writeState, renderCell, handlers, left, top, width, height } = props;
+  const { address, row, column, display, isFormula, selected, active, loading, className, title, format, field, overflow, writeState, renderCell, handlers, left, top, width, height } = props;
   const point: GridPoint = { row, column };
   const context: SpreadsheetCellRenderContext = { address, point, display, field, selected, active, loading };
   return (
@@ -73,6 +79,8 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       role="gridcell"
       tabIndex={-1}
       aria-selected={selected}
+      aria-rowindex={row + 1}
+      aria-colindex={column + 1}
       className={className}
       title={title}
       style={{
@@ -90,7 +98,10 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       onPointerEnter={() => handlers.current?.pointerEnter(point)}
       onDoubleClick={() => handlers.current?.doubleClick(point)}
     >
-      {loading ? <span className="loading-placeholder" /> : renderCell?.(context) ?? <span className={`${isFormula ? "formula-value" : ""}${display.includes("\n") ? " multiline" : ""}`}>{display}</span>}
+      {loading ? <span className="loading-placeholder" /> : renderCell?.(context) ?? <span
+        className={`${isFormula ? "formula-value" : ""}${display.includes("\n") ? " multiline" : ""}`}
+        style={overflow ? { marginLeft: -overflow.left, maxWidth: `calc(100% + ${overflow.left + overflow.right}px)`, textOverflow: "clip" } : undefined}
+      >{display}</span>}
       {writeState && <button type="button" className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handlers.current?.badgeClick(address, writeState, event)} />}
     </div>
   );
@@ -106,6 +117,8 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
   && prev.className === next.className
   && prev.title === next.title
   && sameFormat(prev.format, next.format)
+  && prev.overflow?.left === next.overflow?.left
+  && prev.overflow?.right === next.overflow?.right
   && prev.field === next.field
   && prev.writeState === next.writeState
   && prev.renderCell === next.renderCell

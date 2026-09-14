@@ -29,21 +29,26 @@ import {
   formulaReferenceLabel,
   formulaErrorMessage,
   moveFormulaReference,
+  moveRange,
   moveSelection,
   normaliseSelection,
   applyTsvRows,
   parseTsv,
   pasteTsv,
   populatedColumnSelection,
+  selectionAggregates,
   selectionLabel,
   selectionAddresses,
   selectionToTsv,
   sortGridRows,
   replaceAllText,
+  edgeOfData,
+  usedRangeBounds,
   validateTypedCell,
   type CellDataType,
   type GridPoint,
   type GridSelection,
+  type SelectionAggregates,
   type FormulaReferenceSelection,
 } from "../grid/model";
 import {
@@ -88,6 +93,8 @@ export type SpreadsheetSelection = {
   error?: string;
   format?: Partial<CellFormat>;
   mixedFormats?: readonly (keyof CellFormat)[];
+  /** Status-bar aggregates over the selected cells; present only when the selection spans more than one cell. */
+  aggregates?: SelectionAggregates;
 };
 
 export type SpreadsheetViewport = Readonly<{
@@ -470,6 +477,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
   const [fillTarget, setFillTarget] = useState<GridPoint | null>(null);
   const [copyRange, setCopyRange] = useState<ReturnType<typeof normaliseSelection>>();
+  /** Internal clipboard snapshot — powers Excel's Enter-to-paste flow and survives clipboard changes until dismissed. */
+  const copyBuffer = useRef<{ tsv: string } | null>(null);
+  /** In-flight drag-move: the grabbed range, the cell the drag started on, and the latest (clamped) drop origin. */
+  const moveDrag = useRef<{ range: { top: number; left: number; bottom: number; right: number }; origin: GridPoint; target: GridPoint } | null>(null);
+  const [movePreview, setMovePreview] = useState<{ top: number; left: number; bottom: number; right: number } | null>(null);
   const [columnWidths, setColumnWidths] = useState<number[]>(() => initialState
     ? [...initialState.columnWidths]
     : Array.from({ length: columnCount }, (_, index) => initialColumnWidths?.[index] ?? (index < 7 ? 170 : 140)));
@@ -1000,12 +1012,36 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       if (covered < area) values.add(undefined);
       return values.size > 1;
     });
-    onSelectionChange?.({ address, range: selectionLabel(selection), input, error: formulaErrorMessage(value), format: formats.get(selection.focus) ?? {}, mixedFormats });
+    const aggregates = area > 1
+      ? selectionAggregates(data, selection, (point) => displayValue(worksheet, point))
+      : undefined;
+    onSelectionChange?.({ address, range: selectionLabel(selection), input, error: formulaErrorMessage(value), format: formats.get(selection.focus) ?? {}, mixedFormats, aggregates });
   }, [data, formats, onSelectionChange, range.bottom, range.left, range.right, range.top, selection, worksheet]);
 
   useEffect(() => {
     const finishDrag = () => {
       dragSelecting.current = false;
+      if (moveDrag.current) {
+        const drag = moveDrag.current;
+        moveDrag.current = null;
+        setMovePreview(null);
+        if (drag.target.row === drag.range.top && drag.target.column === drag.range.left) {
+          // Pointer released without the range leaving its origin: treat the
+          // press as a click and collapse the selection to the grabbed cell.
+          setSelection({ anchor: drag.origin, focus: drag.origin });
+        } else {
+          const source: GridSelection = { anchor: { row: drag.range.top, column: drag.range.left }, focus: { row: drag.range.bottom, column: drag.range.right } };
+          const moved = moveRange(data, source, drag.target, rowCount, columnCount, canEdit);
+          if (moved) {
+            // The mutation diff only covers listed addresses — the source
+            // cells must be included or their cleared values never apply.
+            commit(moved.data, "Move range", [...selectionAddresses(source), ...selectionAddresses(moved.selection)]);
+            setSelection(moved.selection);
+            setCopyRange(undefined);
+            copyBuffer.current = null;
+          }
+        }
+      }
       if (!readOnly && fillOrigin.current && fillTargetRef.current) {
         const filled = fillSelection(data, fillOrigin.current, fillTargetRef.current, rowCount, columnCount, canEdit);
         commit(filled.data, "Autofill", selectionAddresses(filled.selection));
@@ -1088,6 +1124,25 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setSelection(next);
     queueMicrotask(() => reveal(next.focus));
   }, [columnCount, reveal, rowCount, worksheet]);
+
+  const hasCellValue = useCallback(
+    (address: string) => (data.get(address) ?? "") !== "" || worksheet.spills.value(address) !== undefined,
+    [data, worksheet],
+  );
+
+  // Ctrl+Arrow: jump to the edge of the contiguous populated/empty run in
+  // that direction, Excel-style. Shift extends the selection.
+  const jumpToEdge = useCallback((delta: GridPoint, extend: boolean) => {
+    const current = selectionRef.current;
+    const focus = edgeOfData(hasCellValue, current.focus, delta, rowCount, columnCount);
+    if (samePoint(focus, current.focus)) return;
+    setSelection(extend ? { anchor: current.anchor, focus } : { anchor: focus, focus });
+    queueMicrotask(() => reveal(focus));
+  }, [columnCount, hasCellValue, reveal, rowCount]);
+
+  const selectWhole = useCallback(() => {
+    setSelection({ anchor: { row: 0, column: 0 }, focus: { row: rowCount - 1, column: columnCount - 1 } });
+  }, [columnCount, rowCount]);
 
   const beginEdit = useCallback((point: GridPoint, replaceWith?: string) => {
     if (!canEdit(point)) return;
@@ -1338,37 +1393,140 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (editing) return;
     const command = event.metaKey || event.ctrlKey;
-    if (event.key === "Escape") { setCopyRange(undefined); return; }
+    const key = event.key.toLowerCase();
+    if (event.key === "Escape") {
+      setCopyRange(undefined);
+      copyBuffer.current = null;
+      moveDrag.current = null;
+      setMovePreview(null);
+      return;
+    }
+    // Ctrl/Cmd+A selects the populated region first, then the whole sheet.
+    if (command && key === "a") {
+      event.preventDefault();
+      const bounds = usedRangeBounds(data);
+      const within = bounds
+        ? { top: Math.min(bounds.top, rowCount - 1), left: Math.min(bounds.left, columnCount - 1), bottom: Math.min(bounds.bottom, rowCount - 1), right: Math.min(bounds.right, columnCount - 1) }
+        : undefined;
+      if (within && !(range.top === within.top && range.bottom === within.bottom && range.left === within.left && range.right === within.right)) {
+        setSelection({ anchor: { row: within.top, column: within.left }, focus: { row: within.bottom, column: within.right } });
+      } else selectWhole();
+      return;
+    }
     if (!command && event.key === "?") { event.preventDefault(); setShowShortcutHelp(true); return; }
-    if (command && event.key.toLowerCase() === "z") {
+    if (command && key === "z") {
       event.preventDefault();
       event.shiftKey ? redo() : undo();
       return;
     }
-    if (command && event.key.toLowerCase() === "f" && !event.shiftKey) {
+    if (command && key === "f" && !event.shiftKey) {
       event.preventDefault();
       setFindPanel("find");
       return;
     }
-    if (command && (event.key.toLowerCase() === "h" || (event.shiftKey && event.key.toLowerCase() === "f"))) {
+    if (command && (key === "h" || (event.shiftKey && key === "f"))) {
       event.preventDefault();
       if (!readOnly) setFindPanel("replace");
       return;
     }
-    if (command && event.shiftKey && event.key.toLowerCase() === "v") {
+    if (command && event.shiftKey && key === "v") {
       pasteValuesNext.current = true;
       return;
     }
-    if (command && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
-    if (command && !event.shiftKey && event.key.toLowerCase() === "d") { event.preventDefault(); fillDown(); return; }
-    if (command && !event.shiftKey && event.key.toLowerCase() === "r") { event.preventDefault(); fillRight(); return; }
+    if (command && key === "y") { event.preventDefault(); redo(); return; }
+    if (command && !event.shiftKey && key === "d") { event.preventDefault(); fillDown(); return; }
+    if (command && !event.shiftKey && key === "r") { event.preventDefault(); fillRight(); return; }
+    // Ctrl/Cmd+; inserts today's date, Ctrl/Cmd+Shift+; the current time.
+    if (command && event.key === ";") {
+      event.preventDefault();
+      writeActiveCell(new Date().toISOString().slice(0, 10));
+      return;
+    }
+    if (command && event.key === ":") {
+      event.preventDefault();
+      writeActiveCell(new Date().toTimeString().slice(0, 5));
+      return;
+    }
+    // Shift+Space selects the row(s), Ctrl/Cmd+Space the column(s), both the sheet.
+    if (event.key === " " && (command || event.shiftKey)) {
+      event.preventDefault();
+      if (command && event.shiftKey) selectWhole();
+      else if (command) setSelection({ anchor: { row: 0, column: range.left }, focus: { row: rowCount - 1, column: range.right } });
+      else setSelection({ anchor: { row: range.top, column: 0 }, focus: { row: range.bottom, column: columnCount - 1 } });
+      return;
+    }
+    // Ctrl/Cmd+Shift+= inserts and Ctrl/Cmd+- deletes when the selection
+    // spans a full axis; the helpers no-op on read-only or bound grids.
+    if (command && event.shiftKey && (event.key === "+" || event.key === "=")) {
+      const fullRows = range.left === 0 && range.right === columnCount - 1;
+      const fullColumns = range.top === 0 && range.bottom === rowCount - 1;
+      if (fullRows || fullColumns) {
+        event.preventDefault();
+        if (fullRows) changeRows("insert");
+        else changeColumns("insert");
+      }
+      return;
+    }
+    if (command && event.key === "-") {
+      const fullRows = range.left === 0 && range.right === columnCount - 1;
+      const fullColumns = range.top === 0 && range.bottom === rowCount - 1;
+      if (fullRows || fullColumns) {
+        event.preventDefault();
+        if (fullRows) changeRows("delete");
+        else changeColumns("delete");
+      }
+      return;
+    }
+    // Ctrl/Cmd+Backspace scrolls the active cell back into view (Excel).
+    if (command && event.key === "Backspace") {
+      event.preventDefault();
+      reveal(selection.focus);
+      return;
+    }
     const navigation: Record<string, GridPoint> = {
       ArrowUp: { row: -1, column: 0 }, ArrowDown: { row: 1, column: 0 },
       ArrowLeft: { row: 0, column: -1 }, ArrowRight: { row: 0, column: 1 },
     };
-    if (navigation[event.key]) { event.preventDefault(); move(navigation[event.key], event.shiftKey); return; }
+    if (navigation[event.key]) {
+      event.preventDefault();
+      if (command) jumpToEdge(navigation[event.key], event.shiftKey);
+      else move(navigation[event.key], event.shiftKey);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const bounds = usedRangeBounds(data);
+      const focus = event.key === "Home"
+        ? (command ? { row: 0, column: 0 } : { row: selection.focus.row, column: 0 })
+        : (command
+          ? { row: Math.min(rowCount - 1, bounds?.bottom ?? 0), column: Math.min(columnCount - 1, bounds?.right ?? 0) }
+          : edgeOfData(hasCellValue, selection.focus, { row: 0, column: 1 }, rowCount, columnCount));
+      setSelection(event.shiftKey ? { anchor: selection.anchor, focus } : { anchor: focus, focus });
+      queueMicrotask(() => reveal(focus));
+      return;
+    }
+    if (event.key === "PageDown" || event.key === "PageUp") {
+      event.preventDefault();
+      const page = Math.max(1, viewportRange.rowEnd - viewportRange.rowStart);
+      move({ row: event.key === "PageDown" ? page : -page, column: 0 }, event.shiftKey);
+      return;
+    }
     if (event.key === "Tab") { event.preventDefault(); move({ row: 0, column: event.shiftKey ? -1 : 1 }, false); return; }
-    if (event.key === "Enter") { event.preventDefault(); if (!readOnly) beginEdit(selection.focus); return; }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      // With a live copy marquee, Enter pastes the internal copy once and
+      // dismisses it (Excel); otherwise Enter moves the selection down.
+      if (!readOnly && copyRange && copyBuffer.current) {
+        const pasted = pasteTsv(data, selection.focus, copyBuffer.current.tsv, rowCount, columnCount, canEdit);
+        commit(pasted.data, "Paste range", selectionAddresses(pasted.selection));
+        setSelection(pasted.selection);
+        setCopyRange(undefined);
+        copyBuffer.current = null;
+        return;
+      }
+      move({ row: event.shiftKey ? -1 : 1, column: 0 }, false);
+      return;
+    }
     if (event.key === "F2") { event.preventDefault(); if (!readOnly) beginEdit(selection.focus); return; }
     const openColumnMenuAt = (column: number) => {
       const header = viewportRef.current?.querySelector<HTMLDivElement>(`[role="columnheader"][data-column="${column}"]`);
@@ -1381,7 +1539,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      event.preventDefault(); setCopyRange(undefined); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
+      event.preventDefault(); setCopyRange(undefined); copyBuffer.current = null; if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
     }
     if (!command && !event.altKey && event.key.length === 1) {
       if (readOnly) return;
@@ -1391,7 +1549,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
   const onCopy = (event: React.ClipboardEvent) => {
     event.preventDefault();
-    event.clipboardData.setData("text/plain", selectionToTsv(data, selection));
+    const tsv = selectionToTsv(data, selection);
+    event.clipboardData.setData("text/plain", tsv);
     const calculated = new Map<string, string>();
     for (const address of selectionAddresses(selection)) {
       const point = parseAddress(address);
@@ -1399,6 +1558,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       calculated.set(address, input.startsWith("=") ? displayValue(worksheet, point) : input);
     }
     event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, selection));
+    copyBuffer.current = { tsv };
     setCopyRange(normaliseSelection(selection));
     announce(`Copied ${selectionLabel(selection)}`);
   };
@@ -1560,6 +1720,28 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         } else updateFormulaReference(next);
         return;
       }
+      // Pressing inside the selection within a few pixels of its border arms
+      // an Excel-style drag-move instead of re-anchoring the selection.
+      if (
+        !readOnly && !editing
+        && point.row >= range.top && point.row <= range.bottom
+        && point.column >= range.left && point.column <= range.right
+      ) {
+        const cellBox = event.currentTarget.getBoundingClientRect();
+        const x = ROW_HEADER_WIDTH + columnOffsets[point.column] + (event.clientX - cellBox.left);
+        const y = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[point.row] + (event.clientY - cellBox.top);
+        const edge = Math.min(
+          x - (ROW_HEADER_WIDTH + columnOffsets[range.left]),
+          ROW_HEADER_WIDTH + columnOffsets[range.right + 1] - x,
+          y - (COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[range.top]),
+          COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[range.bottom + 1] - y,
+        );
+        if (edge <= 5) {
+          moveDrag.current = { range, origin: point, target: { row: range.top, column: range.left } };
+          viewportRef.current?.focus({ preventScroll: true });
+          return;
+        }
+      }
       dragSelecting.current = true;
       setSelection((current) => ({ anchor: event.shiftKey ? current.anchor : point, focus: point }));
       // The pointer is already on the target: letting focus scroll would
@@ -1576,6 +1758,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     pointerEnter: (point) => {
       if (editing && formulaReference && dragSelecting.current) {
         updateFormulaReference({ ...formulaReference, focus: point });
+        return;
+      }
+      if (moveDrag.current) {
+        const drag = moveDrag.current;
+        const height = drag.range.bottom - drag.range.top + 1;
+        const width = drag.range.right - drag.range.left + 1;
+        const top = Math.max(0, Math.min(Math.max(0, rowCount - height), drag.range.top + point.row - drag.origin.row));
+        const left = Math.max(0, Math.min(Math.max(0, columnCount - width), drag.range.left + point.column - drag.origin.column));
+        drag.target = { row: top, column: left };
+        setMovePreview({ top, left, bottom: top + height - 1, right: left + width - 1 });
         return;
       }
       if (fillOrigin.current) {
@@ -1647,6 +1839,31 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           : undefined;
         const format = conditionalFormat ? { ...baseFormat, ...conditionalFormat } : baseFormat;
         const value = formatCellDisplay(calculated, format, columnDisplay[column]);
+        // Excel-style overflow: single-line text paints across adjacent
+        // empty cells. The span clips itself at the first populated,
+        // spilled, or still-loading neighbour.
+        let overflow: { left: number; right: number } | undefined;
+        if (value !== "" && !value.includes("\n") && !renderCell && !loading) {
+          const neighbourEmpty = (r: number, c: number) =>
+            (data.get(cellKey({ row: r, column: c })) ?? "") === ""
+            && worksheet.spills.value(cellKey({ row: r, column: c })) === undefined
+            && !loadingRanges.some((entry) => r >= entry.rowStart && r <= entry.rowEnd && c >= entry.columnStart && c <= entry.columnEnd);
+          let right = 0;
+          if (format?.horizontalAlign !== "right") {
+            for (let c = column + 1; c < columnCount && c - column <= 12; c++) {
+              if (!neighbourEmpty(row, c)) break;
+              right += columnWidths[c];
+            }
+          }
+          let left = 0;
+          if (format?.horizontalAlign === "right" || format?.horizontalAlign === "center") {
+            for (let c = column - 1; c >= 0 && column - c <= 12; c--) {
+              if (!neighbourEmpty(row, c)) break;
+              left += columnWidths[c];
+            }
+          }
+          if (left > 0 || right > 0) overflow = { left, right };
+        }
         return <GridCell
           key={key}
           address={key}
@@ -1657,9 +1874,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           selected={selected}
           active={active}
           loading={loading}
-          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}`}
+          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}`}
           title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
           format={format}
+          overflow={overflow}
           field={fieldByColumn.get(column)}
           writeState={writeState}
           renderCell={renderCell}
@@ -1774,7 +1992,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       </div>}
 
 
-      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: ROW_HEADER_WIDTH, height: COLUMN_HEADER_HEIGHT }} />
+      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: ROW_HEADER_WIDTH, height: COLUMN_HEADER_HEIGHT }}
+        title="Select all (Ctrl/Cmd+A)"
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          selectWhole();
+          viewportRef.current?.focus({ preventScroll: true });
+        }}
+      />
       <div className={`selection-outline${fillTarget ? " filling" : ""}${selectionIsCopySource ? " copied" : ""}`} style={{
         left: columnLeft(previewRange.left),
         top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[previewRange.top],
@@ -1792,6 +2017,24 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             fillTargetRef.current = selection.focus;
             setFillTarget(selection.focus);
           }}
+          onDoubleClick={(event) => {
+            // Excel: double-click fills down to the bottom of the tallest
+            // contiguous data run in a column adjacent to the selection.
+            event.preventDefault();
+            event.stopPropagation();
+            fillOrigin.current = null;
+            const extent = (column: number) => {
+              if (column < 0 || column >= columnCount) return range.bottom;
+              let row = range.bottom;
+              while (row + 1 < rowCount && hasCellValue(cellKey({ row: row + 1, column }))) row++;
+              return row;
+            };
+            const targetRow = Math.max(extent(range.left - 1), extent(range.right + 1));
+            if (targetRow <= range.bottom) return;
+            const filled = fillSelection(data, selection, { row: targetRow, column: range.right }, rowCount, columnCount, canEdit);
+            commit(filled.data, "Autofill", selectionAddresses(filled.selection));
+            setSelection(filled.selection);
+          }}
         />}
       </div>
 
@@ -1807,6 +2050,17 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       >
         <rect />
       </svg>}
+
+      {movePreview && <div
+        className="move-outline"
+        aria-hidden="true"
+        style={{
+          left: columnLeft(movePreview.left),
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[movePreview.top],
+          width: columnOffsets[movePreview.right + 1] - columnOffsets[movePreview.left],
+          height: rowOffsets[movePreview.bottom + 1] - rowOffsets[movePreview.top],
+        }}
+      />}
 
       {spillBox && <div
         className="spill-range"
@@ -1969,7 +2223,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3 }}>{validationError}</div>}
       {showShortcutHelp && <div className="shortcut-backdrop"><section ref={shortcutHelpRef} className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}>
         <header><strong>Keyboard shortcuts</strong><button type="button" aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
-        <dl><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Fill down</dt><dd>Ctrl/Cmd D</dd><dt>Fill right</dt><dd>Ctrl/Cmd R</dd><dt>Edit cell</dt><dd>Enter or F2</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
+        <dl><dt>Edit cell</dt><dd>F2 or type</dd><dt>Move through sheet</dt><dd>Arrows · Enter · Tab · Page Up/Down</dd><dt>Jump to data edge</dt><dd>Ctrl/Cmd + arrows</dd><dt>Select all</dt><dd>Ctrl/Cmd A or corner</dd><dt>Select row / column</dt><dd>Shift Space · Ctrl Space</dd><dt>Paste copied range</dt><dd>Enter</dd><dt>Move cells</dt><dd>Drag selection border</dd><dt>Fill down / right</dt><dd>Ctrl/Cmd D · R</dd><dt>Insert date / time</dt><dd>Ctrl/Cmd ; · Shift :</dd><dt>Insert / delete axis</dt><dd>Ctrl/Cmd Shift + · Ctrl/Cmd −</dd><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
       </section></div>}
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
         left: columnLeft(editing.column),
