@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fitTransform, getRelations, rewriteReferences, sheetbaseFieldsOf, tableHeaderFields, validateGraph, withAutoLayout } from "./graph";
-import type { SchemaGraph } from "./types";
+import { fitTransform, getRelations, relatedModels, rewriteReferences, sheetbaseFieldsOf, tableHeaderFields, validateGraph, withAutoLayout } from "./graph";
+import type { SchemaGraph, SchemaRelation } from "./types";
 
 const graph: SchemaGraph = {
   models: [
@@ -24,6 +24,30 @@ describe("getRelations", () => {
   it("skips dangling references", () => {
     const dangling: SchemaGraph = { models: [{ name: "a", fields: [{ key: "x", type: "relationship", references: { model: "ghost" } }] }] };
     expect(getRelations(dangling)).toEqual([]);
+  });
+
+  it("merges explicit relations and drops the ones pointing at missing models", () => {
+    const linked: SchemaGraph = {
+      models: graph.models,
+      relations: [
+        { id: "lineage:customer->order", fromModel: "customer", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+        { id: "lineage:ghost->order", fromModel: "ghost", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+      ],
+    };
+    expect(getRelations(linked)).toEqual([
+      { id: "order.customer_id->customer.id", fromModel: "order", fromField: "customer_id", toModel: "customer", toField: "id" },
+      { id: "lineage:customer->order", fromModel: "customer", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+    ]);
+  });
+
+  it("does not double-draw an explicit relation that restates a field reference", () => {
+    const duplicated: SchemaGraph = {
+      models: graph.models,
+      relations: [
+        { id: "order.customer_id->customer.id", fromModel: "order", fromField: "customer_id", toModel: "customer", toField: "id", kind: "join" },
+      ],
+    };
+    expect(getRelations(duplicated)).toHaveLength(1);
   });
 });
 
@@ -70,6 +94,13 @@ describe("withAutoLayout", () => {
     expect(laid.models.every((m) => m.position)).toBe(true);
     expect(graph.models.every((m) => !m.position)).toBe(true);
   });
+
+  it("preserves explicit relations", () => {
+    const links: SchemaRelation[] = [
+      { id: "lineage:customer->order", fromModel: "customer", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+    ];
+    expect(withAutoLayout({ models: graph.models, relations: links }).relations).toBe(links);
+  });
 });
 
 describe("sheetbaseFieldsOf", () => {
@@ -93,6 +124,51 @@ describe("rewriteReferences", () => {
       { kind: "delete-model", name: "customer" },
     );
     expect(next.models[0]?.fields.find((f) => f.key === "customer_id")?.references).toBeUndefined();
+  });
+
+  it("rewrites explicit relations on rename and drops them on delete", () => {
+    const linked: SchemaGraph = {
+      models: [...graph.models, { name: "summary", fields: [] }],
+      relations: [
+        { id: "lineage:customer->summary", fromModel: "customer", fromField: "", toModel: "summary", toField: "", kind: "lineage" },
+        { id: "join:order.customer_id->customer.id", fromModel: "order", fromField: "customer_id", toModel: "customer", toField: "id", kind: "join" },
+        { id: "lineage:summary->order", fromModel: "summary", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+      ],
+    };
+    const renamed = rewriteReferences(linked, { kind: "rename-model", from: "customer", to: "client" });
+    expect(renamed.relations?.map((relation) => relation.id)).toEqual([
+      "lineage:client->summary",
+      "order.customer_id->client.id",
+      "lineage:summary->order",
+    ]);
+    const deleted = rewriteReferences(linked, { kind: "delete-model", name: "customer" });
+    expect(deleted.relations).toEqual([
+      { id: "lineage:summary->order", fromModel: "summary", fromField: "", toModel: "order", toField: "", kind: "lineage" },
+    ]);
+  });
+});
+
+describe("relatedModels", () => {
+  it("returns the selection plus every linked model", () => {
+    const relations = getRelations(graph);
+    expect([...relatedModels(relations, "customer")].sort()).toEqual(["customer", "order"]);
+    expect([...relatedModels(relations, "order")].sort()).toEqual(["customer", "order"]);
+    expect([...relatedModels([], "order")]).toEqual(["order"]);
+  });
+
+  it("walks the full upstream and downstream chain", () => {
+    const chain: SchemaGraph = {
+      models: [
+        { name: "a", fields: [] },
+        { name: "b", fields: [{ key: "a_id", type: "relationship", references: { model: "a" } }] },
+        { name: "c", fields: [{ key: "b_id", type: "relationship", references: { model: "b" } }] },
+        { name: "unrelated", fields: [] },
+      ],
+    };
+    const relations = getRelations(chain);
+    expect([...relatedModels(relations, "b")].sort()).toEqual(["a", "b", "c"]);
+    expect([...relatedModels(relations, "c")].sort()).toEqual(["a", "b", "c"]);
+    expect([...relatedModels(relations, "a")].sort()).toEqual(["a", "b", "c"]);
   });
 });
 

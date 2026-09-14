@@ -8,6 +8,32 @@ versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Schema editor**: SQL query import — `analyzeSql`/`sqlToGraph` turn pasted
+  or dropped SQL into an ERD (source tables, joins, CTEs/subqueries, result
+  columns) with dbt support (`{{ ref }}`/`{{ source }}` expansion,
+  `-- model.sql` headers, any file order). Query nodes
+  (`kind: cte | subquery | query | view`) are design-time only and skipped by
+  `graphToDdl`/`graphToProvision`/`diffGraphs`. The Import SQL dialog gains
+  file pick/drop and a live preview.
+- **Schema editor**: filled per-kind edge arrowheads that stop short of the
+  target node, with staggered entry points for parallel edges.
+- **Schema editor**: canvas navigation — the wheel zooms anchored at the
+  cursor, drag pans (middle button anywhere, left button on empty canvas),
+  and a Focus toggle that greys out models which are not upstream or
+  downstream of the selection (full chain, not just neighbours).
+
+### Changed
+
+- Schema editor dev demo fills the viewport with a small margin.
+- Schema editor query-import nodes drop the green left stripe; the green
+  header and kind chip carry the distinction.
+- Schema editor dev server pre-bundles `sheetbase-shared` (one library module
+  instead of ~20 source modules) and gains `bun run dev:bundled`, a watch-build
+  + preview mode the orb portal uses: the page went from 40 requests / 4.0s to
+  3 requests / ~0.6s at 250ms RTT. Production builds are byte-identical.
+
 ## [0.1.0] — pending first publish
 
 ### Added

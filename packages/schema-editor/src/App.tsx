@@ -46,7 +46,7 @@ const starter: SchemaGraph = {
 export function App() {
   const [graph, setGraph] = useState<SchemaGraph>(starter);
   return (
-    <div className="sb-demo-stage">
+    <div className="sb-demo-stage sb-demo-stage--fill">
       <SchemaEditor value={graph} onChange={setGraph} />
     </div>
   );

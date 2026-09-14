@@ -4,6 +4,7 @@ import { App } from "./App";
 import "sheetbase-shared/theme.css";
 import "sheetbase-shared/shell.css";
 import "./styles.css";
+import "./demo.css";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("missing #root element");

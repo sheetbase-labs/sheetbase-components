@@ -43,10 +43,24 @@ The canvas is fully keyboard-operable — pointer drag is not the only path.
   A moving node shows a dashed outline.
 - With the canvas itself focused: `+`/`-` zoom, arrow keys pan the view
   (Shift for a larger step), `0` resets zoom and pan.
+- Pointer navigation: the wheel zooms anchored at the cursor, and dragging
+  pans — the middle mouse button anywhere, the left button on empty canvas.
+  A horizontal trackpad swipe pans sideways.
+- The topbar Focus toggle (`aria-pressed`) greys out models that are not on
+  the selected model's upstream or downstream chain (transitively, not just
+  immediate neighbours). It is a visual aid only: greyed models stay
+  focusable and clickable, and the inspector's Links section carries the same
+  information.
 - Move start/end and the final coordinates announce through `.sb-schema-live`
   (`aria-live="polite"`).
 - Plain arrow keys are free for the canvas because `PaneLayout` pane operations
   bind Alt+Arrow and Alt+Shift+Arrow only — there is no conflict.
+- The import dialog is a labelled `role="dialog"` whose textarea takes focus on
+  open; `cmd/ctrl+Enter` imports, `Esc` closes, the live preview announces
+  through `aria-live="polite"`, and dropped `.sql` files have a keyboard
+  equivalent in the "Add .sql files" button.
+- Edges are drawn with one arrow marker per relation kind (reference, join,
+  lineage) and the canvas legend names the kinds present.
 
 ## Explorer (`sheetbase-explorer`)
 

@@ -16,6 +16,7 @@
   "files": ["dist-lib", "dist-types", "README.md"],
   "scripts": {
     "dev": "vite",
+    "dev:bundled": "node scripts/dev-bundled.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",

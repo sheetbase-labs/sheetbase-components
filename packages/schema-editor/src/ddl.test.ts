@@ -296,3 +296,28 @@ describe("diffGraphs / graphDiffToDdl", () => {
     expect(() => graphDiffToDdl(graph, bad)).toThrow(SchemaValidationError);
   });
 });
+
+describe("query-import nodes", () => {
+  const withQueryNodes: SchemaGraph = {
+    models: [
+      { name: "orders", fields: [{ key: "id", type: "text", primaryKey: true }] },
+      { name: "recent", kind: "cte", fields: [{ key: "id", type: "text" }], sql: "select id from orders" },
+      { name: "query_1", kind: "query", label: "Query 1", fields: [{ key: "id", type: "text" }], sql: "select id from recent" },
+    ],
+  };
+
+  it("emits DDL and payloads for tables only", () => {
+    expect(graphToDdl(withQueryNodes)).toBe('create table "orders" (\n  "id" text primary key\n);');
+    expect(graphToProvision(withQueryNodes).models.map((model) => model.name)).toEqual(["orders"]);
+  });
+
+  it("ignores query nodes when diffing", () => {
+    const diff = diffGraphs(withQueryNodes, {
+      models: [...withQueryNodes.models, { name: "extra", kind: "view", fields: [{ key: "id", type: "text" }] }],
+    });
+    expect(diff.create).toEqual([]);
+    expect(diff.drop).toEqual([]);
+    expect(diff.alter).toEqual([]);
+    expect(diff.destructive).toEqual([]);
+  });
+});

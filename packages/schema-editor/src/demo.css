@@ -1,0 +1,14 @@
+/*
+ * Dev demo only (not part of the published library): the demo fills the
+ * viewport with a small margin instead of the frame's centred card sizing.
+ */
+.sb-demo-stage--fill {
+  box-sizing: border-box;
+  height: 100vh;
+  min-height: 0;
+  place-items: stretch;
+  align-content: stretch;
+  padding: 20px;
+}
+.sb-demo-stage--fill > .sheetbase-scope { min-width: 0; min-height: 0; }
+.sb-demo-stage--fill .sb-frame { width: auto; height: 100%; min-height: 0; }

@@ -1,5 +1,5 @@
 import type { FieldDataType } from "sheetbase-shared";
-import { primaryKeyOf, validateGraph, withAutoLayout } from "./graph";
+import { primaryKeyOf, tableModels, validateGraph, withAutoLayout } from "./graph";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 
 /**
@@ -8,6 +8,10 @@ import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
  * run. `graphToDdl` emits `create table`; `diffGraphs`/`graphDiffToDdl` emit
  * alter-table migrations between a previous graph (e.g. `ddlToGraph` of the
  * live schema) and the edited one.
+ *
+ * Query-import nodes (`kind: cte | subquery | query | view`, see `analyzeSql`)
+ * are design-time annotations: emission, provisioning and diffing cover the
+ * table models only.
  */
 
 export class SchemaValidationError extends Error {
@@ -78,7 +82,7 @@ function createTableDdl(graph: SchemaGraph, model: SchemaModel): string {
 export function graphToDdl(graph: SchemaGraph): string {
   const errors = validateGraph(graph);
   if (errors.length > 0) throw new SchemaValidationError(errors);
-  return graph.models.map((model) => createTableDdl(graph, model)).join("\n\n");
+  return tableModels(graph).map((model) => createTableDdl(graph, model)).join("\n\n");
 }
 
 /**
@@ -102,7 +106,7 @@ export function graphToProvision(graph: SchemaGraph): Readonly<{
   const errors = validateGraph(graph);
   if (errors.length > 0) throw new SchemaValidationError(errors);
   return {
-    models: graph.models.map((model) => ({
+    models: tableModels(graph).map((model) => ({
       name: model.name,
       ...(model.label ? { label: model.label } : {}),
       fields: model.fields.map((field) => ({
@@ -198,17 +202,19 @@ function fieldChanges(prevGraph: SchemaGraph, prev: SchemaField, nextGraph: Sche
 export function diffGraphs(previous: SchemaGraph, next: SchemaGraph): SchemaDiff {
   const errors = validateGraph(next);
   if (errors.length > 0) throw new SchemaValidationError(errors);
-  const prevByName = new Map(previous.models.map((model) => [model.name, model]));
-  const nextByName = new Map(next.models.map((model) => [model.name, model]));
-  const create = next.models.filter((model) => !prevByName.has(model.name));
-  const drop = previous.models.filter((model) => !nextByName.has(model.name)).map((model) => model.name);
+  const prevTables = tableModels(previous);
+  const nextTables = tableModels(next);
+  const prevByName = new Map(prevTables.map((model) => [model.name, model]));
+  const nextByName = new Map(nextTables.map((model) => [model.name, model]));
+  const create = nextTables.filter((model) => !prevByName.has(model.name));
+  const drop = prevTables.filter((model) => !nextByName.has(model.name)).map((model) => model.name);
   const destructive: string[] = [];
   for (const name of drop) {
-    const model = previous.models.find((m) => m.name === name);
+    const model = prevTables.find((m) => m.name === name);
     destructive.push(`drops table "${name}" (${model?.fields.length ?? 0} fields)`);
   }
   const alter: SchemaModelAlter[] = [];
-  for (const nextModel of next.models) {
+  for (const nextModel of nextTables) {
     const prevModel = prevByName.get(nextModel.name);
     if (!prevModel) continue;
     const prevFields = new Map(prevModel.fields.map((field) => [field.key, field]));
@@ -281,8 +287,8 @@ export function graphDiffToDdl(previous: SchemaGraph, next: SchemaGraph, options
 
 export class SchemaParseError extends Error {
   readonly errors: readonly string[];
-  constructor(errors: readonly string[]) {
-    super(`Could not parse DDL:\n${errors.join("\n")}`);
+  constructor(errors: readonly string[], message = "Could not parse DDL:") {
+    super(`${message}\n${errors.join("\n")}`);
     this.name = "SchemaParseError";
     this.errors = errors;
   }
@@ -382,14 +388,15 @@ function parseColumnDef(def: string): SchemaField | "constraint" {
 }
 
 /**
- * Parse `create table` DDL back into a SchemaGraph — the import counterpart
- * to `graphToDdl`. Understands the emitted grammar plus the common Postgres
+ * Parse the `create table` statements in `sql` — the read-side counterpart to
+ * `graphToDdl`. Understands the emitted grammar plus the common Postgres
  * spellings (`if not exists`, schema-qualified names, `varchar`/`int`/
  * `serial` aliases, table-level `primary key`/`foreign key` constraints).
- * Unknown column types import as `text`. Throws SchemaParseError when no
- * statement yields a model.
+ * Unknown column types import as `text`. Statements that do not yield a model
+ * are reported in `errors` instead of throwing — `ddlToGraph` and the query
+ * importer both build on this.
  */
-export function ddlToGraph(sql: string): SchemaGraph {
+export function parseCreateTables(sql: string): { models: SchemaModel[]; errors: string[] } {
   const models: SchemaModel[] = [];
   const errors: string[] = [];
   const statements = sql.split(";").map((s) => s.trim()).filter(Boolean);
@@ -430,9 +437,6 @@ export function ddlToGraph(sql: string): SchemaGraph {
     if (fields.length === 0) { errors.push(`create table ${name}: no columns parsed`); continue; }
     models.push({ name, fields });
   }
-  if (models.length === 0) {
-    throw new SchemaParseError(errors.length > 0 ? errors : ["no create table statements found"]);
-  }
   // Normalise: an explicit `references (pk)` restates the implicit target —
   // drop it so round-tripped graphs match the hand-built shape.
   for (const model of models) {
@@ -443,6 +447,19 @@ export function ddlToGraph(sql: string): SchemaGraph {
         field.references = { model: field.references.model };
       }
     }
+  }
+  return { models, errors };
+}
+
+/**
+ * Parse `create table` DDL back into a SchemaGraph. Throws SchemaParseError
+ * when no statement yields a model; skipped statements are listed in
+ * `error.errors`.
+ */
+export function ddlToGraph(sql: string): SchemaGraph {
+  const { models, errors } = parseCreateTables(sql);
+  if (models.length === 0) {
+    throw new SchemaParseError(errors.length > 0 ? errors : ["no create table statements found"]);
   }
   return withAutoLayout({ models });
 }
