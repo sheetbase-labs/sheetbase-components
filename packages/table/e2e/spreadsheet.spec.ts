@@ -87,6 +87,24 @@ test("renders plain status text and context-menu actions", async ({ page }) => {
   await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
+test("marks the copied range with a dashed marquee until Escape", async ({ page, browserName }) => {
+  // Playwright cannot synthesise clipboard shortcuts in Firefox; the real
+  // copy event path is covered by the chromium and webkit projects.
+  test.skip(browserName === "firefox", "Firefox does not dispatch copy for synthesised shortcuts");
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  await page.getByRole("gridcell").first().click();
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.press("ControlOrMeta+c");
+  const marquee = page.locator(".copy-outline");
+  await expect(marquee).toBeVisible();
+  // Excel semantics: the marquee stays on the source range while the
+  // selection moves elsewhere so repeat pastes keep their target context.
+  await page.keyboard.press("ArrowDown");
+  await expect(marquee).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(marquee).toHaveCount(0);
+});
+
 test("announces selection through a polite live region", async ({ page }) => {
   await page.goto("/default", { waitUntil: "domcontentloaded" });
   const announcer = page.locator(".grid-announcer");

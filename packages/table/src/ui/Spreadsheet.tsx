@@ -469,6 +469,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
   const [fillTarget, setFillTarget] = useState<GridPoint | null>(null);
+  const [copyRange, setCopyRange] = useState<ReturnType<typeof normaliseSelection>>();
   const [columnWidths, setColumnWidths] = useState<number[]>(() => initialState
     ? [...initialState.columnWidths]
     : Array.from({ length: columnCount }, (_, index) => initialColumnWidths?.[index] ?? (index < 7 ? 170 : 140)));
@@ -722,6 +723,17 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }
     return bottom >= top && right >= left ? { top, left, bottom, right } : undefined;
   })();
+
+  // Excel-style copy marquee: the copied range keeps an animated dashed
+  // outline that survives selection moves and pastes (repeat-paste), and is
+  // dismissed by Escape, a fresh edit, or clearing cells. Clamp to the grid
+  // in case rows or columns were removed after the copy.
+  const copyBox = copyRange && copyRange.top < rowCount && copyRange.left < columnCount
+    ? { top: copyRange.top, left: copyRange.left, bottom: Math.min(copyRange.bottom, rowCount - 1), right: Math.min(copyRange.right, columnCount - 1) }
+    : undefined;
+  const selectionIsCopySource = copyBox !== undefined && !fillTarget
+    && copyBox.top === range.top && copyBox.bottom === range.bottom
+    && copyBox.left === range.left && copyBox.right === range.right;
 
   const pushHistory = useCallback((mutation: GridMutation) => {
     if (isEmptyMutation(mutation)) return false;
@@ -1080,6 +1092,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const beginEdit = useCallback((point: GridPoint, replaceWith?: string) => {
     if (!canEdit(point)) return;
     setSelection({ anchor: point, focus: point });
+    setCopyRange(undefined);
     setEditing(point);
     setDraft(replaceWith ?? data.get(cellKey(point)) ?? "");
     setSuggestionIndex(0);
@@ -1325,6 +1338,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (editing) return;
     const command = event.metaKey || event.ctrlKey;
+    if (event.key === "Escape") { setCopyRange(undefined); return; }
     if (!command && event.key === "?") { event.preventDefault(); setShowShortcutHelp(true); return; }
     if (command && event.key.toLowerCase() === "z") {
       event.preventDefault();
@@ -1367,7 +1381,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      event.preventDefault(); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
+      event.preventDefault(); setCopyRange(undefined); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
     }
     if (!command && !event.altKey && event.key.length === 1) {
       if (readOnly) return;
@@ -1385,10 +1399,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       calculated.set(address, input.startsWith("=") ? displayValue(worksheet, point) : input);
     }
     event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, selection));
+    setCopyRange(normaliseSelection(selection));
+    announce(`Copied ${selectionLabel(selection)}`);
   };
   const onCut = (event: React.ClipboardEvent) => {
     if (readOnly) { event.preventDefault(); return; }
     onCopy(event);
+    announce(`Cut ${selectionLabel(selection)}`);
     commit(clearSelection(data, selection, canEdit), "Cut range", selectionAddresses(selection));
   };
   const onPaste = (event: React.ClipboardEvent) => {
@@ -1758,7 +1775,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
 
       <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: ROW_HEADER_WIDTH, height: COLUMN_HEADER_HEIGHT }} />
-      <div className={`selection-outline${fillTarget ? " filling" : ""}`} style={{
+      <div className={`selection-outline${fillTarget ? " filling" : ""}${selectionIsCopySource ? " copied" : ""}`} style={{
         left: columnLeft(previewRange.left),
         top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[previewRange.top],
         width: columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left],
@@ -1777,6 +1794,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           }}
         />}
       </div>
+
+      {copyBox && <svg
+        className="copy-outline"
+        aria-hidden="true"
+        style={{
+          left: columnLeft(copyBox.left),
+          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[copyBox.top],
+          width: columnOffsets[copyBox.right + 1] - columnOffsets[copyBox.left],
+          height: rowOffsets[copyBox.bottom + 1] - rowOffsets[copyBox.top],
+        }}
+      >
+        <rect />
+      </svg>}
 
       {spillBox && <div
         className="spill-range"

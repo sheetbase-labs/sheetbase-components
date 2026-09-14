@@ -97,6 +97,11 @@ button { border: 0; background: transparent; cursor: pointer; }
 .column-resizer:hover { background: rgb(118 82 239 / 25%); }
 .selection-outline { z-index: 3; border: 2px solid #7652ef; pointer-events: none; box-shadow: 0 0 0 1px rgb(118 82 239 / 8%); }
 .selection-outline.filling { border-style: dashed; background: rgb(118 82 239 / 4%); }
+.selection-outline.copied { border-color: transparent; box-shadow: none; }
+.copy-outline { position: absolute; z-index: 4; overflow: visible; pointer-events: none; }
+.copy-outline rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: #7652ef; stroke-width: 2px; stroke-dasharray: 4px 4px; animation: copy-ants 0.4s linear infinite; }
+@keyframes copy-ants { to { stroke-dashoffset: -8px; } }
+@media (prefers-reduced-motion: reduce) { .copy-outline rect { animation: none; } }
 .spill-range { position: absolute; z-index: 2; border: 1.5px dashed #7652ef; border-radius: 2px; pointer-events: none; }
 .fill-handle { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; padding: 0; border: 1px solid white; border-radius: 1px; background: #7652ef; cursor: crosshair; pointer-events: auto; }
 .fill-handle:hover { transform: scale(1.25); }
