@@ -13,7 +13,7 @@
   --ts-chart-3: var(--orange);
   --ts-chart-4: var(--blue);
   --ts-chart-5: var(--purple);
-  --ts-chart-6: #6d7d4b;
+  --ts-chart-6: var(--muted);
 }
 .sheetbase-explorer[data-theme="dark"] {
   color-scheme: dark;

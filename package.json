@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.5",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
-    "lint": "biome ci --error-on-warnings .",
+    "lint": "biome ci --error-on-warnings . && bun scripts/check-colour-literals.ts",
     "build:lib": "bun run --filter sheetbase-shared build:lib && bun run --filter sheetbase-table build:lib && bun run --filter sheetbase-explorer build:lib && bun run --filter sheetbase-schemaeditor build:lib && bun run --filter sheetbase-rulesengine build:lib && bun run --filter sheetbase-advanced-search build:lib",
     "dev": "bun run dev:table & bun run dev:explorer & bun run dev:schema & bun run dev:rules & bun run dev:search & bun run dev:demo & wait",
     "dev:table": "bun run --filter sheetbase-table dev",
@@ -18,7 +20,8 @@
     "dev:search": "bun run --filter sheetbase-advanced-search dev",
     "dev:demo": "bun run --filter sheetbase-demo dev",
     "version:bump": "bun scripts/version.mjs",
-    "pack:smoke": "node scripts/pack-smoke.mjs"
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "check:colours": "bun scripts/check-colour-literals.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
