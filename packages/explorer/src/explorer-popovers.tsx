@@ -1,6 +1,5 @@
+import { FileUploadIcon } from './components/icons'
 import { useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { FileUploadIcon } from '@hugeicons/core-free-icons'
 import { FieldSelect } from './components/FieldSelect'
 import { filterOperators } from './lib/filter-operators'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, FilterOperator, FilterRule, PaletteKind, ReferenceLine, SavedExploration } from './lib/types'
@@ -162,7 +161,7 @@ function LibraryPopover({ saved, name, onName, onSave, onLoad, onDelete }: { sav
 function ImportPopover({ sources, status, onLoadSource, onOpenFile }: { sources: DataAdapter[]; status: string | null; onLoadSource(id: string): void; onOpenFile(file?: File): void }) {
   const fileRef = useRef<HTMLInputElement>(null)
   return (
-    <><h4>Dataset</h4><div className="export-actions"><button type="button" onClick={() => fileRef.current?.click()}><HugeiconsIcon icon={FileUploadIcon} size={13}/>From file…</button></div><ul className="library-list">{sources.map((source) => <li key={source.id}><button type="button" className="library-load" onClick={() => onLoadSource(source.id)}><span>{source.label}</span><small>{source.id}</small></button></li>)}</ul><input ref={fileRef} type="file" hidden accept=".csv,.tsv,.json,text/csv,application/json" onChange={(event) => onOpenFile(event.target.files?.[0])}/>{status && <p className="muted">{status}</p>}</>
+    <><h4>Dataset</h4><div className="export-actions"><button type="button" onClick={() => fileRef.current?.click()}><FileUploadIcon size={13}/>From file…</button></div><ul className="library-list">{sources.map((source) => <li key={source.id}><button type="button" className="library-load" onClick={() => onLoadSource(source.id)}><span>{source.label}</span><small>{source.id}</small></button></li>)}</ul><input ref={fileRef} type="file" hidden accept=".csv,.tsv,.json,text/csv,application/json" onChange={(event) => onOpenFile(event.target.files?.[0])}/>{status && <p className="muted">{status}</p>}</>
   )
 }
 
