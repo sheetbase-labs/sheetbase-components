@@ -77,13 +77,13 @@ import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
 import { conflictWriteKeys, fieldWritesForMutation, type MutationFieldWrite } from "../data";
 import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
 
-const ROW_HEIGHT = 31;
+const DEFAULT_ROW_HEIGHT = 31;
 
-const COLUMN_HEADER_HEIGHT = 31;
+const DEFAULT_COLUMN_HEADER_HEIGHT = 31;
 /** Cells per frame slice for large pastes; keeps the viewport responsive while pasting. */
 const PASTE_CHUNK_CELLS = 20_000;
 
-const ROW_HEADER_WIDTH = 50;
+const DEFAULT_ROW_HEADER_WIDTH = 50;
 const defaultQuery: DatasetQuery = {};
 
 export type SpreadsheetSelection = {
@@ -213,6 +213,12 @@ export type SpreadsheetProps = {
   initialColumnWidths?: readonly number[];
   /** Per-row initial heights by index; absent entries (or the whole prop) mean automatic height. */
   initialRowHeights?: readonly number[];
+  /** Default row height in px (UI system v3: 28). */
+  defaultRowHeight?: number;
+  /** Column header height in px (v3: 31). */
+  headerHeight?: number;
+  /** Row header width in px (v3: 50). */
+  rowHeaderWidth?: number;
   readOnlyRows?: ReadonlySet<number>;
   /** Blocks value/structure mutations; selection, copy, sorting and filtering stay live. */
   readOnly?: boolean;
@@ -397,6 +403,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   frozenColumns: initialFrozenColumns = 0,
   initialColumnWidths,
   initialRowHeights,
+  defaultRowHeight = DEFAULT_ROW_HEIGHT,
+  headerHeight = DEFAULT_COLUMN_HEADER_HEIGHT,
+  rowHeaderWidth = DEFAULT_ROW_HEADER_WIDTH,
   readOnlyRows = new Set(),
   readOnly = false,
   theme = "light",
@@ -487,7 +496,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     : Array.from({ length: columnCount }, (_, index) => initialColumnWidths?.[index] ?? (index < 7 ? 170 : 140)));
   const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
     ? [...initialState.rowHeights]
-    : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? ROW_HEIGHT));
+    : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? defaultRowHeight));
   const [frozenRowCount, setFrozenRowCount] = useState(initialState?.frozenRows ?? initialFrozenRows);
   const [frozenColumnCount, setFrozenColumnCount] = useState(initialState?.frozenColumns ?? initialFrozenColumns);
   const [contextMenu, setContextMenu] = useState<{ axis: "row" | "column"; index: number; x: number; y: number }>();
@@ -566,7 +575,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => viewportRef.current,
-    estimateSize: (row) => rowHeights[row] ?? ROW_HEIGHT,
+    estimateSize: (row) => rowHeights[row] ?? defaultRowHeight,
     overscan: 8,
     useFlushSync: false,
   });
@@ -671,12 +680,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // (set in onScroll), the same way frozen rows ride --sheet-scroll-top — so
   // scroll never needs a React state update just to reposition them.
   const columnLeft = (column: number, extra = 0): number | string => {
-    const base = ROW_HEADER_WIDTH + columnOffsets[column] + extra;
+    const base = rowHeaderWidth + columnOffsets[column] + extra;
     return column < frozenColumnCount ? `calc(var(--sheet-scroll-left, 0px) + ${base}px)` : base;
   };
   const datasetHeaderHeight = 0;
-  const contentWidth = ROW_HEADER_WIDTH + columnVirtualizer.getTotalSize();
-  const contentHeight = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowVirtualizer.getTotalSize();
+  const contentWidth = rowHeaderWidth + columnVirtualizer.getTotalSize();
+  const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize();
   const virtualRows = rowVirtualizer.getVirtualItems();
   const virtualColumns = columnVirtualizer.getVirtualItems();
   const viewportRange = {
@@ -1200,9 +1209,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     for (const [address, value] of data) {
       try { if (parseAddress(address).row === row) lines = Math.max(lines, value.split("\n").length); } catch { /* Ignore non-cell keys. */ }
     }
-    const after = Math.max(ROW_HEIGHT, Math.min(180, lines * 20 + 11));
+    const after = Math.max(defaultRowHeight, Math.min(180, lines * 20 + 11));
     const next = [...rowHeights]; next[row] = after; setRowHeights(next); onRowHeightsChange?.(next);
-  }, [data, onRowHeightsChange, rowHeights, selection.focus.row]);
+  }, [data, defaultRowHeight, onRowHeightsChange, rowHeights, selection.focus.row]);
   const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
     // Structure moves values between addresses; in a bound grid that desyncs
     // row→record identity (writes would target the wrong records).
@@ -1655,7 +1664,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
     event.preventDefault();
     event.stopPropagation();
-    const before = rowHeights[row] ?? ROW_HEIGHT;
+    const before = rowHeights[row] ?? defaultRowHeight;
     const after = Math.max(20, Math.min(240, before + (event.key === "ArrowDown" ? 8 : -8)));
     if (after === before) return;
     const next = [...rowHeights];
@@ -1668,7 +1677,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     event.preventDefault();
     event.stopPropagation();
     const startY = event.clientY;
-    const startHeight = rowHeights[row] ?? ROW_HEIGHT;
+    const startHeight = rowHeights[row] ?? defaultRowHeight;
     let finalHeight = startHeight;
     const onMove = (moveEvent: PointerEvent) => {
       finalHeight = Math.max(20, Math.min(240, startHeight + moveEvent.clientY - startY));
@@ -1728,13 +1737,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         && point.column >= range.left && point.column <= range.right
       ) {
         const cellBox = event.currentTarget.getBoundingClientRect();
-        const x = ROW_HEADER_WIDTH + columnOffsets[point.column] + (event.clientX - cellBox.left);
-        const y = COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[point.row] + (event.clientY - cellBox.top);
+        const x = rowHeaderWidth + columnOffsets[point.column] + (event.clientX - cellBox.left);
+        const y = headerHeight + datasetHeaderHeight + rowOffsets[point.row] + (event.clientY - cellBox.top);
         const edge = Math.min(
-          x - (ROW_HEADER_WIDTH + columnOffsets[range.left]),
-          ROW_HEADER_WIDTH + columnOffsets[range.right + 1] - x,
-          y - (COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[range.top]),
-          COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[range.bottom + 1] - y,
+          x - (rowHeaderWidth + columnOffsets[range.left]),
+          rowHeaderWidth + columnOffsets[range.right + 1] - x,
+          y - (headerHeight + datasetHeaderHeight + rowOffsets[range.top]),
+          headerHeight + datasetHeaderHeight + rowOffsets[range.bottom + 1] - y,
         );
         if (edge <= 5) {
           moveDrag.current = { range, origin: point, target: { row: range.top, column: range.left } };
@@ -1883,9 +1892,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           renderCell={renderCell}
           handlers={cellHandlersRef}
           left={columnLeft(column)}
-          top={row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}px)` : COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row]}
+          top={row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${headerHeight + datasetHeaderHeight + rowOffsets[row]}px)` : headerHeight + datasetHeaderHeight + rowOffsets[row]}
           width={columnWidths[column]}
-          height={rowHeights[row] ?? ROW_HEIGHT}
+          height={rowHeights[row] ?? defaultRowHeight}
         />;
       }))}
 
@@ -1898,14 +1907,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-selected={row >= range.top && row <= range.bottom}
         className={`row-header${row >= range.top && row <= range.bottom ? " selected-header" : ""}`}
         key={`row-${row}`}
-        style={{ left: "var(--sheet-scroll-left, 0px)", top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[row], width: ROW_HEADER_WIDTH, height: rowHeights[row] ?? ROW_HEIGHT }}
+        style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidth, height: rowHeights[row] ?? defaultRowHeight }}
         onPointerDown={() => {
           dragSelecting.current = true;
           setSelection({ anchor: { row, column: 0 }, focus: { row, column: columnCount - 1 } });
           viewportRef.current?.focus({ preventScroll: true });
         }}
         onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
-      >{row + 1}<hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? ROW_HEIGHT} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>))}
+      >{row + 1}<hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? defaultRowHeight} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>))}
 
       {renderColumns.map(({ index: column }) => (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
@@ -1921,7 +1930,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           left: columnLeft(column),
           top: "var(--sheet-scroll-top, 0px)",
           width: columnWidths[column],
-          height: COLUMN_HEADER_HEIGHT,
+          height: headerHeight,
         }}
         onPointerDown={(event) => {
           if (editing && draft.startsWith("=")) {
@@ -1985,14 +1994,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
-        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = ROW_HEIGHT; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
+        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
         {(frozenRowCount > 0 || frozenColumnCount > 0) && <button type="button" onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
         {contextMenuActions?.map((action) => <button type="button" key={action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
       </div>}
 
 
-      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: ROW_HEADER_WIDTH, height: COLUMN_HEADER_HEIGHT }}
+      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: rowHeaderWidth, height: headerHeight }}
         title="Select all (Ctrl/Cmd+A)"
         onPointerDown={(event) => {
           if (event.button !== 0) return;
@@ -2002,7 +2011,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       />
       <div className={`selection-outline${fillTarget ? " filling" : ""}${selectionIsCopySource ? " copied" : ""}`} style={{
         left: columnLeft(previewRange.left),
-        top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[previewRange.top],
+        top: headerHeight + datasetHeaderHeight + rowOffsets[previewRange.top],
         width: columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left],
         height: rowOffsets[previewRange.bottom + 1] - rowOffsets[previewRange.top],
       }}>
@@ -2043,7 +2052,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-hidden="true"
         style={{
           left: columnLeft(copyBox.left),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[copyBox.top],
+          top: headerHeight + datasetHeaderHeight + rowOffsets[copyBox.top],
           width: columnOffsets[copyBox.right + 1] - columnOffsets[copyBox.left],
           height: rowOffsets[copyBox.bottom + 1] - rowOffsets[copyBox.top],
         }}
@@ -2056,7 +2065,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-hidden="true"
         style={{
           left: columnLeft(movePreview.left),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[movePreview.top],
+          top: headerHeight + datasetHeaderHeight + rowOffsets[movePreview.top],
           width: columnOffsets[movePreview.right + 1] - columnOffsets[movePreview.left],
           height: rowOffsets[movePreview.bottom + 1] - rowOffsets[movePreview.top],
         }}
@@ -2067,7 +2076,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-hidden="true"
         style={{
           left: columnLeft(spillBox.left),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[spillBox.top],
+          top: headerHeight + datasetHeaderHeight + rowOffsets[spillBox.top],
           width: columnOffsets[spillBox.right + 1] - columnOffsets[spillBox.left],
           height: rowOffsets[spillBox.bottom + 1] - rowOffsets[spillBox.top],
         }}
@@ -2083,7 +2092,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         key={`reference-${referenceRange.top}-${referenceRange.left}-${bottom}-${right}`}
         style={{
           left: columnLeft(referenceRange.left),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[referenceRange.top],
+          top: headerHeight + datasetHeaderHeight + rowOffsets[referenceRange.top],
           width: columnOffsets[right + 1] - columnOffsets[referenceRange.left],
           height: rowOffsets[bottom + 1] - rowOffsets[referenceRange.top],
           borderColor: ["#00a77b", "#f26a21", "#2f78ed", "#b44fd8"][index % 4],
@@ -2092,9 +2101,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       })}
       {editing && draft.startsWith("=") && <FormulaTokens value={draft} className="cell-formula-tokens" style={{
         left: columnLeft(editing.column, 1),
-        top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+        top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
         width: columnWidths[editing.column] - 2,
-        height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+        height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
       }} />}
       {editing && !activeCustomEditor && <input
         className={`cell-editor${draft.startsWith("=") ? " tokenised-input" : ""}`}
@@ -2106,9 +2115,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-label={`Edit ${cellKey(editing)}`}
         style={{
           left: columnLeft(editing.column, 1),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+          top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
-          height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+          height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
         }}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -2169,9 +2178,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className="cell-editor custom-editor-host"
         style={{
           left: columnLeft(editing.column, 1),
-          top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row] + 1,
+          top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
-          height: (rowHeights[editing.row] ?? ROW_HEIGHT) - 2,
+          height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
         }}
       >
         {activeCustomEditor.render({
@@ -2193,7 +2202,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className="typed-options boolean"
         role="radiogroup"
         aria-label={`Choose ${editingField.label}`}
-        style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? ["true", "false"]).map((option) => (
             // biome-ignore lint/a11y/useSemanticElements: button-as-radio inside a radiogroup is the intended pattern; a native input would not preserve editor focus or the button styling
@@ -2209,7 +2218,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className={`typed-options ${editingField?.dataType ?? "text"}`}
         role="listbox"
         aria-label={`Choose ${editingField?.label}`}
-        style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? []).flatMap((option) => editingField?.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()) ? [<button type="button"
             role="option"
@@ -2220,14 +2229,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             onClick={() => finishEdit(true, undefined, option)}
           >{option}</button>] : [])}
       </div>)}
-      {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3 }}>{validationError}</div>}
+      {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3 }}>{validationError}</div>}
       {showShortcutHelp && <div className="shortcut-backdrop"><section ref={shortcutHelpRef} className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}>
         <header><strong>Keyboard shortcuts</strong><button type="button" aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
         <dl><dt>Edit cell</dt><dd>F2 or type</dd><dt>Move through sheet</dt><dd>Arrows · Enter · Tab · Page Up/Down</dd><dt>Jump to data edge</dt><dd>Ctrl/Cmd + arrows</dd><dt>Select all</dt><dd>Ctrl/Cmd A or corner</dd><dt>Select row / column</dt><dd>Shift Space · Ctrl Space</dd><dt>Paste copied range</dt><dd>Enter</dd><dt>Move cells</dt><dd>Drag selection border</dd><dt>Fill down / right</dt><dd>Ctrl/Cmd D · R</dd><dt>Insert date / time</dt><dd>Ctrl/Cmd ; · Shift :</dd><dt>Insert / delete axis</dt><dd>Ctrl/Cmd Shift + · Ctrl/Cmd −</dd><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
       </section></div>}
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
         left: columnLeft(editing.column),
-        top: COLUMN_HEADER_HEIGHT + datasetHeaderHeight + rowOffsets[editing.row + 1] + 4,
+        top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 4,
         width: Math.max(290, columnWidths[editing.column]),
       }}>
         {suggestions.map((suggestion, index) => <button type="button"
