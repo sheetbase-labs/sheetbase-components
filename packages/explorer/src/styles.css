@@ -8,7 +8,7 @@
   background: transparent;
   font-synthesis: none;
   /* Surface tokens come from sheetbase-shared/theme.css (imported first); explorer keeps only chart vars below. */
-  --ts-chart-1: #7652ef;
+  --ts-chart-1: var(--accent);
   --ts-chart-2: #07956a;
   --ts-chart-3: #c95814;
   --ts-chart-4: #286dcc;
