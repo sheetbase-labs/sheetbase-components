@@ -35,3 +35,27 @@
 .sb-group-preview summary { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: pointer; font-size: 12px; background: var(--panel-2); }
 .sb-group-preview summary strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-group-preview summary .sb-chip { margin-left: auto; }
+
+/* COMP-04.2 — applied filter chips (ChipTag README; one row above the table). */
+.sb-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 4px 0 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 12px; background: var(--surface); color: var(--text);
+}
+.chip button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--faint); cursor: pointer;
+  font-size: 12px; line-height: 1;
+}
+.chip button:hover { background: var(--surface-hover); color: var(--text); }
+.chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sb-chip-add {
+  height: 24px; padding: 0 8px;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+  background: transparent; color: var(--faint); font-size: 12px; cursor: pointer;
+}
+.sb-chip-add:hover { background: var(--surface-hover); color: var(--text); }
+.sb-chip-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
