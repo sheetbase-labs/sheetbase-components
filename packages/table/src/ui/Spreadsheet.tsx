@@ -217,6 +217,11 @@ export type SpreadsheetProps = {
   defaultRowHeight?: number;
   /** Column header height in px (v3: 31). */
   headerHeight?: number;
+  /**
+   * Optional header groups: a label row above the column headers spanning
+   * the given columns (v3 source group headers). 20px tall when present.
+   */
+  columnGroups?: readonly { label: string; columns: readonly number[] }[];
   /** Row header width in px (v3: 50). */
   rowHeaderWidth?: number;
   readOnlyRows?: ReadonlySet<number>;
@@ -405,6 +410,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   initialRowHeights,
   defaultRowHeight = DEFAULT_ROW_HEIGHT,
   headerHeight = DEFAULT_COLUMN_HEADER_HEIGHT,
+  columnGroups,
   rowHeaderWidth = DEFAULT_ROW_HEADER_WIDTH,
   readOnlyRows = new Set(),
   readOnly = false,
@@ -683,7 +689,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const base = rowHeaderWidth + columnOffsets[column] + extra;
     return column < frozenColumnCount ? `calc(var(--sheet-scroll-left, 0px) + ${base}px)` : base;
   };
-  const datasetHeaderHeight = 0;
+  const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? 20 : 0;
   const contentWidth = rowHeaderWidth + columnVirtualizer.getTotalSize();
   const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize();
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1916,6 +1922,25 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
       >{row + 1}<hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? defaultRowHeight} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>))}
 
+      {columnGroups?.map((group) => {
+        const cols = group.columns.filter((column) => column >= 0 && column < columnCount);
+        if (cols.length === 0) return null;
+        const start = Math.min(...cols);
+        const end = Math.max(...cols);
+        let width = 0;
+        for (let column = start; column <= end; column += 1) width += columnWidths[column] ?? 0;
+        return (
+          <div
+            key={`group-${group.label}`}
+            role="presentation"
+            className="column-group-header"
+            style={{ left: columnLeft(start), top: "var(--sheet-scroll-top, 0px)", width, height: datasetHeaderHeight }}
+          >
+            {group.label}
+          </div>
+        );
+      })}
+
       {renderColumns.map(({ index: column }) => (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
         <div
@@ -1928,7 +1953,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         draggable={Boolean(onColumnMove)}
         style={{
           left: columnLeft(column),
-          top: "var(--sheet-scroll-top, 0px)",
+          top: `calc(var(--sheet-scroll-top, 0px) + ${datasetHeaderHeight}px)`,
           width: columnWidths[column],
           height: headerHeight,
         }}
@@ -2001,7 +2026,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       </div>}
 
 
-      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: rowHeaderWidth, height: headerHeight }}
+      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: rowHeaderWidth, height: headerHeight + datasetHeaderHeight }}
         title="Select all (Ctrl/Cmd+A)"
         onPointerDown={(event) => {
           if (event.button !== 0) return;
