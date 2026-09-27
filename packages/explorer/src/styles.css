@@ -9,10 +9,10 @@
   font-synthesis: none;
   /* Surface tokens come from sheetbase-shared/theme.css (imported first); explorer keeps only chart vars below. */
   --ts-chart-1: var(--accent);
-  --ts-chart-2: #07956a;
-  --ts-chart-3: #c95814;
-  --ts-chart-4: #286dcc;
-  --ts-chart-5: #9541b7;
+  --ts-chart-2: var(--green);
+  --ts-chart-3: var(--orange);
+  --ts-chart-4: var(--blue);
+  --ts-chart-5: var(--purple);
   --ts-chart-6: #6d7d4b;
 }
 .sheetbase-explorer[data-theme="dark"] {
@@ -54,7 +54,7 @@
 .column-copy { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .column-copy strong { font-size: 11.5px; font-weight: 540; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-copy small { font-size: 9.5px; color: var(--muted); }
-.mapping-badge { padding: 3px 6px; border-radius: 10px; background: var(--accent); color: white; font-size: 8.5px; font-weight: 650; }
+.mapping-badge { padding: 3px 6px; border-radius: 10px; background: var(--accent); color: var(--panel); font-size: 8.5px; font-weight: 650; }
 .source-footer { margin-top: auto; min-height: 70px; padding: 11px 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; font-size: 10px; background: var(--panel-2); }
 .source-footer span, .source-footer small { color: var(--muted); }
 .source-footer strong { font-size: 11px; }
@@ -121,7 +121,7 @@
   .dataset-title { position: static; transform: none; }
 }
 .library-popover { width: 330px; }
-.library-save-row button { min-height: 24px; padding: 0 10px; border: 1px solid transparent; border-radius: 5px; background: var(--accent); color: #fff; font-size: 11px; cursor: pointer; }
+.library-save-row button { min-height: 24px; padding: 0 10px; border: 1px solid transparent; border-radius: 5px; background: var(--accent); color: var(--panel); font-size: 11px; cursor: pointer; }
 .library-save-row button:disabled { opacity: .5; cursor: default; }
 .library-save-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin: 5px 0; }
 .library-save-row input { height: 24px; min-width: 0; padding: 0 6px; border: 1px solid transparent; border-radius: 5px; background: var(--panel-2); color: var(--text); font-size: 11px; }

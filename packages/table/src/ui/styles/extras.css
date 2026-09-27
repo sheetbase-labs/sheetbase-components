@@ -21,7 +21,7 @@
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-nav > a:first-child { color: var(--text); }
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-nav-links a { color: var(--faint); }
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-nav-links a:hover { background: var(--text); color: var(--text); }
-.stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-nav-links a[aria-current="page"] { background: #373147; color: var(--selection-border); }
+.stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-nav-links a[aria-current="page"] { background: var(--accent-soft); color: var(--selection-border); }
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-home-head h1,
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-section-head h2 { color: #f2f0f6; }
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-section > p { color: var(--faint); }
