@@ -12,6 +12,7 @@
       "import": "./dist-lib/sheetbase-shared.js"
     },
     "./theme.css": "./src/theme.css",
+    "./themes/v3.css": "./src/themes/v3.css",
     "./shell.css": "./src/shell.css",
     "./panes.css": "./src/panes/panes.css",
     "./styles.css": "./dist-lib/style.css",

@@ -25,6 +25,37 @@
   --purple: #9541b7;
   --danger: #c43d3d;
   --shadow: 0 12px 35px rgb(0 0 0 / 7%);
+  /* COMP-01: variables the v3 theme needs. Defaults map onto the package's
+     current palette so behaviour is unchanged until themes/v3.css is loaded. */
+  --surface: var(--panel);
+  --surface-muted: var(--panel-2);
+  --surface-hover: color-mix(in oklab, var(--panel-2) 88%, var(--border));
+  --surface-derived: var(--panel-2);
+  --surface-disabled: var(--app);
+  --border-subtle: color-mix(in oklab, var(--border) 55%, var(--panel));
+  --grid-line: var(--border);
+  --link: var(--accent);
+  --link-hover: var(--accent-dark);
+  --focus: var(--accent);
+  --selection: var(--accent-soft);
+  --selection-subtle: var(--accent-soft-2);
+  --selection-border: color-mix(in oklab, var(--accent) 40%, var(--panel));
+  --green-text: var(--green);
+  --orange-soft: #fff7e0;
+  --orange-text: var(--orange);
+  --purple-soft: #f3e9fb;
+  --danger-text: var(--danger);
+  --danger-soft: #fdecec;
+  --series-a: var(--blue);
+  --series-b: var(--accent);
+  --series-c: var(--muted);
+  --chart-grid: var(--border);
+  --chart-axis: var(--faint);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --row-height: 31px;
+  --control-height: 32px;
   font-family: var(--font-sans);
   color: var(--text);
   font-size: var(--text-size);
@@ -52,6 +83,9 @@
   --purple: #ca84e2;
   --danger: #ef7777;
   --shadow: 0 14px 36px rgb(0 0 0 / 28%);
+  --orange-soft: #3a2e12;
+  --purple-soft: #2c2233;
+  --danger-soft: #3a1f1f;
 }
 :where(.sheetbase-scope), :where(.sheetbase-scope) *, :where(.sheetbase-explorer), :where(.sheetbase-explorer) * { box-sizing: border-box; }
 :where(.sheetbase-scope) button, :where(.sheetbase-scope) select, :where(.sheetbase-scope) input, :where(.sheetbase-scope) textarea { font: inherit; color: inherit; }
