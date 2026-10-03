@@ -377,6 +377,7 @@ export const CORE_FUNCTIONS: Record<string, FunctionImpl> = {
   STDEVA: (args, ctx) => stdev(sampleA(args, ctx), false),
   "STDEV.P": (args, ctx) => stdev(sample(args, ctx), true),
   STDEVP: (args, ctx) => stdev(sample(args, ctx), true),
+  STDEVPA: (args, ctx) => stdev(sampleA(args, ctx), true),
   VAR: (args, ctx) => stdev(sample(args, ctx), false) ** 2,
   "VAR.S": (args, ctx) => stdev(sample(args, ctx), false) ** 2,
   VARA: (args, ctx) => stdev(sampleA(args, ctx), false) ** 2,

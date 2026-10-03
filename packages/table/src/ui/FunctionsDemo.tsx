@@ -133,6 +133,7 @@ export const DEMO_SECTIONS: readonly DemoSection[] = [
       entry("STDEVA", "=STDEVA(A1:A5)", NUM),
       entry("STDEV.P", "=STDEV.P(A1:A5)", NUM),
       entry("STDEVP", "=STDEVP(A1:A5)", NUM),
+      entry("STDEVPA", "=STDEVPA(A1:A5)", NUM),
       entry("VAR", "=VAR(A1:A5)", NUM),
       entry("VAR.S", "=VAR.S(A1:A5)", NUM),
       entry("VARA", "=VARA(A1:A5)", NUM),

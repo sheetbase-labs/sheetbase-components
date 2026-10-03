@@ -123,7 +123,23 @@ export const TEXT_FUNCTIONS: Record<string, FunctionImpl> = {
   SECOND: (args) => asDate(scalarOf(args[0])).getUTCSeconds(),
   DATEVALUE: (args) => asDate(scalarOf(args[0])),
   TIMEVALUE: (args) => {
-    const parsed = asDate(scalarOf(args[0]));
+    const value = scalarOf(args[0]);
+    // Excel's time text is "13:30", "13:30:15" or "1:30 PM"; ISO datetime
+    // strings (and serials) keep working through the date codec.
+    if (typeof value === "string") {
+      const match = /^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?\s*([AaPp][Mm])?$/.exec(value.trim());
+      if (match) {
+        let hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        const seconds = Number(match[3] ?? 0);
+        const meridiem = match[5]?.toUpperCase();
+        if (meridiem === "PM" && hours < 12) hours += 12;
+        else if (meridiem === "AM" && hours === 12) hours = 0;
+        if (hours > 23 || minutes > 59 || seconds > 59) throw new Error("#VALUE!");
+        return dayFraction(hours, minutes, seconds);
+      }
+    }
+    const parsed = asDate(value);
     return dayFraction(parsed.getUTCHours(), parsed.getUTCMinutes(), parsed.getUTCSeconds());
   },
   WEEKDAY: (args) => {

@@ -140,9 +140,9 @@ export function evaluateBytecode(program: BytecodeProgram, resolve: ValueResolve
         const value = number(scalar(stack.pop()));
         stack.push(instruction.operator === "-" ? -value : value);
       } else if (instruction.op === "binary") {
-        const right = scalar(stack.pop());
-        const left = scalar(stack.pop());
-        stack.push(binary(instruction.operator, left, right));
+        const right = stack.pop();
+        const left = stack.pop();
+        stack.push(binaryOperands(instruction.operator, left, right, resolve));
       } else if (instruction.op === "jump-if-false") {
         if (!scalar(stack.pop())) pointer = instruction.target - 1;
       }       else if (instruction.op === "jump") pointer = instruction.target - 1;
@@ -199,9 +199,9 @@ export async function evaluateBytecodeAsync(
         const value = number(scalar(stack.pop()));
         stack.push(instruction.operator === "-" ? -value : value);
       } else if (instruction.op === "binary") {
-        const right = scalar(stack.pop());
-        const left = scalar(stack.pop());
-        stack.push(binary(instruction.operator, left, right));
+        const right = stack.pop();
+        const left = stack.pop();
+        stack.push(binaryOperands(instruction.operator, left, right, resolve));
       } else if (instruction.op === "jump-if-false") {
         if (!scalar(stack.pop())) pointer = instruction.target - 1;
       } else if (instruction.op === "jump") pointer = instruction.target - 1;
@@ -269,6 +269,63 @@ function binary(operator: string, left: Scalar, right: Scalar): Scalar {
   if (operator === ">=") return (left as string | number) >= (right as string | number);
   throw new Error("#VALUE!");
 }
+
+/** Array arithmetic: when either side of a binary operator is a range or a
+ * spill, apply the operator elementwise and return a spill (Excel uses this
+ * for `A1:A3>1`, the FILTER predicate form). A 1x1 side broadcasts. */
+function binaryOperands(
+  operator: string,
+  left: Operand | undefined,
+  right: Operand | undefined,
+  resolve: ValueResolver,
+): FormulaOutput {
+  const leftMatrix = matrixOfOperand(left, resolve);
+  const rightMatrix = matrixOfOperand(right, resolve);
+  if (leftMatrix === undefined && rightMatrix === undefined) {
+    return binary(operator, scalar(left), scalar(right));
+  }
+  return {
+    kind: "spill",
+    values: broadcastBinary(operator, leftMatrix ?? [[scalar(left)]], rightMatrix ?? [[scalar(right)]]),
+  };
+}
+
+function matrixOfOperand(value: Operand | undefined, resolve: ValueResolver): Scalar[][] | undefined {
+  if (value !== undefined && isRange(value)) return expandMatrix(value, resolve).values as Scalar[][];
+  if (value !== undefined && isSpill(value)) return value.values as Scalar[][];
+  return undefined;
+}
+
+function broadcastBinary(
+  operator: string,
+  left: readonly (readonly Scalar[])[],
+  right: readonly (readonly Scalar[])[],
+): Scalar[][] {
+  const rows = Math.max(left.length, right.length);
+  const columns = Math.max(left[0]?.length ?? 1, right[0]?.length ?? 1);
+  const fits = (matrix: readonly (readonly Scalar[])[]): boolean => {
+    const matrixRows = matrix.length;
+    const matrixColumns = matrix[0]?.length ?? 1;
+    return (matrixRows === rows || matrixRows === 1) && (matrixColumns === columns || matrixColumns === 1);
+  };
+  if (!fits(left) || !fits(right)) throw new Error("#VALUE!");
+  const output: Scalar[][] = [];
+  for (let row = 0; row < rows; row++) {
+    const outputRow: Scalar[] = [];
+    for (let column = 0; column < columns; column++) {
+      outputRow.push(binary(operator, cellAt(left, row, column), cellAt(right, row, column)));
+    }
+    output.push(outputRow);
+  }
+  return output;
+}
+
+function cellAt(matrix: readonly (readonly Scalar[])[], row: number, column: number): Scalar {
+  const sourceRow = matrix.length === 1 ? 0 : row;
+  const sourceColumn = (matrix[0]?.length ?? 1) === 1 ? 0 : column;
+  return matrix[sourceRow][sourceColumn];
+}
+
 function expandMatrix(value: RangeOperand, resolve: ValueResolver): SpillMatrix {
   if (value.start.sheet !== value.end.sheet) throw new Error("#REF!");
   const start = parseAddress(value.start.address);
