@@ -154,6 +154,51 @@ function HeatMarks({ heat }: { heat: NonNullable<FigureModel['heat']> }) {
   )
 }
 
+/**
+ * Violin marks (kind `violin`): the closed density profile, then the design's
+ * box overlay (whisker line, IQR box, median) on the same band.
+ */
+function ViolinMarks({ violins }: { violins: NonNullable<FigureModel['violins']> }) {
+  return (
+    <g>
+      {violins.map((violin) => {
+        const key = `${violin.category}|${violin.seriesId}`
+        const overlayWidth = Math.min(violin.width, 8)
+        const overlayX = violin.px - overlayWidth / 2
+        const stroke = { strokeWidth: FIGURE_LAYOUT.strokeWidth }
+        return (
+          <g key={key}>
+            <polygon
+              points={violin.outline.map((point) => `${point.px},${point.py}`).join(' ')}
+              style={{
+                fill: violin.colour,
+                fillOpacity: 0.16,
+                stroke: violin.colour,
+                strokeWidth: FIGURE_LAYOUT.strokeWidth,
+              }}
+            />
+            <line x1={violin.px} y1={violin.box.yWhiskerLow} x2={violin.px} y2={violin.box.yWhiskerHigh} style={{ ...stroke, stroke: violin.colour }} />
+            <rect
+              x={overlayX}
+              y={Math.min(violin.box.yQ1, violin.box.yQ3)}
+              width={overlayWidth}
+              height={Math.abs(violin.box.yQ3 - violin.box.yQ1)}
+              style={{ fill: FIGURE_TOKENS.surface, stroke: violin.colour, strokeWidth: FIGURE_LAYOUT.strokeWidth }}
+            />
+            <line
+              x1={overlayX}
+              y1={violin.box.yMedian}
+              x2={overlayX + overlayWidth}
+              y2={violin.box.yMedian}
+              style={{ stroke: violin.colour, strokeWidth: FIGURE_LAYOUT.strokeWidth * 1.5 }}
+            />
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 /** The heatmap's discrete colour scale: its steps, with the range's ends. */
 function ScaleLegend({ legend }: { legend: FigureScaleLegend }) {
   return (
@@ -254,6 +299,7 @@ export function FigureSvg({ figure, ariaLabel, className }: { figure: FigureMode
       {figure.bars?.length ? <BarMarks bars={figure.bars} /> : null}
       {figure.boxes?.length ? <BoxMarks boxes={figure.boxes} /> : null}
       {figure.heat?.length ? <HeatMarks heat={figure.heat} /> : null}
+      {figure.violins?.length ? <ViolinMarks violins={figure.violins} /> : null}
       {figure.series.map((entry) => (
         <g key={entry.id || 'series'}>
           {entry.line.length > 1 ? (

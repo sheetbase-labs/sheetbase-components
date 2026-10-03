@@ -45,7 +45,7 @@ The grid is one tab stop: arrows move between cells, Enter commits an edit and m
 
 `Spreadsheet` and `SheetbaseTable` accept `readOnly`. It blocks cell edits, clear/cut/paste, autofill, row/column insert/delete, find-and-replace, direct formatting and annotations, and hides the fill handle, replace UI and structural menu items. Selection, navigation, copy, sorting, filtering, column layout and `hydrate` stay live; the grid exposes `aria-readonly`. `SheetbaseTable` also locks the formula bar and drops sheet add/rename/delete/move while read-only. `FormulaBar` accepts `readOnly` on its own for custom compositions.
 
-Typed dataset fields support text, number, date, boolean and relationship input. `required`, `writable`, `computed` and `options` define validation and editability independently of presentation.
+Typed dataset fields support text, number, date, boolean and relationship input. `required`, `writable`, `computed` and `options` define validation and editability independently of presentation. A `boolean` column renders its `true`/`false` values as a themed checkbox mark (`.cell-boolean`, an accessible `role="img"` with a True/False label) rather than the literal text; empty cells stay blank, a host `displayText` label wins over the mark, and the radiogroup editor is unchanged.
 
 ## Table surface and presentation state
 
@@ -112,8 +112,8 @@ Both popovers render through portals (they cannot be clipped by the table wrappe
 
 Hosts can customise cells, editing and menus without forking the grid:
 
-- `renderCell(context)` replaces the content of a cell. Returning `undefined` keeps the built-in rendering. The context carries `address`, `point`, `display`, `field`, `selected`, `active` and `loading`; selection, keyboard handling and write-state badges are unaffected. `display` already includes a field's `displayText` label.
-- `customEditors` replaces the built-in input for matched fields. `matches({ point, columnId, field })` selects the editor; `render({ point, address, columnId, field, storedValue, initialDraft, commit, cancel })` renders any input UI and calls `commit(value)` to save or `cancel()` to discard. `columnId` is the stable `fieldIds[column]` id, so record pickers and formula-reference editors can target a column by id even when it has no dataset field.
+- `renderCell(context)` replaces the content of a cell. Returning `undefined` keeps the built-in rendering (including the boolean mark). The context carries `address`, `point`, `display`, `field`, `selected`, `active` and `loading`; selection, keyboard handling and write-state badges are unaffected. `display` already includes a field's `displayText` label. `address` is the stored cell address (a bound write target), while `point` is the displayed coordinate — under a local view they differ.
+- `customEditors` replaces the built-in input for matched fields. `matches({ point, columnId, field })` selects the editor; `render({ point, address, columnId, field, storedValue, initialDraft, commit, cancel })` renders any input UI and calls `commit(value)` to save or `cancel()` to discard. `columnId` is the stable `fieldIds[column]` id, so record pickers and formula-reference editors can target a column by id even when it has no dataset field. `storedValue` and `address` are the stored cell's; `point` is the displayed coordinate.
 
 ```tsx
 <Spreadsheet
@@ -148,6 +148,10 @@ change set — no history entry, no bound field writes, no `onMutation`; assign
 to `change.next` to replace individual proposed values. A rejected single-cell
 edit applies nothing and leaves the editor open.
 
+For bulk operations the change list is the operation's full intended target set,
+including cells the grid would skip; see
+[Whole-operation veto for bulk writes](#whole-operation-veto-for-bulk-writes--intended-targets).
+
 ```ts
 beforeCellsChange?(
   changes: SpreadsheetCellChange[],
@@ -155,9 +159,10 @@ beforeCellsChange?(
 ): boolean | void;
 
 type SpreadsheetCellChange = {
-  address: string; row: number; column: number;
-  recordId?: string; fieldId?: string;      // bound identity, when known
-  before?: string; next?: string;           // previously/next stored values
+  address: string; row: number; column: number;   // stored coordinates
+  recordId?: string; fieldId?: string;            // bound identity, when known
+  before?: string; next?: string;                 // previously/next stored values
+  editable?: boolean;                             // false: the grid will skip it
 };
 
 type SpreadsheetMutationSource =
@@ -250,6 +255,77 @@ onSortChange?(sorts: readonly SortClause[]): void;
 onFiltersChange?(filters: readonly FilterClause[]): void;
 // ref: spreadsheetRef.current?.getQuery()
 ```
+
+### Local sort and filter for bound grids — `sortMode: "local"`
+
+A bound grid (`datasetHeader.recordIdForRow`) never reorders `data`: rows are
+records, so moving values between addresses would desync row→record identity.
+With `sortMode: "local"` (the default) the grid instead applies the query as a
+**view** — a display→source row mapping — so displayed order and hidden rows
+change while every value stays with its record:
+
+- `query.sort` orders the displayed rows (numeric-aware, `nulls` honoured,
+  stable ties); `query.filters` + `filterLogic`, or the authoritative
+  `filterTree`, hide rows that do not match.
+- Rows with no record (`recordIdForRow` returns `undefined`) are placeholders,
+  not dataset rows, so an active view shows the records that exist instead of
+  thousands of empty rows.
+- A query that leaves order and membership unchanged costs nothing: the grid
+  keeps the identity mapping.
+- Selection, editing, clipboard, fill, move, find/replace and the write path all
+  operate on displayed rows and resolve each one back to its stored cell, so a
+  bound write still carries the right `recordId`/`fieldId`.
+- `cellState(row, column)`, `onSelectionChange.address`, `beforeCellsChange`
+  changes, `onPaste`'s target and field writes report **stored** rows/addresses;
+  `onSelectionChange.range` and the row numbers are displayed positions.
+- Row heights, hidden rows, direct formats and conditional-format rules are
+  stored against the owning row, so they travel with the record.
+- `onViewportChange` reports the stored rows behind the visible window (min/max)
+  so a viewport loader keeps loading what the user sees.
+- `sortMode: "server"` (used by `PagedSpreadsheet`) keeps the old contract: the
+  query goes to the host and no local view is applied.
+
+The view primitives are exported for hosts and tests:
+`buildGridView(config)` → `{ rows, indexOf } | undefined`, plus
+`viewSourceRow`, `viewDisplayRow`, `viewCellKey`, `rowOffsetTable`,
+`compareGridValues` and `compareNullable`.
+
+### Whole-operation veto for bulk writes — `intended` targets
+
+Handsontable's paste/fill/clear semantics are all-or-nothing: a host that must
+not write partially rejects the whole operation. `beforeCellsChange` therefore
+receives the operation's **full intended target set**, including cells the grid
+will not write because they are not editable. Those entries carry
+`editable: false`; every cell the grid will write has no `editable` field.
+
+```ts
+beforeCellsChange?(
+  changes: SpreadsheetCellChange[],
+  source: SpreadsheetMutationSource,
+): boolean | void;
+
+type SpreadsheetCellChange = {
+  address: string; row: number; column: number;   // stored coordinates
+  recordId?: string; fieldId?: string;            // bound identity, when known
+  before?: string; next?: string;                 // previously/next stored values
+  editable?: boolean;                             // false: the grid will skip it
+};
+```
+
+Return `false` to refuse the operation as a whole — nothing is applied, no
+history entry, no field writes, no `onMutation`:
+
+```ts
+beforeCellsChange: (changes) => changes.every((change) => change.editable !== false)
+```
+
+- `change.next` still replaces an individual proposed value, but only for cells
+  the grid writes; a non-editable target can be vetoed, never written.
+- Bulk operations (paste, fill, clear, move) report targets; a single-cell edit
+  and a structural change report their applied cells only.
+- A paste larger than 20,000 cells is applied in frame-sized slices, and its
+  whole target set is gated once before the first slice lands.
+
 
 ## Multi-select option fields and large pastes
 

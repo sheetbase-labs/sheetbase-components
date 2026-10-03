@@ -154,6 +154,12 @@ export interface ChartSpec {
   barRadius: number
   barLayout: BarLayout
   histogramBins: number
+  /** Histogram: explicit bin width over the observed range; wins over `histogramBins`. */
+  histogramBinWidth?: number
+  /** Histogram: plot a probability density rather than counts. */
+  histogramDensity?: boolean
+  /** Violin: KDE bandwidth in data units; automatic (Silverman) when absent. */
+  violinBandwidth?: number
   palette: string[]
   markColor?: string
   primaryColor?: string

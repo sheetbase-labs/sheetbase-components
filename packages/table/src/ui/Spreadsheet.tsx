@@ -45,6 +45,8 @@ import {
   edgeOfData,
   usedRangeBounds,
   validateTypedCell,
+  clearRangeTargets,
+  pasteTargetChanges,
   type CellDataType,
   type GridPoint,
   type GridSelection,
@@ -62,13 +64,14 @@ import {
   isEmptyMutation,
   emitMutationAudit,
   mutationFormat,
+  type CellChange,
   type GridMutation,
 } from "../grid/mutations";
 import { CellStore } from "../grid/cell-store";
+import { buildGridView, rowOffsetTable, viewCellKey, viewDisplayRow, viewSourceRow, type GridView } from "../grid/view";
 import { resolveConditionalFormat, type ConditionalFormatRule } from "../grid/conditional-formatting";
-import { columnDisplayDefaults, formatCellDisplay } from "./column-display";
+import { booleanCellValue, columnDisplayDefaults, formatCellDisplay } from "./column-display";
 import {
-  cellDisplayText,
   enabledMenuActions,
   resolveBeforeCellsChange,
   resolveClipboardPayload,
@@ -421,6 +424,14 @@ export type SpreadsheetCommitOutcome =
   | Readonly<{ status: "empty" }>
   | Readonly<{ status: "rejected" }>;
 
+/** Options for the internal commit pipeline, shared with the pre-commit gate. */
+type SpreadsheetCommitOptions = Readonly<{
+  emitFieldWrites?: boolean;
+  source?: SpreadsheetMutationSource;
+  /** Full intended target set for a bulk operation (see `GridMutation.intended`). */
+  intended?: readonly CellChange[];
+}>;
+
 
 function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFit, onHide, onMove, onFreeze, onUnfreeze, onFormat, headerActions, actions, onClose }: Readonly<{
   x: number; y: number; column: number;
@@ -705,10 +716,88 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     };
   }, [showShortcutHelp]);
 
+  const worksheet = worksheetRef.current;
+  // A bound grid owns no row identity: rows are server records, so structure
+  // ops and local sort must not move values between addresses. `recordIdForRow`
+  // presence is the bound signal — a header passed for display metadata alone
+  // leaves the grid unbound.
+  const bound = datasetHeader?.recordIdForRow !== undefined;
+  // Lookups hoisted out of the per-cell render loop and the local view.
+  const fieldByColumn = useMemo(
+    () => new Map((datasetHeader?.fields ?? []).map((field) => [field.column, field])),
+    [datasetHeader],
+  );
+  const columnByFieldId = useMemo(
+    () => new Map(fieldIds.flatMap((fieldId, column) => fieldId === undefined ? [] : [[fieldId, column] as const])),
+    [fieldIds],
+  );
+
+  // ── Local view for identity-keyed bound grids ────────────────────────────
+  // A bound grid keeps `data` in record order: values never move between
+  // records. A local sort or filter is instead applied as a display → source
+  // row mapping, so the visible order and membership change while every write,
+  // annotation and field write still resolves the record behind the row the
+  // user sees. Unbound grids keep their physical local sort below.
+  const cellValueAt = useCallback((row: number, column: number): string => {
+    const raw = data.get(cellKey({ row, column })) ?? "";
+    return raw.startsWith("=") ? displayValue(worksheet, { row, column }) : raw;
+  }, [data, worksheet]);
+  const view = useMemo<GridView | undefined>(
+    () => (bound && sortMode === "local"
+      ? buildGridView({
+        rowCount,
+        query,
+        columnFor: (fieldId) => columnByFieldId.get(fieldId),
+        valueAt: cellValueAt,
+        // Rows without a record are placeholders, so an active view shows the
+        // records that exist rather than thousands of empty rows.
+        hasRow: (row) => datasetHeader?.recordIdForRow?.(row) !== undefined,
+      })
+      : undefined),
+    [bound, sortMode, rowCount, query, columnByFieldId, cellValueAt, datasetHeader],
+  );
+  /** Number of rows the grid displays (fewer than `rowCount` when filtered). */
+  const viewRowCount = view ? view.rows.length : rowCount;
+  /** Source row a displayed row shows; -1 when the view hides it. */
+  const sourceRowOf = useCallback((row: number) => viewSourceRow(view, row), [view]);
+  /** Display row a source row appears at; -1 when the view hides it. */
+  const displayRowOf = useCallback((row: number) => viewDisplayRow(view, row), [view]);
+  /** Resolves a displayed coordinate to the stored address it shows ("" when hidden). */
+  const keyFor = useCallback((point: GridPoint): string => viewCellKey(view, point), [view]);
+  const cellKeyAt = useCallback((row: number, column: number) => keyFor({ row, column }), [keyFor]);
+  const rowHeightAt = useCallback(
+    (row: number) => rowHeights[sourceRowOf(row)] ?? defaultRowHeight,
+    [defaultRowHeight, rowHeights, sourceRowOf],
+  );
+
+  // A local view re-orders and hides rows, so a selection held in display rows
+  // would otherwise point at a different record after the order settles. Remap
+  // it by record (source row) so the selected records survive a sort or filter;
+  // a record the filter now hides keeps its display position.
+  const previousViewRef = useRef<GridView | undefined | null>(null);
+  useEffect(() => {
+    const previous = previousViewRef.current;
+    previousViewRef.current = view;
+    if (previous === null || previous === view) return;
+    const lastRow = Math.max(0, viewRowCount - 1);
+    const remap = (row: number) => {
+      const source = previous ? previous.rows[row] ?? -1 : row;
+      if (source < 0) return row;
+      return view ? view.indexOf.get(source) ?? row : source;
+    };
+    setSelection((current) => {
+      const anchor = { row: Math.min(remap(current.anchor.row), lastRow), column: current.anchor.column };
+      const focus = { row: Math.min(remap(current.focus.row), lastRow), column: current.focus.column };
+      return anchor.row === current.anchor.row && focus.row === current.focus.row
+        ? current
+        : { anchor, focus };
+    });
+  }, [view, viewRowCount]);
+
   const rowVirtualizer = useVirtualizer({
-    count: rowCount,
+    count: viewRowCount,
     getScrollElement: () => viewportRef.current,
-    estimateSize: (row) => rowHeights[row] ?? defaultRowHeight,
+    estimateSize: (row) => rowHeightAt(row),
     overscan: 8,
     useFlushSync: false,
   });
@@ -721,7 +810,6 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     useFlushSync: false,
   });
 
-  const worksheet = worksheetRef.current;
   const formulaFields = useMemo(() => Array.from({ length: columnCount }, (_, column) => ({
     column,
     label: data.get(cellKey({ row: 0, column })) ?? columnLabel(column),
@@ -752,7 +840,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           label,
           reference: configuredField ? `[${configuredField.id}]` : undefined,
           detail: `${field && field !== columnLabel(column) ? `${field} · ` : ""}${end - start + 1} populated cells`,
-          distance: editing ? Math.abs(column - editing.column) + Math.abs(start - editing.row) / 100 : column,
+          distance: editing ? Math.abs(column - editing.column) + Math.abs(start - sourceRowOf(editing.row)) / 100 : column,
         });
       };
       for (const row of rows.slice(1)) {
@@ -762,7 +850,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       add(previous);
     }
     return regions.sort((a, b) => a.distance - b.distance).slice(0, 12);
-  }, [data, datasetHeader, editing, formulaFields]);
+  }, [data, datasetHeader, editing, formulaFields, sourceRowOf]);
   const structuredRanges = useMemo(() => new Map<string, string>(formulaRegions.flatMap((region) => {
     const fieldId = /^\[([^\]]+)\]$/.exec(region.reference ?? "")?.[1];
     return fieldId ? [[fieldId, region.label]] : [];
@@ -770,8 +858,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   useEffect(() => { structuredRangesRef.current = structuredRanges; }, [structuredRanges]);
   const structuredRangeSignature = [...structuredRanges].map(([field, region]) => `${field}:${region}`).join("|");
   const suggestions = useMemo(
-    () => editing ? formulaSuggestions(draft, editing.row, formulaFields, formulaRegions) : [],
-    [draft, editing, formulaFields, formulaRegions],
+    // Field suggestions name the stored cell (`B4`), so they read the source row.
+    () => editing ? formulaSuggestions(draft, sourceRowOf(editing.row), formulaFields, formulaRegions) : [],
+    [draft, editing, formulaFields, formulaRegions, sourceRowOf],
   );
   const referencedRanges = useMemo(
     () => editing ? formulaReferenceRanges(draft).slice(0, 24) : [],
@@ -807,11 +896,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     for (const width of columnWidths) offsets.push(offsets[offsets.length - 1] + width);
     return offsets;
   }, [columnWidths]);
-  const rowOffsets = useMemo(() => {
-    const offsets = [0];
-    for (const height of rowHeights) offsets.push(offsets[offsets.length - 1] + height);
-    return offsets;
-  }, [rowHeights]);
+  const rowOffsets = useMemo(
+    () => rowOffsetTable(viewRowCount, (index) => rowHeightAt(index)),
+    [rowHeightAt, viewRowCount],
+  );
   // Frozen columns ride the imperative --sheet-scroll-left custom property
   // (set in onScroll), the same way frozen rows ride --sheet-scroll-top — so
   // scroll never needs a React state update just to reposition them.
@@ -821,13 +909,17 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   };
   // COMP-02.4: the append row sits one past the last populated row. When it is
   // inside the virtual window it renders like any row (with the "+"/"new"
-  // header); at the very end (appendIndex === rowCount) it is painted as an
-  // overlay past the last virtual row instead.
+  // header); at the very end it is painted as an overlay past the last virtual
+  // row instead. Under a local view it always sits at the end of the displayed
+  // rows, since the source row that follows the data may be filtered away.
   const appendIndex = useMemo(() => (readOnly ? undefined : appendRowIndex(data, appendRow)), [appendRow, data, readOnly]);
   const appendEnabled = appendIndex !== undefined && appendRowEnabled(appendRow);
-  const appendInRows = appendEnabled && appendIndex !== undefined && appendIndex < rowCount;
-  const appendBeyond = appendEnabled && appendIndex !== undefined && appendIndex === rowCount;
-  const draftRow = appendEnabled && editing?.row === appendIndex;
+  const appendDisplayIndex = appendEnabled && appendIndex !== undefined ? (view ? viewRowCount : appendIndex) : undefined;
+  /** Source row the append row creates into: the row after the last populated one. */
+  const appendSourceRow = appendIndex ?? 0;
+  const appendInRows = appendDisplayIndex !== undefined && appendDisplayIndex < viewRowCount;
+  const appendBeyond = appendDisplayIndex !== undefined && (view !== undefined || appendIndex === rowCount);
+  const draftRow = appendEnabled && editing?.row === appendDisplayIndex;
   const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? 20 : 0;
   const contentWidth = rowHeaderWidth + columnVirtualizer.getTotalSize();
   const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize() + (appendBeyond ? (rowHeights[rowCount] ?? defaultRowHeight) : 0);
@@ -840,11 +932,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     columnEnd: virtualColumns.at(-1)?.index ?? 0,
   };
   const visibleRows = [...new Set([
-    ...Array.from({ length: Math.min(frozenRowCount, rowCount) }, (_, row) => row),
+    ...Array.from({ length: Math.min(frozenRowCount, viewRowCount) }, (_, row) => row),
     ...virtualRows.map((item) => item.index),
   ])];
-  const renderRows = appendInRows && appendIndex !== undefined && !visibleRows.includes(appendIndex)
-    ? [...visibleRows, appendIndex].sort((a, b) => a - b)
+  const renderRows = appendInRows && appendDisplayIndex !== undefined && !visibleRows.includes(appendDisplayIndex)
+    ? [...visibleRows, appendDisplayIndex].sort((a, b) => a - b)
     : visibleRows;
   const renderColumns = [...new Set([
     ...Array.from({ length: Math.min(frozenColumnCount, columnCount) }, (_, column) => column),
@@ -875,19 +967,22 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // Spill-aware selection: resolve the active cell through the worksheet's
   // spill ownership during render (no engine state in React state) and box
   // the full spill extent for the dashed spill-range outline below.
-  const activeKey = cellKey(selection.focus);
-  const spillOwner = worksheet.spills.owner(activeKey);
+  const activeKey = cellKeyAt(selection.focus.row, selection.focus.column);
+  const spillOwner = activeKey === "" ? undefined : worksheet.spills.owner(activeKey);
   const spillBox = (() => {
     if (!spillOwner) return undefined;
     const addresses = worksheet.spills.range(spillOwner);
     if (addresses.length < 2) return undefined;
-    let top = rowCount, left = columnCount, bottom = -1, right = -1;
+    let top = viewRowCount, left = columnCount, bottom = -1, right = -1;
     for (const address of addresses) {
       try {
         const point = parseAddress(address);
-        if (point.row < 0 || point.column < 0 || point.row >= rowCount || point.column >= columnCount) continue;
-        top = Math.min(top, point.row); left = Math.min(left, point.column);
-        bottom = Math.max(bottom, point.row); right = Math.max(right, point.column);
+        if (point.column < 0 || point.column >= columnCount) continue;
+        // Spill addresses are stored rows; paint them where their records show.
+        const displayRow = displayRowOf(point.row);
+        if (displayRow < 0) continue;
+        top = Math.min(top, displayRow); left = Math.min(left, point.column);
+        bottom = Math.max(bottom, displayRow); right = Math.max(right, point.column);
       } catch { /* Ignore non-cell keys. */ }
     }
     return bottom >= top && right >= left ? { top, left, bottom, right } : undefined;
@@ -897,8 +992,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // outline that survives selection moves and pastes (repeat-paste), and is
   // dismissed by Escape, a fresh edit, or clearing cells. Clamp to the grid
   // in case rows or columns were removed after the copy.
-  const copyBox = copyRange && copyRange.top < rowCount && copyRange.left < columnCount
-    ? { top: copyRange.top, left: copyRange.left, bottom: Math.min(copyRange.bottom, rowCount - 1), right: Math.min(copyRange.right, columnCount - 1) }
+  const copyBox = copyRange && copyRange.top < viewRowCount && copyRange.left < columnCount
+    ? { top: copyRange.top, left: copyRange.left, bottom: Math.min(copyRange.bottom, viewRowCount - 1), right: Math.min(copyRange.right, columnCount - 1) }
     : undefined;
   const selectionIsCopySource = copyBox !== undefined && !fillTarget
     && copyBox.top === range.top && copyBox.bottom === range.bottom
@@ -1011,7 +1106,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
    * move values between addresses so row→record identity no longer holds.
    * The pre-commit gate runs first: a rejected mutation applies nothing.
    */
-  const commitMutation = useCallback((mutation: GridMutation, options?: { emitFieldWrites?: boolean; source?: SpreadsheetMutationSource }): SpreadsheetCommitOutcome => {
+  const commitMutation = useCallback((mutation: GridMutation, options?: SpreadsheetCommitOptions): SpreadsheetCommitOutcome => {
     const resolved = resolveBeforeCellsChange(beforeCellsChange, mutation, options?.source ?? "edit", datasetHeader);
     if (!resolved) return { status: "rejected" };
     if (!pushHistory(resolved)) return { status: "empty" };
@@ -1022,9 +1117,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return { status: "applied", mutation: resolved };
   }, [beforeCellsChange, datasetHeader, emitFieldWrites, pushHistory, worksheet]);
 
-  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>, options?: { emitFieldWrites?: boolean; source?: SpreadsheetMutationSource }) => {
+  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>, options?: SpreadsheetCommitOptions) => {
     const mutation = cellMutation(label, data, next, affectedAddresses);
-    return commitMutation(mutation, options);
+    return commitMutation(options?.intended?.length ? { ...mutation, intended: options.intended } : mutation, options);
   }, [commitMutation, data]);
 
 
@@ -1035,12 +1130,6 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     [datasetHeader],
   );
 
-  // Lookups hoisted out of the per-cell render loop: field metadata,
-  // annotations, and field→column were all linear finds per cell per render.
-  const fieldByColumn = useMemo(
-    () => new Map((datasetHeader?.fields ?? []).map((field) => [field.column, field])),
-    [datasetHeader],
-  );
   // Two namespaces: record-keyed annotations match bound cells by
   // (recordId, fieldId) wherever the record renders; address-keyed entries
   // (unbound sheets, free columns, legacy state) match by coordinate. A bound
@@ -1059,23 +1148,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }
     return { byRecord, byAddressKeyed, byAddressAll };
   }, [annotations]);
-  const columnByFieldId = useMemo(
-    () => new Map(fieldIds.flatMap((fieldId, column) => fieldId === undefined ? [] : [[fieldId, column] as const])),
-    [fieldIds],
-  );
-
-  // A bound grid owns no row identity: rows are server records, so structure
-  // ops and local sort (which only move the data map) would desync
-  // row→record mapping. `recordIdForRow` presence is the bound signal — a
-  // header passed for display metadata alone leaves the grid unbound.
-  const bound = datasetHeader?.recordIdForRow !== undefined;
 
   const canEdit = useCallback((point: GridPoint) => {
     if (readOnly) return false;
-    if (readOnlyRows.has(point.row)) return false;
+    // `readOnlyRows` is host data, indexed by the row's record (source row).
+    if (readOnlyRows.has(sourceRowOf(point.row))) return false;
     const field = fieldByColumn.get(point.column);
     return field?.writable !== false;
-  }, [fieldByColumn, readOnly, readOnlyRows]);
+  }, [fieldByColumn, readOnly, readOnlyRows, sourceRowOf]);
 
   const undo = useCallback(() => {
     const previous = past.current.pop();
@@ -1101,25 +1181,43 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
   const writeActiveCell = useCallback((value: string) => {
     if (readOnly || !canEdit(selection.focus)) return;
-    const key = cellKey(selection.focus);
+    const key = cellKeyAt(selection.focus.row, selection.focus.column);
+    if (key === "") return;
     commitMutation(cellChangesMutation("Edit cell", [{
       address: key,
       before: data.get(key),
       after: value === "" ? undefined : value,
     }]), { source: "edit" });
-  }, [canEdit, commitMutation, data, readOnly, selection.focus]);
+  }, [canEdit, cellKeyAt, commitMutation, data, readOnly, selection.focus]);
 
   const applyFormat = useCallback((patch: Partial<CellFormat>) => {
     if (readOnly) return;
     const next = formats.clone();
-    const current = next.get(selection.focus) ?? {};
-    next.write({
-      start: { row: range.top, column: range.left },
-      end: { row: range.bottom, column: range.right },
-    }, { ...current, ...patch });
+    const activeRow = sourceRowOf(selection.focus.row);
+    const current = (activeRow < 0 ? undefined : next.get({ row: activeRow, column: selection.focus.column })) ?? {};
+    // Formats are stored against the row that owns the value, so a locally
+    // sorted view keeps a format with its record. A display rectangle is not a
+    // contiguous source range under a view, so each cell is written on its own.
+    if (view) {
+      const points = new Map<string, GridPoint>();
+      for (let row = range.top; row <= range.bottom; row++) {
+        const source = sourceRowOf(row);
+        if (source < 0) continue;
+        for (let column = range.left; column <= range.right; column++) {
+          const point = { row: source, column };
+          points.set(cellKey(point), point);
+        }
+      }
+      for (const point of points.values()) next.write({ start: point, end: point }, { ...current, ...patch });
+    } else {
+      next.write({
+        start: { row: range.top, column: range.left },
+        end: { row: range.bottom, column: range.right },
+      }, { ...current, ...patch });
+    }
     const mutation = formatMutation("Format range", formats, next);
     if (pushHistory(mutation)) setFormats(next);
-  }, [formats, pushHistory, range.bottom, range.left, range.right, range.top, readOnly, selection.focus]);
+  }, [formats, pushHistory, range.bottom, range.left, range.right, range.top, readOnly, selection.focus, sourceRowOf, view]);
 
   const hydrate = useCallback((cells: ReadonlyMap<string, SpreadsheetHydrationCell>) => {
     const changes = [...cells].map(([address, cell]) => ({ address, after: cell.display }));
@@ -1155,15 +1253,28 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   }, [structuredRangeSignature, worksheet]);
 
   useEffect(() => {
-    const address = cellKey(selection.focus);
-    const input = data.get(address) ?? "";
-    const value = input.startsWith("=") ? displayValue(worksheet, selection.focus) : input;
+    const address = cellKeyAt(selection.focus.row, selection.focus.column);
+    const input = address === "" ? "" : data.get(address) ?? "";
+    const sourceFocus = { row: sourceRowOf(selection.focus.row), column: selection.focus.column };
+    const value = input.startsWith("=") ? displayValue(worksheet, sourceFocus) : input;
     const properties: readonly (keyof CellFormat)[] = ["foreground", "background", "fontWeight", "horizontalAlign", "numberFormat"];
-    const overlaps = formats.query({ start: { row: range.top, column: range.left }, end: { row: range.bottom, column: range.right } });
-    const area = (range.bottom - range.top + 1) * (range.right - range.left + 1);
+    // Formats are stored against the rows that own the values, so the painted
+    // range is the source span of the selected records, not the display box.
+    let sourceTop = Infinity;
+    let sourceBottom = -1;
+    for (let row = range.top; row <= range.bottom; row++) {
+      const source = sourceRowOf(row);
+      if (source < 0) continue;
+      sourceTop = Math.min(sourceTop, source);
+      sourceBottom = Math.max(sourceBottom, source);
+    }
+    const overlaps = sourceBottom >= sourceTop
+      ? formats.query({ start: { row: sourceTop, column: range.left }, end: { row: sourceBottom, column: range.right } })
+      : [];
+    const area = sourceBottom >= sourceTop ? (sourceBottom - sourceTop + 1) * (range.right - range.left + 1) : 0;
     const covered = overlaps.reduce((sum, entry) => {
-      const top = Math.max(range.top, Math.min(entry.range.start.row, entry.range.end.row));
-      const bottom = Math.min(range.bottom, Math.max(entry.range.start.row, entry.range.end.row));
+      const top = Math.max(sourceTop, Math.min(entry.range.start.row, entry.range.end.row));
+      const bottom = Math.min(sourceBottom, Math.max(entry.range.start.row, entry.range.end.row));
       const left = Math.max(range.left, Math.min(entry.range.start.column, entry.range.end.column));
       const right = Math.min(range.right, Math.max(entry.range.start.column, entry.range.end.column));
       return sum + Math.max(0, bottom - top + 1) * Math.max(0, right - left + 1);
@@ -1174,10 +1285,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return values.size > 1;
     });
     const aggregates = area > 1
-      ? selectionAggregates(data, selection, (point) => displayValue(worksheet, point))
+      ? selectionAggregates(data, selection, (point) => displayValue(worksheet, { row: sourceRowOf(point.row), column: point.column }), keyFor)
       : undefined;
-    onSelectionChange?.({ address, range: selectionLabel(selection), input, error: formulaErrorMessage(value), format: formats.get(selection.focus) ?? {}, mixedFormats, aggregates });
-  }, [data, formats, onSelectionChange, range.bottom, range.left, range.right, range.top, selection, worksheet]);
+    onSelectionChange?.({ address, range: selectionLabel(selection), input, error: formulaErrorMessage(value), format: formats.get(sourceFocus) ?? {}, mixedFormats, aggregates });
+  }, [cellKeyAt, data, formats, keyFor, onSelectionChange, range.bottom, range.left, range.right, range.top, selection, sourceRowOf, worksheet]);
 
   useEffect(() => {
     const finishDrag = () => {
@@ -1192,11 +1303,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           setSelection({ anchor: drag.origin, focus: drag.origin });
         } else {
           const source: GridSelection = { anchor: { row: drag.range.top, column: drag.range.left }, focus: { row: drag.range.bottom, column: drag.range.right } };
-          const moved = moveRange(data, source, drag.target, rowCount, columnCount, canEdit);
+          const moved = moveRange(data, source, drag.target, viewRowCount, columnCount, canEdit, keyFor);
           if (moved) {
             // The mutation diff only covers listed addresses — the source
             // cells must be included or their cleared values never apply.
-            commit(moved.data, "Move range", [...selectionAddresses(source), ...selectionAddresses(moved.selection)], { source: "move" });
+            commit(moved.data, "Move range", [...selectionAddresses(source, keyFor), ...selectionAddresses(moved.selection, keyFor)], { source: "move", intended: moved.intended });
             setSelection(moved.selection);
             setCopyRange(undefined);
             copyBuffer.current = null;
@@ -1204,8 +1315,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         }
       }
       if (!readOnly && fillOrigin.current && fillTargetRef.current) {
-        const filled = fillSelection(data, fillOrigin.current, fillTargetRef.current, rowCount, columnCount, canEdit);
-        const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection), { source: "fill" });
+        const filled = fillSelection(data, fillOrigin.current, fillTargetRef.current, viewRowCount, columnCount, canEdit, keyFor);
+        const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection, keyFor), { source: "fill", intended: filled.intended });
         if (outcome.status !== "rejected") setSelection(filled.selection);
       }
       fillOrigin.current = null;
@@ -1214,7 +1325,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     };
     window.addEventListener("pointerup", finishDrag);
     return () => window.removeEventListener("pointerup", finishDrag);
-  }, [canEdit, columnCount, commit, data, readOnly, rowCount]);
+  }, [canEdit, columnCount, commit, data, keyFor, readOnly, viewRowCount]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: columnWidths is a deliberate re-measure trigger, not a capture
   useEffect(() => {
@@ -1240,11 +1351,26 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     viewportRef.current.scrollLeft = initialState.scroll.left;
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: viewportRange is rebuilt every render; its numeric fields are the meaningful deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: viewportRange is rebuilt every render; its numeric fields are the meaningful fields
   useEffect(() => {
-    onViewportChange?.(viewportRange);
+    if (!view) {
+      onViewportChange?.(viewportRange);
+      return;
+    }
+    // A local view reports the source rows behind the visible window, so a
+    // viewport loader keeps loading the records the user is looking at.
+    const start = sourceRowOf(viewportRange.rowStart);
+    const end = sourceRowOf(viewportRange.rowEnd);
+    onViewportChange?.({
+      rowStart: Math.max(0, Math.min(start, end)),
+      rowEnd: Math.max(start, end),
+      columnStart: viewportRange.columnStart,
+      columnEnd: viewportRange.columnEnd,
+    });
   }, [
     onViewportChange,
+    sourceRowOf,
+    view,
     viewportRange.columnEnd,
     viewportRange.columnStart,
     viewportRange.rowEnd,
@@ -1261,16 +1387,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (extend && samePoint(current.anchor, current.focus)) {
       // First Shift+arrow from a spill child covers the whole spill extent,
       // so keyboard expansion starts from the dynamic array, not one cell.
-      const owner = worksheet.spills.owner(cellKey(current.focus));
+      const activeAddress = cellKeyAt(current.focus.row, current.focus.column);
+      const owner = activeAddress === "" ? undefined : worksheet.spills.owner(activeAddress);
       const addresses = owner ? worksheet.spills.range(owner) : [];
       if (addresses.length > 1) {
-        let top = rowCount, left = columnCount, bottom = -1, right = -1;
+        let top = viewRowCount, left = columnCount, bottom = -1, right = -1;
         for (const address of addresses) {
           try {
             const point = parseAddress(address);
-            if (point.row < 0 || point.column < 0 || point.row >= rowCount || point.column >= columnCount) continue;
-            top = Math.min(top, point.row); left = Math.min(left, point.column);
-            bottom = Math.max(bottom, point.row); right = Math.max(right, point.column);
+            if (point.column < 0 || point.column >= columnCount) continue;
+            const displayRow = displayRowOf(point.row);
+            if (displayRow < 0) continue;
+            top = Math.min(top, displayRow); left = Math.min(left, point.column);
+            bottom = Math.max(bottom, displayRow); right = Math.max(right, point.column);
           } catch { /* Ignore non-cell keys. */ }
         }
         if (bottom >= top && right >= left) {
@@ -1281,10 +1410,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         }
       }
     }
-    const next = moveSelection(current, delta, rowCount, columnCount, extend);
+    const next = moveSelection(current, delta, viewRowCount, columnCount, extend);
     setSelection(next);
     queueMicrotask(() => reveal(next.focus));
-  }, [columnCount, reveal, rowCount, worksheet]);
+  }, [cellKeyAt, columnCount, displayRowOf, reveal, viewRowCount, worksheet]);
 
   const hasCellValue = useCallback(
     (address: string) => (data.get(address) ?? "") !== "" || worksheet.spills.value(address) !== undefined,
@@ -1295,15 +1424,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // that direction, Excel-style. Shift extends the selection.
   const jumpToEdge = useCallback((delta: GridPoint, extend: boolean) => {
     const current = selectionRef.current;
-    const focus = edgeOfData(hasCellValue, current.focus, delta, rowCount, columnCount);
+    const focus = edgeOfData(hasCellValue, current.focus, delta, viewRowCount, columnCount, keyFor);
     if (samePoint(focus, current.focus)) return;
     setSelection(extend ? { anchor: current.anchor, focus } : { anchor: focus, focus });
     queueMicrotask(() => reveal(focus));
-  }, [columnCount, hasCellValue, reveal, rowCount]);
+  }, [columnCount, hasCellValue, keyFor, reveal, viewRowCount]);
 
   const selectWhole = useCallback(() => {
-    setSelection({ anchor: { row: 0, column: 0 }, focus: { row: rowCount - 1, column: columnCount - 1 } });
-  }, [columnCount, rowCount]);
+    setSelection({ anchor: { row: 0, column: 0 }, focus: { row: viewRowCount - 1, column: columnCount - 1 } });
+  }, [columnCount, viewRowCount]);
 
   const beginEdit = useCallback((point: GridPoint, replaceWith?: string) => {
     if (!canEdit(point)) return;
@@ -1311,30 +1440,36 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setCopyRange(undefined);
     updateCutStatus(null);
     setEditing(point);
-    setDraft(replaceWith ?? data.get(cellKey(point)) ?? "");
+    setDraft(replaceWith ?? data.get(cellKeyAt(point.row, point.column)) ?? "");
     setSuggestionIndex(0);
     setFormulaReference(null);
     setValidationError(undefined);
-  }, [canEdit, data, updateCutStatus]);
+  }, [canEdit, cellKeyAt, data, updateCutStatus]);
 
   /** COMP-02.4: click on the append row targets its first writable cell. */
   const selectAppendRow = useCallback(() => {
-    if (appendIndex === undefined || readOnly) return;
+    if (appendDisplayIndex === undefined || readOnly) return;
     const column = firstWritableColumn(datasetHeader?.fields ?? []);
-    setSelection({ anchor: { row: appendIndex, column }, focus: { row: appendIndex, column } });
+    setSelection({ anchor: { row: appendDisplayIndex, column }, focus: { row: appendDisplayIndex, column } });
     queueMicrotask(() => viewportRef.current?.focus({ preventScroll: true }));
-  }, [appendIndex, datasetHeader, readOnly]);
+  }, [appendDisplayIndex, datasetHeader, readOnly]);
 
   const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
     if (!editing) return;
     if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
     if (save) {
-      const key = cellKey(editing);
+      const key = cellKeyAt(editing.row, editing.column);
+      if (key === "") { setEditing(null); setFormulaReference(null); return; }
+      // The append row is a display-only position at the end of the view; its
+      // record is the source row that follows the populated data.
+      const editingSourceRow = appendEnabled && appendDisplayIndex !== undefined && editing.row === appendDisplayIndex
+        ? appendSourceRow
+        : sourceRowOf(editing.row);
       const completedDraft = completeFormula(explicitDraft ?? draft);
       const field = datasetHeader?.fields.find((item) => item.column === editing.column);
       const invalid = field ? validateTypedCell(completedDraft, field.dataType, field.required, field.options) : undefined;
       if (invalid) { setValidationError(invalid); return; }
-      const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editing.row, column: item.column })) ?? "").trim()) : false;
+      const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editingSourceRow, column: item.column })) ?? "").trim()) : false;
       const before = data.get(key);
       // The single-edit write goes through runFieldWrite below, which carries
       // the blank-row record-create semantics — commitMutation must not also
@@ -1349,20 +1484,20 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       if (outcome.status === "rejected") return;
       const appliedCell = outcome.status === "applied" ? outcome.mutation.cells.find((cell) => cell.address === key) : undefined;
       const appliedValue = appliedCell ? appliedCell.after ?? "" : completedDraft;
-      const recordId = datasetHeader?.recordIdForRow?.(editing.row);
+      const recordId = datasetHeader?.recordIdForRow?.(editingSourceRow);
       // Skip the write entirely when the edit changed nothing — an unchanged
       // commit still bumps the server revision and pollutes held writes.
-      if (field && (!rowWasBlank || recordId) && (before ?? "") !== appliedValue) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: appliedValue }, before);
+      if (field && (!rowWasBlank || recordId) && (before ?? "") !== appliedValue) runFieldWrite({ address: key, row: editingSourceRow, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: appliedValue }, before);
       if (rowWasBlank && datasetHeader && appliedValue !== "") {
-        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? appliedValue : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
-        if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editing.row, values })).catch(() => undefined);
+        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? appliedValue : data.get(cellKey({ row: editingSourceRow, column: item.column })) ?? ""]));
+        if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editingSourceRow, values })).catch(() => undefined);
       }
     }
     setEditing(null);
     setFormulaReference(null);
     if (movement) move(movement, false);
     queueMicrotask(() => viewportRef.current?.focus());
-  }, [commitMutation, data, datasetHeader, draft, editing, move, onRecordCreate, readOnly, runFieldWrite]);
+  }, [appendDisplayIndex, appendEnabled, appendSourceRow, cellKeyAt, commitMutation, data, datasetHeader, draft, editing, move, onRecordCreate, readOnly, runFieldWrite, sourceRowOf]);
 
   const editActiveInput = useCallback((value: string) => {
     if (readOnly) return;
@@ -1371,13 +1506,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   }, [beginEdit, editing, readOnly, selection.focus]);
 
   const autoFitRow = useCallback((row = selection.focus.row) => {
+    const source = sourceRowOf(row);
+    if (source < 0) return;
     let lines = 1;
     for (const [address, value] of data) {
-      try { if (parseAddress(address).row === row) lines = Math.max(lines, value.split("\n").length); } catch { /* Ignore non-cell keys. */ }
+      try { if (parseAddress(address).row === source) lines = Math.max(lines, value.split("\n").length); } catch { /* Ignore non-cell keys. */ }
     }
     const after = Math.max(defaultRowHeight, Math.min(180, lines * 20 + 11));
-    const next = [...rowHeights]; next[row] = after; setRowHeights(next); onRowHeightsChange?.(next);
-  }, [data, defaultRowHeight, onRowHeightsChange, rowHeights, selection.focus.row]);
+    const next = [...rowHeights]; next[source] = after; setRowHeights(next); onRowHeightsChange?.(next);
+  }, [data, defaultRowHeight, onRowHeightsChange, rowHeights, selection.focus.row, sourceRowOf]);
   const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
     // Structure moves values between addresses; in a bound grid that desyncs
     // row→record identity (writes would target the wrong records).
@@ -1408,30 +1545,35 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const fillDown = useCallback(() => {
     if (readOnly || range.bottom === range.top) return;
     const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.top, column: range.right } };
-    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    const outcome = commit(filled.data, "Fill down", selectionAddresses(filled.selection), { source: "fill" });
+    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, viewRowCount, columnCount, canEdit, keyFor);
+    const outcome = commit(filled.data, "Fill down", selectionAddresses(filled.selection, keyFor), { source: "fill", intended: filled.intended });
     if (outcome.status !== "rejected") setSelection(filled.selection);
     announce("Filled down");
-  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
+  }, [announce, canEdit, columnCount, commit, data, keyFor, range.bottom, range.left, range.right, range.top, readOnly, viewRowCount]);
 
   const fillRight = useCallback(() => {
     if (readOnly || range.right === range.left) return;
     const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.bottom, column: range.left } };
-    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    const outcome = commit(filled.data, "Fill right", selectionAddresses(filled.selection), { source: "fill" });
+    const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, viewRowCount, columnCount, canEdit, keyFor);
+    const outcome = commit(filled.data, "Fill right", selectionAddresses(filled.selection, keyFor), { source: "fill", intended: filled.intended });
     if (outcome.status !== "rejected") setSelection(filled.selection);
     announce("Filled right");
-  }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
+  }, [announce, canEdit, columnCount, commit, data, keyFor, range.bottom, range.left, range.right, range.top, readOnly, viewRowCount]);
 
   const findText = useCallback((query: string) => {
     const normalized = query.toLocaleLowerCase();
-    const match = [...data].find(([, value]) => value.toLocaleLowerCase().includes(normalized));
+    const match = [...data].find(([address, value]) => {
+      if (!value.toLocaleLowerCase().includes(normalized)) return false;
+      // A locally filtered row is not on screen; searching must not select it.
+      try { return displayRowOf(parseAddress(address).row) >= 0; } catch { return false; }
+    });
     if (!match) return undefined;
-    const point = parseAddress(match[0]);
+    const sourcePoint = parseAddress(match[0]);
+    const point = { row: displayRowOf(sourcePoint.row), column: sourcePoint.column };
     setSelection({ anchor: point, focus: point });
     reveal(point);
     return match[0];
-  }, [data, reveal]);
+  }, [data, displayRowOf, reveal]);
 
   const replaceAll = useCallback((query: string, replacement: string) => {
     if (readOnly || !query) return 0;
@@ -1547,16 +1689,24 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
   const navigateFormulaReference = useCallback((delta: GridPoint, extend: boolean) => {
     if (!editing) return;
+    // Formula references are stored coordinates (the formula text names data
+    // cells), so the walk happens in source space and only the scroll follows
+    // the displayed row.
+    const origin = { row: sourceRowOf(editing.row), column: editing.column };
+    if (origin.row < 0) return;
     const next = moveFormulaReference(
-      formulaReference, editing, delta, extend, rowCount, columnCount, draft.length,
+      formulaReference, origin, delta, extend, rowCount, columnCount, draft.length,
     );
     updateFormulaReference(next);
-    reveal(next.focus);
-  }, [columnCount, draft.length, editing, formulaReference, reveal, rowCount, updateFormulaReference]);
+    const display = displayRowOf(next.focus.row);
+    if (display >= 0) reveal({ row: display, column: next.focus.column });
+  }, [columnCount, displayRowOf, draft.length, editing, formulaReference, reveal, rowCount, sourceRowOf, updateFormulaReference]);
 
   const selectFormulaColumn = useCallback((column: number, append = false) => {
     if (!editing || !draft.startsWith("=")) return false;
-    const range = populatedColumnSelection(data, column, editing);
+    const origin = { row: sourceRowOf(editing.row), column: editing.column };
+    if (origin.row < 0) return false;
+    const range = populatedColumnSelection(data, column, origin);
     if (!range) return false;
     const field = datasetHeader?.fields.find((item) => item.column === column);
     const reference = field ? `[${field.id}]` : selectionLabel(range);
@@ -1565,7 +1715,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setFormulaReference({ ...range, tokenStart: draft.length + separator.length });
     setSuggestionIndex(0);
     return true;
-  }, [data, datasetHeader, draft, editing]);
+  }, [data, datasetHeader, draft, editing, sourceRowOf]);
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (editing) return;
     const command = event.metaKey || event.ctrlKey;
@@ -1583,7 +1733,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       event.preventDefault();
       const bounds = usedRangeBounds(data);
       const within = bounds
-        ? { top: Math.min(bounds.top, rowCount - 1), left: Math.min(bounds.left, columnCount - 1), bottom: Math.min(bounds.bottom, rowCount - 1), right: Math.min(bounds.right, columnCount - 1) }
+        ? (view
+          // The populated region is stored rows, which are not a contiguous
+          // display range under a local view: select every displayed row.
+          ? { top: 0, left: Math.min(bounds.left, columnCount - 1), bottom: viewRowCount - 1, right: Math.min(bounds.right, columnCount - 1) }
+          : { top: Math.min(bounds.top, rowCount - 1), left: Math.min(bounds.left, columnCount - 1), bottom: Math.min(bounds.bottom, rowCount - 1), right: Math.min(bounds.right, columnCount - 1) })
         : undefined;
       if (within && !(range.top === within.top && range.bottom === within.bottom && range.left === within.left && range.right === within.right)) {
         setSelection({ anchor: { row: within.top, column: within.left }, focus: { row: within.bottom, column: within.right } });
@@ -1628,7 +1782,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (event.key === " " && (command || event.shiftKey)) {
       event.preventDefault();
       if (command && event.shiftKey) selectWhole();
-      else if (command) setSelection({ anchor: { row: 0, column: range.left }, focus: { row: rowCount - 1, column: range.right } });
+      else if (command) setSelection({ anchor: { row: 0, column: range.left }, focus: { row: viewRowCount - 1, column: range.right } });
       else setSelection({ anchor: { row: range.top, column: 0 }, focus: { row: range.bottom, column: columnCount - 1 } });
       return;
     }
@@ -1636,7 +1790,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     // spans a full axis; the helpers no-op on read-only or bound grids.
     if (command && event.shiftKey && (event.key === "+" || event.key === "=")) {
       const fullRows = range.left === 0 && range.right === columnCount - 1;
-      const fullColumns = range.top === 0 && range.bottom === rowCount - 1;
+      const fullColumns = range.top === 0 && range.bottom === viewRowCount - 1;
       if (fullRows || fullColumns) {
         event.preventDefault();
         if (fullRows) changeRows("insert");
@@ -1646,7 +1800,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }
     if (command && event.key === "-") {
       const fullRows = range.left === 0 && range.right === columnCount - 1;
-      const fullColumns = range.top === 0 && range.bottom === rowCount - 1;
+      const fullColumns = range.top === 0 && range.bottom === viewRowCount - 1;
       if (fullRows || fullColumns) {
         event.preventDefault();
         if (fullRows) changeRows("delete");
@@ -1673,11 +1827,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
       const bounds = usedRangeBounds(data);
+      // The used range is stored rows; the selection moves in displayed rows.
+      const endRow = view ? Math.min(viewRowCount - 1, Math.max(displayRowOf(bounds?.bottom ?? 0), 0)) : Math.min(rowCount - 1, bounds?.bottom ?? 0);
       const focus = event.key === "Home"
         ? (command ? { row: 0, column: 0 } : { row: selection.focus.row, column: 0 })
         : (command
-          ? { row: Math.min(rowCount - 1, bounds?.bottom ?? 0), column: Math.min(columnCount - 1, bounds?.right ?? 0) }
-          : edgeOfData(hasCellValue, selection.focus, { row: 0, column: 1 }, rowCount, columnCount));
+          ? { row: endRow, column: Math.min(columnCount - 1, bounds?.right ?? 0) }
+          : edgeOfData(hasCellValue, selection.focus, { row: 0, column: 1 }, viewRowCount, columnCount, keyFor));
       setSelection(event.shiftKey ? { anchor: selection.anchor, focus } : { anchor: focus, focus });
       queueMicrotask(() => reveal(focus));
       return;
@@ -1705,8 +1861,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       // With a live copy marquee, Enter pastes the internal copy once and
       // dismisses it (Excel); otherwise Enter moves the selection down.
       if (!readOnly && copyRange && copyBuffer.current) {
-        const pasted = pasteTsv(data, selection.focus, copyBuffer.current.tsv, rowCount, columnCount, canEdit);
-        const outcome = commit(pasted.data, "Paste range", selectionAddresses(pasted.selection), { source: "paste" });
+        const pasted = pasteTsv(data, selection.focus, copyBuffer.current.tsv, viewRowCount, columnCount, canEdit, keyFor);
+        const intended = beforeCellsChange ? pasteTargetChanges(data, selection.focus, parseTsv(copyBuffer.current.tsv), viewRowCount, columnCount, keyFor) : undefined;
+        const outcome = commit(pasted.data, "Paste range", selectionAddresses(pasted.selection, keyFor), { source: "paste", intended });
         if (outcome.status !== "rejected") setSelection(pasted.selection);
         setCopyRange(undefined);
         copyBuffer.current = null;
@@ -1728,7 +1885,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      event.preventDefault(); setCopyRange(undefined); copyBuffer.current = null; updateCutStatus(null); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection), { source: "clear" }); return;
+      event.preventDefault(); setCopyRange(undefined); copyBuffer.current = null; updateCutStatus(null);
+      if (!readOnly) {
+        const intended = beforeCellsChange ? clearRangeTargets(data, selection, keyFor) : undefined;
+        commit(clearSelection(data, selection, canEdit, keyFor), "Clear range", selectionAddresses(selection, keyFor), { source: "clear", intended });
+      }
+      return;
     }
     if (!command && !event.altKey && event.key.length === 1) {
       if (readOnly) return;
@@ -1737,7 +1899,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   };
 
   const clipboardPayloadFor = useCallback((source: GridSelection): SpreadsheetClipboardPayload => {
-    const text = selectionToTsv(data, source);
+    const text = selectionToTsv(data, source, keyFor);
     const bounds = normaliseSelection(source);
     const columnIds: (string | undefined)[] = [];
     for (let column = bounds.left; column <= bounds.right; column += 1) columnIds.push(fieldIds[column]);
@@ -1746,19 +1908,26 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       values: parseTsv(text),
       range: { top: bounds.top, left: bounds.left, bottom: bounds.bottom, right: bounds.right, columnIds },
     };
-  }, [data, fieldIds]);
+  }, [data, fieldIds, keyFor]);
 
   /** Writes both clipboard channels: raw TSV plus the calculated-values channel Excel re-paste uses. */
   const writeClipboard = useCallback((event: React.ClipboardEvent, payload: SpreadsheetClipboardPayload, source: GridSelection) => {
     event.clipboardData.setData("text/plain", payload.text);
+    // The calculated channel is keyed by displayed coordinate so the second
+    // read lines up with the same selection; values come from the stored cell.
     const calculated = new Map<string, string>();
-    for (const address of selectionAddresses(source)) {
-      const point = parseAddress(address);
-      const input = data.get(address) ?? "";
-      calculated.set(address, input.startsWith("=") ? displayValue(worksheet, point) : input);
+    const bounds = normaliseSelection(source);
+    for (let row = bounds.top; row <= bounds.bottom; row++) {
+      for (let column = bounds.left; column <= bounds.right; column++) {
+        const address = cellKeyAt(row, column);
+        if (address === "") continue;
+        const input = data.get(address) ?? "";
+        const point = { row: sourceRowOf(row), column };
+        calculated.set(cellKey({ row, column }), input.startsWith("=") ? displayValue(worksheet, point) : input);
+      }
     }
     event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, source));
-  }, [data, worksheet]);
+  }, [cellKeyAt, data, sourceRowOf, worksheet]);
 
   const onCopy = (event: React.ClipboardEvent) => {
     event.preventDefault();
@@ -1782,7 +1951,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setCopyRange(normaliseSelection(selection));
     updateCutStatus({ label: `Cut ${selectionLabel(selection)}`, range: resolved.range });
     announce(`Cut ${selectionLabel(selection)}`);
-    commit(clearSelection(data, selection, canEdit), "Cut range", selectionAddresses(selection), { source: "clear" });
+    const intended = beforeCellsChange ? clearRangeTargets(data, selection, keyFor) : undefined;
+    commit(clearSelection(data, selection, canEdit, keyFor), "Cut range", selectionAddresses(selection, keyFor), { source: "clear", intended });
   };
   const onPaste = (event: React.ClipboardEvent) => {
     event.preventDefault();
@@ -1796,31 +1966,39 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       values: parseTsv(sourceText),
       range: { top: selection.focus.row, left: selection.focus.column, bottom: selection.focus.row, right: selection.focus.column, columnIds: [fieldIds[selection.focus.column]] },
     };
-    const resolved = resolveClipboardPayload(clipboard?.onPaste?.(payload, { row: selection.focus.row, column: selection.focus.column }), payload);
+    const resolved = resolveClipboardPayload(clipboard?.onPaste?.(payload, { row: sourceRowOf(selection.focus.row), column: selection.focus.column }), payload);
     if (!resolved) return;
     const tsv = resolved.text;
     const rows = parseTsv(tsv);
+    const pasteLabel = asValues ? "Paste values" : "Paste range";
     const totalCells = rows.reduce((sum, row) => sum + row.length, 0);
     const chunkRows = Math.max(1, Math.floor(PASTE_CHUNK_CELLS / Math.max(1, rows[0]?.length ?? 1)));
     if (totalCells <= PASTE_CHUNK_CELLS) {
-      const pasted = pasteTsv(data, selection.focus, tsv, rowCount, columnCount, canEdit);
-      const outcome = commit(pasted.data, asValues ? "Paste values" : "Paste range", selectionAddresses(pasted.selection), { source: "paste" });
+      const pasted = pasteTsv(data, selection.focus, tsv, viewRowCount, columnCount, canEdit, keyFor);
+      const intended = beforeCellsChange ? pasteTargetChanges(data, selection.focus, rows, viewRowCount, columnCount, keyFor) : undefined;
+      const outcome = commit(pasted.data, pasteLabel, selectionAddresses(pasted.selection, keyFor), { source: "paste", intended });
       if (outcome.status !== "rejected") setSelection(pasted.selection);
       updateCutStatus(null);
       return;
     }
     // Large pastes apply in frame-sized slices so the viewport keeps painting.
+    // The whole target set is gated once up front, so a host that refuses to
+    // write partially rejects the operation before its first slice lands.
+    if (beforeCellsChange) {
+      const fullTargets = pasteTargetChanges(data, selection.focus, rows, viewRowCount, columnCount, keyFor);
+      const preflight = resolveBeforeCellsChange(beforeCellsChange, { label: pasteLabel, cells: [], intended: fullTargets, columnWidths: [] }, "paste", datasetHeader);
+      if (!preflight) { updateCutStatus(null); return; }
+    }
     let working = data;
     let rowIndex = 0;
     let bottom = selection.focus.row;
     let right = selection.focus.column;
-    const pasteLabel = asValues ? "Paste values" : "Paste range";
     const applyChunk = () => {
       const slice = rows.slice(rowIndex, rowIndex + chunkRows);
       const start = { row: selection.focus.row + rowIndex, column: selection.focus.column };
-      const applied = applyTsvRows(working, start, slice, rowCount, columnCount, canEdit);
+      const applied = applyTsvRows(working, start, slice, viewRowCount, columnCount, canEdit, keyFor);
       working = applied.data;
-      commit(applied.data, pasteLabel, selectionAddresses(applied.selection), { source: "paste" });
+      commit(applied.data, pasteLabel, selectionAddresses(applied.selection, keyFor), { source: "paste" });
       rowIndex += slice.length;
       bottom = Math.max(bottom, applied.selection.focus.row);
       right = Math.max(right, applied.selection.focus.column);
@@ -1881,11 +2059,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
     event.preventDefault();
     event.stopPropagation();
-    const before = rowHeights[row] ?? defaultRowHeight;
+    const source = sourceRowOf(row);
+    if (source < 0) return;
+    const before = rowHeights[source] ?? defaultRowHeight;
     const after = Math.max(20, Math.min(240, before + (event.key === "ArrowDown" ? 8 : -8)));
     if (after === before) return;
     const next = [...rowHeights];
-    next[row] = after;
+    next[source] = after;
     setRowHeights(next);
     onRowHeightsChange?.(next);
   };
@@ -1893,22 +2073,24 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const resizeRow = (row: number, event: React.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    const source = sourceRowOf(row);
+    if (source < 0) return;
     const startY = event.clientY;
-    const startHeight = rowHeights[row] ?? defaultRowHeight;
+    const startHeight = rowHeights[source] ?? defaultRowHeight;
     let finalHeight = startHeight;
     const onMove = (moveEvent: PointerEvent) => {
       finalHeight = Math.max(20, Math.min(240, startHeight + moveEvent.clientY - startY));
       const height = finalHeight;
       setRowHeights((current) => {
-        if (current[row] === height) return current;
+        if (current[source] === height) return current;
         const next = [...current];
-        next[row] = height;
+        next[source] = height;
         return next;
       });
     };
     const onUp = () => {
       if (finalHeight !== startHeight) {
-        const next = [...rowHeights]; next[row] = finalHeight; onRowHeightsChange?.(next);
+        const next = [...rowHeights]; next[source] = finalHeight; onRowHeightsChange?.(next);
       }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -1933,9 +2115,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       if (editing && draft.startsWith("=")) {
         event.preventDefault();
         dragSelecting.current = true;
+        // The reference names a data cell, so it is recorded in source space
+        // and only the overlay is positioned in displayed rows.
+        const source = { row: sourceRowOf(point.row), column: point.column };
+        if (source.row < 0) return;
         const next = {
-          anchor: point,
-          focus: point,
+          anchor: source,
+          focus: source,
           tokenStart: formulaReference?.tokenStart ?? draft.length,
         };
         if (event.metaKey || event.ctrlKey) {
@@ -1983,14 +2169,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     },
     pointerEnter: (point) => {
       if (editing && formulaReference && dragSelecting.current) {
-        updateFormulaReference({ ...formulaReference, focus: point });
+        const source = { row: sourceRowOf(point.row), column: point.column };
+        if (source.row >= 0) updateFormulaReference({ ...formulaReference, focus: source });
         return;
       }
       if (moveDrag.current) {
         const drag = moveDrag.current;
         const height = drag.range.bottom - drag.range.top + 1;
         const width = drag.range.right - drag.range.left + 1;
-        const top = Math.max(0, Math.min(Math.max(0, rowCount - height), drag.range.top + point.row - drag.origin.row));
+        const top = Math.max(0, Math.min(Math.max(0, viewRowCount - height), drag.range.top + point.row - drag.origin.row));
         const left = Math.max(0, Math.min(Math.max(0, columnCount - width), drag.range.left + point.column - drag.origin.column));
         drag.target = { row: top, column: left };
         setMovePreview({ top, left, bottom: top + height - 1, right: left + width - 1 });
@@ -2021,7 +2208,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     tabIndex={0}
     role="grid"
     aria-readonly={readOnly || undefined}
-    aria-rowcount={rowCount}
+    aria-rowcount={viewRowCount}
     aria-colcount={columnCount}
     onKeyDown={onKeyDown}
     onCopy={onCopy}
@@ -2036,7 +2223,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight, backgroundSize: `140px ${defaultRowHeight}px` }}>
       {renderRows.flatMap((row) => renderColumns.map(({ index: column }) => {
         const point = { row, column };
-        const key = cellKey(point);
+        // Displayed rows resolve to the stored row that owns the value.
+        const sourceRow = sourceRowOf(row);
+        const key = sourceRow < 0 ? "" : cellKey({ row: sourceRow, column });
         const field = fieldByColumn.get(column);
         const derived = field?.source === "dataset" || field?.source === "calc";
         const active = samePoint(point, selection.focus);
@@ -2045,42 +2234,54 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         // Dynamic-array children have no `data` entry; resolve them through the
         // worksheet spill store so SEQUENCE/UNIQUE/SORT results actually paint.
         const spilled = raw === "" ? worksheet.spills.value(key) : undefined;
-        const loading = raw === "" && spilled === undefined && loadingRanges.some((loadingRange) => row >= loadingRange.rowStart && row <= loadingRange.rowEnd && column >= loadingRange.columnStart && column <= loadingRange.columnEnd);
+        const loading = raw === "" && spilled === undefined && loadingRanges.some((loadingRange) => sourceRow >= loadingRange.rowStart && sourceRow <= loadingRange.rowEnd && column >= loadingRange.columnStart && column <= loadingRange.columnEnd);
         const writeState = writeStates.get(key);
-        const annotationRecordId = bound ? datasetHeader?.recordIdForRow?.(row) : undefined;
+        const annotationRecordId = bound ? datasetHeader?.recordIdForRow?.(sourceRow) : undefined;
         const annotationFieldId = fieldIds[column];
         const annotation = bound
           ? ((annotationRecordId !== undefined && annotationFieldId !== undefined
               ? annotationMaps.byRecord.get(`${annotationRecordId}\u0000${annotationFieldId}`)
               : undefined) ?? annotationMaps.byAddressKeyed.get(key))
           : annotationMaps.byAddressAll.get(key);
-        const baseFormat = formats.get(point);
-        const calculated = raw.startsWith("=") || spilled !== undefined ? displayValue(worksheet, point) : raw;
+        const sourcePoint = { row: sourceRow, column };
+        const baseFormat = formats.get(sourcePoint);
+        const calculated = raw.startsWith("=") || spilled !== undefined ? displayValue(worksheet, sourcePoint) : raw;
         // Empty rules are the common case — skip the per-cell scan entirely.
         const conditionalFormat = conditionalFormats.length
-          ? resolveConditionalFormat(point, calculated, fieldIds[column], conditionalFormats, (conditionFieldId) => {
+          ? resolveConditionalFormat(sourcePoint, calculated, fieldIds[column], conditionalFormats, (conditionFieldId) => {
             const conditionColumn = columnByFieldId.get(conditionFieldId) ?? -1;
             if (conditionColumn < 0) return "";
-            const conditionRaw = data.get(cellKey({ row, column: conditionColumn })) ?? "";
-            return conditionRaw.startsWith("=") ? displayValue(worksheet, { row, column: conditionColumn }) : conditionRaw;
+            const conditionKey = cellKey({ row: sourceRow, column: conditionColumn });
+            const conditionRaw = data.get(conditionKey) ?? "";
+            return conditionRaw.startsWith("=") ? displayValue(worksheet, { row: sourceRow, column: conditionColumn }) : conditionRaw;
           })
           : undefined;
         const format = conditionalFormat ? { ...baseFormat, ...conditionalFormat } : baseFormat;
         const value = formatCellDisplay(calculated, format, columnDisplay[column]);
-        const resolvedState = cellState ? resolveCellState(cellState(row, column)) : undefined;
+        const resolvedState = cellState ? resolveCellState(cellState(sourceRow, column)) : undefined;
+        // A host label wins over the built-in rendering (and over the
+        // boolean checkbox, which reads the stored literal).
+        const label = field?.displayText?.(calculated);
         // A conflict replaces the value with the design's "2 values" copy.
         const display = resolvedState?.state === "conflict"
           ? conflictValueLabel(resolvedState.count ?? 2)
-          : cellDisplayText(field, calculated, value);
+          : label ?? value;
+        const booleanValue = resolvedState === undefined && label === undefined
+          ? booleanCellValue(field?.dataType, calculated)
+          : undefined;
         // Excel-style overflow: single-line text paints across adjacent
         // empty cells. The span clips itself at the first populated,
         // spilled, or still-loading neighbour.
         let overflow: { left: number; right: number } | undefined;
-        if (resolvedState === undefined && value !== "" && !value.includes("\n") && !renderCell && !loading) {
-          const neighbourEmpty = (r: number, c: number) =>
-            (data.get(cellKey({ row: r, column: c })) ?? "") === ""
-            && worksheet.spills.value(cellKey({ row: r, column: c })) === undefined
-            && !loadingRanges.some((entry) => r >= entry.rowStart && r <= entry.rowEnd && c >= entry.columnStart && c <= entry.columnEnd);
+        if (resolvedState === undefined && booleanValue === undefined && value !== "" && !value.includes("\n") && !renderCell && !loading) {
+          const neighbourEmpty = (displayRow: number, c: number) => {
+            const neighbourKey = cellKeyAt(displayRow, c);
+            if (neighbourKey === "") return false;
+            const neighbourSource = sourceRowOf(displayRow);
+            return (data.get(neighbourKey) ?? "") === ""
+              && worksheet.spills.value(neighbourKey) === undefined
+              && !loadingRanges.some((entry) => neighbourSource >= entry.rowStart && neighbourSource <= entry.rowEnd && c >= entry.columnStart && c <= entry.columnEnd);
+          };
           let right = 0;
           if (format?.horizontalAlign !== "right") {
             for (let c = column + 1; c < columnCount && c - column <= 12; c++) {
@@ -2103,11 +2304,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           row={row}
           column={column}
           display={display}
+          booleanValue={booleanValue}
           isFormula={raw.startsWith("=")}
           selected={selected}
           active={active}
           loading={loading}
-          className={`grid-cell${loading ? " loading-cell" : ""}${derived ? " dataset-derived" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}${cellStateClassName(resolvedState)}${row === appendIndex && draftRow ? " draft-row" : ""}`}
+          className={`grid-cell${loading ? " loading-cell" : ""}${derived ? " dataset-derived" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeightAt(row - 1) === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}${cellStateClassName(resolvedState)}${row === appendDisplayIndex && draftRow ? " draft-row" : ""}`}
           title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
           format={format}
           overflow={overflow}
@@ -2119,12 +2321,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           left={columnLeft(column)}
           top={row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${headerHeight + datasetHeaderHeight + rowOffsets[row]}px)` : headerHeight + datasetHeaderHeight + rowOffsets[row]}
           width={columnWidths[column]}
-          height={rowHeights[row] ?? defaultRowHeight}
+          height={rowHeightAt(row)}
         />;
       }))}
 
       {renderRows.map((row) => {
-        const isAppendRow = appendInRows && row === appendIndex;
+        const isAppendRow = appendInRows && row === appendDisplayIndex;
         return (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
         <div
@@ -2134,7 +2336,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-selected={!isAppendRow && row >= range.top && row <= range.bottom}
         className={`row-header${!isAppendRow && row >= range.top && row <= range.bottom ? " selected-header" : ""}${isAppendRow ? " append-row-header" : ""}`}
         key={`row-${row}`}
-        style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidth, height: rowHeights[row] ?? defaultRowHeight }}
+        style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidth, height: rowHeightAt(row) }}
         onPointerDown={() => {
           if (isAppendRow) { selectAppendRow(); return; }
           dragSelecting.current = true;
@@ -2142,17 +2344,17 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           viewportRef.current?.focus({ preventScroll: true });
         }}
         onContextMenu={(event) => { event.preventDefault(); if (!isAppendRow) setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
-      >{isAppendRow ? (draftRow ? "new" : "+") : row + 1}{!isAppendRow && <hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? defaultRowHeight} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} />}</div>);
+      >{isAppendRow ? (draftRow ? "new" : "+") : row + 1}{!isAppendRow && <hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeightAt(row)} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} />}</div>);
       })}
 
-      {appendIndex !== undefined && (appendInRows || appendBeyond) && !draftRow && (
+      {appendDisplayIndex !== undefined && (appendInRows || appendBeyond) && !draftRow && (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — the append row is an absolutely positioned div like every other cell
         <div
           className="grid-cell append-row"
           role="gridcell"
           tabIndex={-1}
           aria-label={appendRowLabel(appendRow)}
-          style={{ left: rowHeaderWidth, top: headerHeight + datasetHeaderHeight + rowOffsets[appendIndex], width: Math.max(contentWidth - rowHeaderWidth, 0), height: rowHeights[appendIndex] ?? defaultRowHeight }}
+          style={{ left: rowHeaderWidth, top: headerHeight + datasetHeaderHeight + rowOffsets[appendDisplayIndex], width: Math.max(contentWidth - rowHeaderWidth, 0), height: rowHeights[appendSourceRow] ?? defaultRowHeight }}
           onPointerDown={(event) => { event.stopPropagation(); selectAppendRow(); }}
         >{appendRowLabel(appendRow)}</div>
       )}
@@ -2204,7 +2406,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             return;
           }
           dragSelecting.current = true;
-          setSelection({ anchor: { row: 0, column }, focus: { row: rowCount - 1, column } });
+          setSelection({ anchor: { row: 0, column }, focus: { row: viewRowCount - 1, column } });
           viewportRef.current?.focus({ preventScroll: true });
         }}
         onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "column", index: column, x: event.clientX, y: event.clientY }); }}
@@ -2262,8 +2464,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
         {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
-        {contextMenu.axis === "row" && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
-        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
+        {contextMenu.axis === "row" && <button type="button" onClick={() => { const source = sourceRowOf(contextMenu.index); if (source < 0) { closeContextMenu(); return; } const next = [...rowHeights]; next[source] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
+        {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeightAt(contextMenu.index - 1) === 0 && <button type="button" onClick={() => { const source = sourceRowOf(contextMenu.index - 1); if (source < 0) { closeContextMenu(); return; } const next = [...rowHeights]; next[source] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
         {(frozenRowCount > 0 || frozenColumnCount > 0) && <button type="button" onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
         {enabledMenuActions(contextMenuActions).map((action) => <button type="button" key={action.id ?? action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
@@ -2304,13 +2506,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             const extent = (column: number) => {
               if (column < 0 || column >= columnCount) return range.bottom;
               let row = range.bottom;
-              while (row + 1 < rowCount && hasCellValue(cellKey({ row: row + 1, column }))) row++;
+              while (row + 1 < viewRowCount && hasCellValue(cellKeyAt(row + 1, column))) row++;
               return row;
             };
             const targetRow = Math.max(extent(range.left - 1), extent(range.right + 1));
             if (targetRow <= range.bottom) return;
-            const filled = fillSelection(data, selection, { row: targetRow, column: range.right }, rowCount, columnCount, canEdit);
-            const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection), { source: "fill" });
+            const filled = fillSelection(data, selection, { row: targetRow, column: range.right }, viewRowCount, columnCount, canEdit, keyFor);
+            const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection, keyFor), { source: "fill", intended: filled.intended });
             if (outcome.status !== "rejected") setSelection(filled.selection);
           }}
         />}
@@ -2353,17 +2555,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
       {displayedReferenceRanges.map((reference, index) => {
         const referenceRange = normaliseSelection(reference);
-        if (referenceRange.top >= rowCount || referenceRange.left >= columnCount) return null;
+        // References name stored cells; paint them where their rows show.
+        const top = displayRowOf(referenceRange.top);
+        const bottom = Math.min(displayRowOf(referenceRange.bottom), viewRowCount - 1);
+        if (top < 0 || bottom < top || referenceRange.left >= columnCount) return null;
         const right = Math.min(referenceRange.right, columnCount - 1);
-        const bottom = Math.min(referenceRange.bottom, rowCount - 1);
         return <div
         className={`formula-reference${suggestedRange === reference ? " suggested" : ""}`}
-        key={`reference-${referenceRange.top}-${referenceRange.left}-${bottom}-${right}`}
+        key={`reference-${top}-${referenceRange.left}-${bottom}-${right}`}
         style={{
           left: columnLeft(referenceRange.left),
-          top: headerHeight + datasetHeaderHeight + rowOffsets[referenceRange.top],
+          top: headerHeight + datasetHeaderHeight + rowOffsets[top],
           width: columnOffsets[right + 1] - columnOffsets[referenceRange.left],
-          height: rowOffsets[bottom + 1] - rowOffsets[referenceRange.top],
+          height: rowOffsets[bottom + 1] - rowOffsets[top],
           borderColor: ["var(--ref-1)", "var(--ref-2)", "var(--ref-3)", "var(--ref-4)"][index % 4],
         }}
       />;
@@ -2372,7 +2576,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         left: columnLeft(editing.column, 1),
         top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
         width: columnWidths[editing.column] - 2,
-        height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
+        height: rowHeightAt(editing.row) - 2,
       }} />}
       {editing && !activeCustomEditor && <input
         className={`cell-editor${draft.startsWith("=") ? " tokenised-input" : ""}`}
@@ -2381,12 +2585,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-invalid={validationError ? true : undefined}
         aria-activedescendant={suggestions.length > 0 ? `formula-suggestion-${suggestionIndex}` : undefined}
         value={draft}
-        aria-label={`Edit ${cellKey(editing)}`}
+        aria-label={`Edit ${cellKeyAt(editing.row, editing.column)}`}
         style={{
           left: columnLeft(editing.column, 1),
           top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
-          height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
+          height: rowHeightAt(editing.row) - 2,
         }}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -2459,15 +2663,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           left: columnLeft(editing.column, 1),
           top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
           width: columnWidths[editing.column] - 2,
-          height: (rowHeights[editing.row] ?? defaultRowHeight) - 2,
+          height: rowHeightAt(editing.row) - 2,
         }}
       >
         {activeCustomEditor.render({
           point: editing,
-          address: cellKey(editing),
+          address: cellKeyAt(editing.row, editing.column),
           columnId: editingColumnId,
           field: editingField,
-          storedValue: data.get(cellKey(editing)) ?? "",
+          storedValue: data.get(cellKeyAt(editing.row, editing.column)) ?? "",
           initialDraft: draft,
           commit: (value) => finishEdit(true, undefined, value),
           cancel: () => finishEdit(false),
@@ -2483,7 +2687,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className="typed-options boolean"
         role="radiogroup"
         aria-label={`Choose ${editingField.label}`}
-        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(columnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? ["true", "false"]).map((option) => (
             // biome-ignore lint/a11y/useSemanticElements: button-as-radio inside a radiogroup is the intended pattern; a native input would not preserve editor focus or the button styling
@@ -2499,7 +2703,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className={`typed-options ${editingField?.dataType ?? "text"}`}
         role="listbox"
         aria-label={`Choose ${editingField?.label}`}
-        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(columnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? []).flatMap((option) => editingField?.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()) ? [<button type="button"
             role="option"
@@ -2510,14 +2714,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             onClick={() => finishEdit(true, undefined, option)}
           >{option}</button>] : [])}
       </div>)}
-      {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 3 }}>{validationError}</div>}
+      {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3 }}>{validationError}</div>}
       {showShortcutHelp && <div className="shortcut-backdrop"><section ref={shortcutHelpRef} className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}>
         <header><strong>Keyboard shortcuts</strong><button type="button" aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
         <dl><dt>Edit cell</dt><dd>F2 or type</dd><dt>Move through sheet</dt><dd>Arrows · Enter · Tab · Page Up/Down</dd><dt>Jump to data edge</dt><dd>Ctrl/Cmd + arrows</dd><dt>Select all</dt><dd>Ctrl/Cmd A or corner</dd><dt>Select row / column</dt><dd>Shift Space · Ctrl Space</dd><dt>Paste copied range</dt><dd>Enter</dd><dt>Move cells</dt><dd>Drag selection border</dd><dt>Fill down / right</dt><dd>Ctrl/Cmd D · R</dd><dt>Insert date / time</dt><dd>Ctrl/Cmd ; · Shift :</dd><dt>Insert / delete axis</dt><dd>Ctrl/Cmd Shift + · Ctrl/Cmd −</dd><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
       </section></div>}
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
         left: columnLeft(editing.column),
-        top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row + 1] + 4,
+        top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 4,
         width: Math.max(290, columnWidths[editing.column]),
       }}>
         {suggestions.map((suggestion, index) => <button type="button"

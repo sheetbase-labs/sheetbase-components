@@ -27,6 +27,10 @@
 .grid-cell .cell-diff ins { text-decoration: underline; color: var(--green-text); }
 .grid-cell .cell-diff del { text-decoration: line-through; color: var(--danger-text); }
 
+/* Boolean columns paint a checkbox mark instead of the literal text. */
+.grid-cell .cell-boolean { display: inline-grid; place-items: center; width: 14px; height: 14px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--panel); color: var(--panel); font-size: 10px; line-height: 1; }
+.grid-cell .cell-boolean[data-boolean="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent, var(--panel)); }
+
 /* COMP-02.4: the "New run" append row and the draft row it becomes. */
 .row-header.append-row-header { background: var(--surface-muted); color: var(--muted); font-weight: 500; }
 .grid-cell.append-row { z-index: 2; color: var(--muted); cursor: text; }

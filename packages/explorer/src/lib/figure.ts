@@ -302,6 +302,62 @@ export interface FigureScaleLegend {
   steps: FigureScaleStep[]
 }
 
+/** One histogram bin (kind `histogram`): its data range, centre and label. */
+export interface FigureBin {
+  /** Position in left-to-right order, for a stable React key. */
+  index: number
+  /** Left edge, in data units. */
+  x0: number
+  /** Right edge, in data units. */
+  x1: number
+  /** Bin centre, in data units. */
+  value: number
+  /** Edge range as drawn on the numeric axis (`0–10`). */
+  label: string
+}
+
+/** A density sample of a violin profile: a y value and its KDE height. */
+export interface FigureDensitySample {
+  value: number
+  density: number
+}
+
+/** The five-number summary the violin's box overlay draws (pixel positions). */
+export interface FigureViolinBox {
+  min: number
+  q1: number
+  median: number
+  q3: number
+  max: number
+  whiskerLow: number
+  whiskerHigh: number
+  yWhiskerLow: number
+  yQ1: number
+  yMedian: number
+  yQ3: number
+  yWhiskerHigh: number
+}
+
+/**
+ * A violin mark (kind `violin`): one category's (and series') KDE over the
+ * numeric y axis, plus the box overlay the design draws on the same band.
+ */
+export interface FigureViolin {
+  category: string
+  seriesId: string
+  colour: string
+  /** Left edge, width and centre of the violin's band slot, in figure units. */
+  x: number
+  width: number
+  px: number
+  /** Closed density outline in pixel coordinates (left side then right). */
+  outline: Array<{ px: number; py: number }>
+  /** KDE samples behind the outline, in data units. */
+  density: FigureDensitySample[]
+  /** Box overlay: five-number summary with Tukey whiskers. */
+  box: FigureViolinBox
+}
+
 export interface FigureModel {
   width: number
   height: number
@@ -322,6 +378,10 @@ export interface FigureModel {
   boxes?: FigureBoxPlot[]
   /** Heatmap cells; empty unless `kind` is `heatmap`. */
   heat?: FigureHeatCell[]
+  /** Histogram bins; empty unless `kind` is `histogram`. */
+  bins?: FigureBin[]
+  /** Violin density profiles; empty unless `kind` is `violin`. */
+  violins?: FigureViolin[]
   /** Discrete colour-scale legend for a heatmap. */
   scaleLegend?: FigureScaleLegend
 }
@@ -377,6 +437,124 @@ export function niceTicks(domain: readonly [number, number], target = 4): number
     if (value >= domain[0] - epsilon) ticks.push(Number(value.toPrecision(12)))
   }
   return ticks
+}
+
+/** Sturges' rule: the usual automatic bin count for `n` samples. */
+function sturgesBinCount(n: number): number {
+  return Math.max(1, Math.ceil(Math.log2(Math.max(1, n)) + 1))
+}
+
+export interface BinOptions {
+  /** Requested bin count; ignored when `width` is given. Non-positive = auto. */
+  bins?: number
+  /** Explicit bin width; wins over `bins`. */
+  width?: number
+  /** Fixed range (defaults to the sample's extent). */
+  min?: number
+  max?: number
+}
+
+/**
+ * Bin edges over a numeric sample. An explicit width wins over a count, a
+ * non-positive count falls back to Sturges' rule, and an explicit width may
+ * widen the last bin to cover the sample. Returns an empty list for an empty
+ * (or all non-finite) sample, otherwise edges of length `bins + 1`.
+ */
+export function binEdges(values: number[], options: BinOptions = {}): number[] {
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  for (const value of values) {
+    if (!Number.isFinite(value)) continue
+    if (value < lo) lo = value
+    if (value > hi) hi = value
+  }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return []
+  if (options.min !== undefined) lo = options.min
+  if (options.max !== undefined) hi = options.max
+  if (hi <= lo) {
+    const pad = Math.abs(lo) || 1
+    lo -= pad * 0.5
+    hi += pad * 0.5
+  }
+  const fixedWidth = options.width !== undefined && options.width > 0
+  let width: number
+  if (fixedWidth) {
+    width = options.width as number
+  } else {
+    const count = options.bins !== undefined && options.bins > 0 ? Math.round(options.bins) : sturgesBinCount(values.length)
+    width = (hi - lo) / count
+  }
+  // A count divides the range exactly, so the last edge lands on `hi`; an
+  // explicit width may overrun it (the final bin stretches to cover the sample).
+  const steps = Math.max(1, Math.ceil((hi - lo) / width - 1e-9))
+  const edges: number[] = []
+  for (let i = 0; i <= steps; i++) {
+    const edge = !fixedWidth && i === steps ? hi : lo + i * width
+    edges.push(Number(edge.toPrecision(12)))
+  }
+  return edges
+}
+
+/** Silverman's rule-of-thumb KDE bandwidth; a positive fallback for flat data. */
+export function kdeBandwidth(values: number[]): number {
+  const sample = values.filter((value) => Number.isFinite(value))
+  const n = sample.length
+  if (n < 2) return 0
+  let mean = 0
+  for (const value of sample) mean += value
+  mean /= n
+  let variance = 0
+  for (const value of sample) variance += (value - mean) ** 2
+  variance /= n - 1
+  const sd = Math.sqrt(variance)
+  if (!(sd > 0)) return Math.max(Math.abs(mean) * 0.05, 0.5)
+  return 1.06 * sd * n ** (-1 / 5)
+}
+
+export interface KdeOptions {
+  /** Bandwidth in data units; automatic (Silverman) when absent or non-positive. */
+  bandwidth?: number
+  /** Number of density samples (default 32). */
+  samples?: number
+  /** Fixed sample range (defaults to the sample's extent padded by 8 %). */
+  min?: number
+  max?: number
+}
+
+/**
+ * Gaussian kernel density estimate of a numeric sample: `samples` evenly spaced
+ * points across the (padded) range, each carrying its density. The knots are
+ * deterministic, so a figure and its exported SVG resolve the same profile.
+ */
+export function kde(values: number[], options: KdeOptions = {}): FigureDensitySample[] {
+  const sample = values.filter((value) => Number.isFinite(value))
+  if (!sample.length) return []
+  let lo = Math.min(...sample)
+  let hi = Math.max(...sample)
+  if (options.min !== undefined) lo = options.min
+  if (options.max !== undefined) hi = options.max
+  const pad = ((hi - lo) || Math.abs(hi) || 1) * 0.08
+  lo -= pad
+  hi += pad
+  const bandwidth = options.bandwidth !== undefined && options.bandwidth > 0
+    ? options.bandwidth
+    : kdeBandwidth(sample)
+  const points = Math.max(2, Math.round(options.samples ?? 32))
+  if (!(bandwidth > 0)) {
+    return [{ value: sample[0] as number, density: 1 }]
+  }
+  const normaliser = 1 / (bandwidth * Math.sqrt(2 * Math.PI) * sample.length)
+  const out: FigureDensitySample[] = []
+  for (let i = 0; i < points; i++) {
+    const value = lo + ((hi - lo) * i) / (points - 1)
+    let sum = 0
+    for (const v of sample) {
+      const u = (value - v) / bandwidth
+      sum += Math.exp(-0.5 * u * u)
+    }
+    out.push({ value, density: sum * normaliser })
+  }
+  return out
 }
 
 /** Data extent for a numeric field, ignoring non-finite values. */
@@ -697,12 +875,23 @@ function markRefLines(spec: ChartSpec, xScale: Scale | undefined, yScale: Scale,
 
 /** The explorer's row pipeline (filter → aggregate → hidden series). */
 function figureRows(dataset: Dataset, spec: ChartSpec): DataRow[] | null {
-  if (!spec.x || !spec.y) return null
+  if (spec.kind === 'histogram') {
+    // The histogram bins `x` (falling back to `y`), so it needs one measure.
+    if (!spec.x && !spec.y) return null
+  } else if (spec.kind === 'violin') {
+    // A violin reads `y` over an optional category, so it is y-only.
+    if (!spec.y) return null
+  } else if (!spec.x || !spec.y) {
+    return null
+  }
   return visibleRows(preparedRows(dataset, spec), spec)
 }
 
 /** Core builder over pre-pipelined rows, shared by `buildFigure` and the group. */
 function buildFigureFromRows(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+  if (spec.kind === 'histogram') return buildHistogramFigure(rows, spec, options)
+  if (spec.kind === 'violin') return buildViolinFigure(rows, spec, options)
+
   const xField = spec.x
   const yField = spec.y
   if (!xField || !yField) return null
@@ -1156,6 +1345,292 @@ function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions
   }
 }
 
+/**
+ * Histogram figure (kind `histogram`): `x` (falling back to `y`) is binned over
+ * the observed range — `histogramBinWidth` when given, else `histogramBins`
+ * (Sturges' rule when non-positive) — and drawn as bars on a numeric x axis.
+ * `histogramDensity` plots a probability density rather than counts. A series
+ * field (`group`/`color`) shares the bin edges and groups or stacks the bars.
+ */
+function buildHistogramFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+  const valueField = spec.x ?? spec.y
+  if (!valueField) return null
+
+  const { width, height, plot } = figureFrame(options)
+  const seriesField = spec.group ?? spec.color
+  const groups = seriesRows(rows, seriesField)
+  const drawnGroups = seriesField ? groups : groups.slice(0, 1)
+
+  const pooled: number[] = []
+  for (const group of drawnGroups) {
+    for (const row of group.rows) {
+      const value = Number(row[valueField])
+      if (Number.isFinite(value)) pooled.push(value)
+    }
+  }
+  const edges = binEdges(pooled, {
+    ...(spec.histogramBins === undefined ? {} : { bins: spec.histogramBins }),
+    ...(spec.histogramBinWidth === undefined ? {} : { width: spec.histogramBinWidth }),
+  })
+  if (edges.length < 2) return null
+  const binCount = edges.length - 1
+  const first = edges[0] as number
+  const last = edges[edges.length - 1] as number
+  const binWidth = (last - first) / binCount
+
+  const seriesValues = drawnGroups.map((group) => {
+    const values: number[] = []
+    for (const row of group.rows) {
+      const value = Number(row[valueField])
+      if (Number.isFinite(value)) values.push(value)
+    }
+    return values
+  })
+  const seriesCounts = seriesValues.map((values) => {
+    const counts = new Array<number>(binCount).fill(0)
+    for (const value of values) {
+      const position = Math.min(binCount - 1, Math.max(0, Math.floor((value - first) / binWidth)))
+      counts[position] = (counts[position] as number) + 1
+    }
+    return counts
+  })
+  const density = spec.histogramDensity === true
+  // Density normalises each series over its own total, so every profile
+  // integrates to 1 and sibling series stay comparable.
+  const valueAt = (seriesIndex: number, position: number): number => {
+    const count = seriesCounts[seriesIndex]?.[position] ?? 0
+    if (!density) return count
+    const total = seriesValues[seriesIndex]?.length ?? 0
+    return total > 0 ? count / (total * binWidth) : 0
+  }
+
+  const stacked = spec.barLayout === 'stacked'
+  let dataHi = 0
+  for (let position = 0; position < binCount; position++) {
+    let stackTotal = 0
+    for (let seriesIndex = 0; seriesIndex < drawnGroups.length; seriesIndex++) {
+      const value = valueAt(seriesIndex, position)
+      if (stacked) stackTotal += value
+      else dataHi = Math.max(dataHi, value)
+    }
+    if (stacked) dataHi = Math.max(dataHi, stackTotal)
+  }
+  if (!(dataHi > 0)) return null
+
+  const xDomain: readonly [number, number] = [first, last]
+  const xScale = linearScale(xDomain, [plot.x, plot.x + plot.width])
+  const x: FigureAxis = {
+    title: axisTitle(spec.xLabel, spec.xUnit, valueField),
+    domain: xDomain,
+    ticks: niceTicks(xDomain).map((value) => ({
+      value,
+      px: xScale(value),
+      py: plot.y + plot.height + FIGURE_LAYOUT.tickOffset,
+      label: formatValue(value),
+    })),
+  }
+  const yDomain = figureDomain(spec.yMin, spec.yMax, [0, dataHi])
+  const { yScale, axis: y, gridlines } = numericYAxis(spec, density ? 'Density' : 'Count', yDomain, plot)
+
+  const slots = stacked ? 1 : drawnGroups.length
+  const gap = Math.max(0, spec.barGap)
+  const stacks = new Array<number>(binCount).fill(0)
+  const bars: FigureBar[] = []
+  for (let seriesIndex = 0; seriesIndex < drawnGroups.length; seriesIndex++) {
+    const group = drawnGroups[seriesIndex] as (typeof drawnGroups)[number]
+    const style = seriesStyle(seriesField ? seriesIndex : 0)
+    const counts = seriesCounts[seriesIndex] as number[]
+    for (let position = 0; position < binCount; position++) {
+      if ((counts[position] as number) === 0) continue
+      const value = valueAt(seriesIndex, position)
+      const value0 = stacked ? (stacks[position] as number) : 0
+      if (stacked) stacks[position] = value0 + value
+      const left = xScale(edges[position] as number)
+      const right = xScale(edges[position + 1] as number)
+      const inner = Math.max(0, right - left - gap)
+      const slotWidth = stacked ? inner : Math.max(0, (inner - gap * (slots - 1)) / slots)
+      const slotLeft = (stacked ? left + gap / 2 : left + gap / 2 + seriesIndex * (slotWidth + gap))
+      const bottom = yScale(value0)
+      const top = yScale(value0 + value)
+      bars.push({
+        category: `${formatValue(edges[position] as number)}–${formatValue(edges[position + 1] as number)}`,
+        seriesId: group.id,
+        colour: style.colour,
+        x: slotLeft,
+        y: Math.min(top, bottom),
+        width: slotWidth,
+        height: Math.abs(bottom - top),
+        value,
+        value0,
+        index: bars.length,
+      })
+    }
+  }
+
+  const bins: FigureBin[] = Array.from({ length: binCount }, (_, index) => {
+    const x0 = edges[index] as number
+    const x1 = edges[index + 1] as number
+    return {
+      index,
+      x0,
+      x1,
+      value: (x0 + x1) / 2,
+      label: `${formatValue(x0)}–${formatValue(x1)}`,
+    }
+  })
+  const legend: FigureLegendItem[] = seriesField
+    ? groups.map((group, position) => ({ label: group.label || valueField, style: seriesStyle(position) }))
+    : []
+  return {
+    width,
+    height,
+    plot,
+    x,
+    y,
+    gridlines,
+    series: [],
+    refLines: markRefLines(spec, xScale, yScale, plot),
+    legend,
+    bars,
+    bins,
+    xTitle: options.showXAxisTitle === false ? '' : x.title,
+    yTitle: options.showYAxisTitle === false ? '' : y.title,
+    ariaLabel: describeFigure(spec, rows.length, legend.map((item) => item.label)),
+  }
+}
+
+/**
+ * Violin figure (kind `violin`): the Gaussian KDE of `y` per category (and
+ * series), drawn as a closed density profile on a band axis with the design's
+ * box overlay (five-number summary + Tukey whiskers) on the same band. Without
+ * an `x` field the series field is the category; with neither, one "all"
+ * category. `violinBandwidth` sets the KDE bandwidth; it is Silverman's
+ * rule-of-thumb otherwise.
+ */
+function buildViolinFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+  const yField = spec.y
+  if (!yField) return null
+
+  const { width, height, plot } = figureFrame(options)
+  const seriesField = spec.group ?? spec.color
+  let categoryField = spec.x
+  let effectiveSeries = seriesField
+  if (!categoryField && seriesField) {
+    categoryField = seriesField
+    effectiveSeries = undefined
+  }
+  if (categoryField && effectiveSeries === categoryField) effectiveSeries = undefined
+
+  const categories = categoryField ? orderedCategories(rows, categoryField, spec.categoryOrder, yField) : []
+  const labels = categories.length ? categories : ['all']
+  const band = bandScale(labels.length, [plot.x, plot.x + plot.width])
+  const index = new Map<string, number>(labels.map((value, position): [string, number] => [value, position]))
+
+  const groups = seriesRows(rows, effectiveSeries)
+  const drawnGroups = effectiveSeries ? groups : groups.slice(0, 1)
+  const buckets: Array<{ position: number; seriesIndex: number; seriesId: string; values: number[] }> = []
+  for (let seriesIndex = 0; seriesIndex < drawnGroups.length; seriesIndex++) {
+    const group = drawnGroups[seriesIndex] as (typeof drawnGroups)[number]
+    const byCategory = categoryField ? bucketByCategory(group.rows, categoryField, index) : null
+    const positions = byCategory ? [...byCategory.keys()].sort((a, b) => a - b) : [0]
+    for (const position of positions) {
+      const catRows = byCategory ? (byCategory.get(position) as DataRow[]) : group.rows
+      const values: number[] = []
+      for (const row of catRows) {
+        const value = Number(row[yField])
+        if (Number.isFinite(value)) values.push(value)
+      }
+      if (!values.length) continue
+      buckets.push({ position, seriesIndex, seriesId: group.id, values })
+    }
+  }
+  if (!buckets.length) return null
+
+  const pooled: number[] = []
+  for (const bucket of buckets) pooled.push(...bucket.values)
+  let dataLo = Number.POSITIVE_INFINITY
+  let dataHi = Number.NEGATIVE_INFINITY
+  for (const value of pooled) {
+    if (value < dataLo) dataLo = value
+    if (value > dataHi) dataHi = value
+  }
+  const yDomain = figureDomain(spec.yMin, spec.yMax, Number.isFinite(dataLo) ? [dataLo, dataHi] : undefined)
+  const { yScale, axis: y, gridlines } = numericYAxis(spec, yField, yDomain, plot)
+  const low = plot.y
+  const high = plot.y + plot.height
+  const yOf = (value: number) => Math.min(high, Math.max(low, yScale(value)))
+
+  const profiles = buckets.map((bucket) => kde(bucket.values, {
+    ...(spec.violinBandwidth === undefined ? {} : { bandwidth: spec.violinBandwidth }),
+  }))
+  let maxDensity = 0
+  for (const profile of profiles) {
+    for (const sample of profile) maxDensity = Math.max(maxDensity, sample.density)
+  }
+  if (!(maxDensity > 0)) maxDensity = 1
+
+  const slots = drawnGroups.length
+  const gap = Math.max(0, spec.barGap) + FIGURE_LAYOUT.strokeWidth
+  const violins: FigureViolin[] = buckets.map((bucket, bucketIndex) => {
+    const slot = slotFor(band, bucket.position, bucket.seriesIndex, slots, gap)
+    const style = seriesStyle(effectiveSeries ? bucket.seriesIndex : 0)
+    const px = slot.x + slot.width / 2
+    const profile = profiles[bucketIndex] as FigureDensitySample[]
+    const half = slot.width / 2
+    const outline: Array<{ px: number; py: number }> = []
+    for (const sample of profile) outline.push({ px: px - (sample.density / maxDensity) * half, py: yOf(sample.value) })
+    for (let i = profile.length - 1; i >= 0; i--) {
+      const sample = profile[i] as FigureDensitySample
+      outline.push({ px: px + (sample.density / maxDensity) * half, py: yOf(sample.value) })
+    }
+    const summary = boxSummary(bucket.values)
+    return {
+      category: labels[bucket.position] as string,
+      seriesId: bucket.seriesId,
+      colour: style.colour,
+      x: slot.x,
+      width: slot.width,
+      px,
+      outline,
+      density: profile,
+      box: {
+        min: summary.min,
+        q1: summary.q1,
+        median: summary.median,
+        q3: summary.q3,
+        max: summary.max,
+        whiskerLow: summary.whiskerLow,
+        whiskerHigh: summary.whiskerHigh,
+        yWhiskerLow: yOf(summary.whiskerLow),
+        yQ1: yOf(summary.q1),
+        yMedian: yOf(summary.median),
+        yQ3: yOf(summary.q3),
+        yWhiskerHigh: yOf(summary.whiskerHigh),
+      },
+    }
+  })
+
+  const x = bandAxis(categoryField ? axisTitle(spec.xLabel, spec.xUnit, categoryField) : '', labels, band, plot, 'x')
+  const legend: FigureLegendItem[] = effectiveSeries
+    ? groups.map((group, position) => ({ label: group.label || yField, style: seriesStyle(position) }))
+    : []
+  return {
+    width,
+    height,
+    plot,
+    x,
+    y,
+    gridlines,
+    series: [],
+    refLines: markRefLines(spec, undefined, yScale, plot),
+    legend,
+    violins,
+    xTitle: options.showXAxisTitle === false ? '' : x.title,
+    yTitle: options.showYAxisTitle === false ? '' : y.title,
+    ariaLabel: describeFigure(spec, rows.length, legend.map((item) => item.label)),
+  }
+}
+
 /** One aggregated heatmap bucket before it becomes a cell. */
 interface HeatmapBucket {
   x: string
@@ -1318,15 +1793,15 @@ export interface FigureGroup {
  * Build a stack of figures that share one x axis. The union of every entry's x
  * domain becomes the shared domain, so a load of 100 sits at the same x in
  * every chart — the Analysis screen's two charts line up vertically. The
- * categorical kinds (bar, box, heatmap) have no shared numeric axis, so a stack
- * containing one builds nothing.
+ * categorical and distribution kinds (bar, box, histogram, violin, heatmap)
+ * have no shared numeric x axis, so a stack containing one builds nothing.
  */
 export function buildFigureGroup(
   dataset: Dataset,
   entries: FigureStackEntry[],
   options: Omit<FigureOptions, 'sharedX'> = {},
 ): FigureGroup | null {
-  if (entries.some((entry) => entry.spec.kind === 'bar' || entry.spec.kind === 'box' || entry.spec.kind === 'heatmap')) return null
+  if (entries.some((entry) => entry.spec.kind === 'bar' || entry.spec.kind === 'box' || entry.spec.kind === 'heatmap' || entry.spec.kind === 'histogram' || entry.spec.kind === 'violin')) return null
   if (!entries.length) return null
   const scoped = entries.map((entry) => ({ entry, rows: figureRows(dataset, entry.spec) }))
   if (scoped.some(({ rows }) => rows === null)) return null
@@ -1363,6 +1838,7 @@ export function buildFigureGroup(
 const FIGURE_KIND_LABELS: Partial<Record<ChartKind, string>> = {
   box: 'Box plot',
   heatmap: 'Heatmap',
+  histogram: 'Histogram',
   violin: 'Violin plot',
 }
 
@@ -1372,12 +1848,17 @@ export function describeFigure(spec: ChartSpec, rowCount: number, seriesLabels: 
   const xTitle = spec.x ? axisTitle(spec.xLabel, spec.xUnit, spec.x) : ''
   const yTitle = spec.y ? axisTitle(spec.yLabel, spec.yUnit, spec.y) : ''
   // A heatmap's two fields are both dimensions; its measure is the size field
-  // (or the cell count).
+  // (or the cell count). A histogram maps one measure onto its bins, and a
+  // violin is often y-only.
   const mapping = spec.kind === 'heatmap' && xTitle && yTitle
     ? ` of ${spec.size ?? 'count'} by ${xTitle} and ${yTitle}`
     : xTitle && yTitle
       ? ` of ${yTitle} against ${xTitle}`
-      : ''
+      : spec.kind === 'histogram' && xTitle
+        ? ` of ${xTitle}`
+        : spec.kind === 'violin' && yTitle
+          ? ` of ${yTitle}`
+          : ''
   const parts = [`${kind}${mapping}`]
   if (seriesLabels.length) parts.push(`for ${seriesLabels.join(', ')}`)
   if (spec.refLines?.length) {

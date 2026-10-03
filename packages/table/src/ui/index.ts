@@ -17,3 +17,4 @@ export * from "./row-height";
 export * from "./append-row";
 export * from "./keyboard";
 export * from "../grid/conditional-formatting";
+export * from "../grid/view";

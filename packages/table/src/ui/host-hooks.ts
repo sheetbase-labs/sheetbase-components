@@ -42,6 +42,11 @@ export type SpreadsheetMutationSource =
  * grid will apply; assign to it to replace the proposed value, or leave it to
  * keep the grid's proposal. `recordId`/`fieldId` identify the bound target when
  * the grid has a dataset header, so the host can validate per record.
+ *
+ * `editable: false` marks a cell in the operation's intended target set that the
+ * grid will *not* write (a read-only row, a read-only column or field). Return
+ * `false` to refuse the operation as a whole instead of letting the editable
+ * subset apply. The field is absent on every cell the grid will write.
  */
 export type SpreadsheetCellChange = {
   address: string;
@@ -51,6 +56,7 @@ export type SpreadsheetCellChange = {
   fieldId?: string;
   before?: string;
   next?: string;
+  editable?: boolean;
 };
 
 /**
@@ -58,6 +64,10 @@ export type SpreadsheetCellChange = {
  * anything is applied (no history entry, no field writes, no `onMutation`);
  * assign to `change.next` to replace individual proposed values. Returning
  * nothing or `true` accepts the (possibly edited) changes.
+ *
+ * For bulk operations (paste, fill, clear, move) the change list is the full
+ * intended target set, so a change with `editable: false` marks a cell the grid
+ * would otherwise skip — a host that must not write partially returns `false`.
  */
 export type SpreadsheetBeforeCellsChange = (
   changes: SpreadsheetCellChange[],
@@ -77,22 +87,28 @@ export function buildCellChanges(
   header?: BeforeCellsChangeHeader,
 ): SpreadsheetCellChange[] {
   const changes: SpreadsheetCellChange[] = [];
-  for (const cell of mutation.cells) {
+  // A bulk mutation carries its full intended target set; every entry is
+  // reported, with `editable: false` on the targets the grid will skip.
+  const applied = new Map(mutation.cells.map((cell) => [cell.address, cell]));
+  for (const cell of mutation.intended ?? mutation.cells) {
     let point: GridPoint;
     try {
       point = parseAddress(cell.address);
     } catch {
       continue;
     }
+    const appliedCell = applied.get(cell.address);
     const field = header?.fields.find((item) => item.column === point.column);
+    const skipped = mutation.intended !== undefined && appliedCell === undefined;
     changes.push({
       address: cell.address,
       row: point.row,
       column: point.column,
       recordId: header?.recordIdForRow?.(point.row),
       fieldId: field?.id,
-      before: cell.before,
-      next: cell.after,
+      before: appliedCell ? appliedCell.before : cell.before,
+      next: appliedCell ? appliedCell.after : cell.after,
+      ...(skipped ? { editable: false } : {}),
     });
   }
   return changes;
@@ -101,7 +117,8 @@ export function buildCellChanges(
 /**
  * Runs the pre-commit gate against a mutation. Returns the mutation to apply
  * (with any host-replaced values) or `undefined` when the host rejected it.
- * Mutations without cell changes bypass the gate.
+ * Mutations with neither applied cells nor an intended target set bypass the
+ * gate.
  */
 export function resolveBeforeCellsChange(
   hook: SpreadsheetBeforeCellsChange | undefined,
@@ -109,13 +126,17 @@ export function resolveBeforeCellsChange(
   source: SpreadsheetMutationSource,
   header?: BeforeCellsChangeHeader,
 ): GridMutation | undefined {
-  if (!hook || mutation.cells.length === 0) return mutation;
+  if (!hook || (mutation.cells.length === 0 && (mutation.intended?.length ?? 0) === 0)) return mutation;
   const changes = buildCellChanges(mutation, header);
   if (hook(changes, source) === false) return undefined;
-  const nextByAddress = new Map(changes.map((change) => [change.address, change.next]));
+  // Host replacements only take effect for cells the grid will actually write;
+  // an intended-only (non-editable) target can be vetoed but never written.
+  const nextByAddress = new Map(mutation.cells.map((cell) => [cell.address, cell.after]));
+  for (const change of changes) {
+    if (nextByAddress.has(change.address)) nextByAddress.set(change.address, change.next);
+  }
   let changed = false;
   const cells = mutation.cells.map((cell) => {
-    if (!nextByAddress.has(cell.address)) return cell;
     const next = nextByAddress.get(cell.address);
     if (next === cell.after) return cell;
     changed = true;

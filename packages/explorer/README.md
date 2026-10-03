@@ -35,9 +35,9 @@ units (`spec.xUnit`/`spec.yUnit`). Colours are theme variables only, so load
 components if you need the numbers, and `describeFigure` produces the
 screen-reader description.
 
-### Bar, box and heatmap figures
+### Bar, box, heatmap, histogram and violin figures
 
-`kind` selects three further primitives on the same `Chart`/`buildFigure`:
+`kind` selects five further primitives on the same `Chart`/`buildFigure`:
 
 - **`bar`** — a categorical `x` axis. `barLayout: 'grouped'` sets sibling
   series side by side within the category band, `'stacked'` stacks them on an
@@ -53,18 +53,31 @@ screen-reader description.
   when no `size` is given. Cells use a discrete five-step sequential scale
   mixed from the theme's series hue over the surface — never a literal, and
   stepped rather than a gradient — legended with the data range's ends.
+- **`histogram`** — a bin primitive: `x` (falling back to `y`) is the numeric
+  measure and is split into equal-width bins over the observed range.
+  `histogramBinWidth` sets an explicit width (wins over `histogramBins`);
+  otherwise `histogramBins` fixes the count and a non-positive value falls back
+  to Sturges' rule. Bars land on a numeric `x` axis and count per bin, or plot
+  a probability density when `histogramDensity` is set. A series field
+  (`group`/`color`) shares the bin edges and groups (`barLayout: 'grouped'`) or
+  stacks (`'stacked'`) the bars.
+- **`violin`** — a density primitive: the Gaussian KDE of `y` per category
+  (`x`, or the series field when no `x` is given) and series, drawn as a closed
+  density profile on a band axis with the design's box overlay (five-number
+  summary + Tukey whiskers) on the same band. `violinBandwidth` sets the KDE
+  bandwidth; Silverman's rule-of-thumb is used otherwise.
 
-The marks land on the model (`bars`, `boxes`, `heat`) together with a
-`scaleLegend` for a heatmap, so a host can assert or restyle them.
-`bandScale`, `boxSummary`, `heatmapColour` and `HEATMAP_SCALE_STEPS` expose the
-band geometry and the scale directly. Shared-x stacks are numeric-only, so
-`buildFigureGroup` returns `null` when an entry is one of these categorical
-kinds.
+The marks land on the model (`bars` + `bins`, `boxes`, `heat`, `violins`)
+together with a `scaleLegend` for a heatmap, so a host can assert or restyle
+them. `bandScale`, `boxSummary`, `heatmapColour`, `HEATMAP_SCALE_STEPS`,
+`binEdges`, `kde` and `kdeBandwidth` expose the band geometry, the colour scale
+and the distribution maths directly. Shared-x stacks are numeric-only, so
+`buildFigureGroup` returns `null` when an entry is one of these categorical or
+distribution kinds.
 
 The v3 design screens (`Analysis`, `ExpResults`) define line and point charts;
-bar, box and heatmap are the primitives the ELN's chart specs additionally
-need, rendered to the same v3 chart rules. The design defines no violin or
-summary/interval primitive, so none is provided.
+bar, box, heatmap, histogram and violin are the primitives the ELN's chart
+specs additionally need, rendered to the same v3 chart rules.
 
 ## Field-role panel (COMP-03.4)
 

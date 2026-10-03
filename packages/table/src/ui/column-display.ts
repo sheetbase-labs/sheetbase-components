@@ -1,4 +1,5 @@
 import type { CellFormat } from "../engine/types";
+import type { CellDataType } from "../grid/model";
 
 /**
  * Declarative per-column display defaults, sourced from
@@ -41,6 +42,20 @@ export function columnDisplayDefaults(fields: readonly ColumnDisplayField[]): re
  */
 const currencyFormat = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const percentFormat = new Intl.NumberFormat("en-GB", { style: "percent", maximumFractionDigits: 2 });
+
+/**
+ * The state a boolean-typed column's cell should paint: `true`/`false` for the
+ * stored literal, or `undefined` when the cell carries no boolean (empty, a
+ * free-text column, a host `displayText` label). Empty cells stay blank rather
+ * than painting an unchecked box in every unused row.
+ */
+export function booleanCellValue(dataType: CellDataType | undefined, value: string): boolean | undefined {
+  if (dataType !== "boolean") return undefined;
+  const normalized = value.trim().toLocaleLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return undefined;
+}
 
 export function formatCellDisplay(
   calculated: string,

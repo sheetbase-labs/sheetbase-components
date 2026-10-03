@@ -28,6 +28,11 @@ export interface GridCellProps {
   column: number;
   /** Formatted display text (the `value` the cell paints). */
   display: string;
+  /**
+   * Boolean state for a `boolean`-typed column: paints a checkbox mark instead
+   * of the literal text. Undefined keeps the plain text rendering.
+   */
+  booleanValue?: boolean;
   /** Whether the raw input is a formula (drives the `formula-value` class). */
   isFormula: boolean;
   selected: boolean;
@@ -73,7 +78,7 @@ function sameFormat(a?: Partial<CellFormat>, b?: Partial<CellFormat>): boolean {
  * memo is not defeated by fresh closures each parent render.
  */
 export const GridCell = memo(function GridCell(props: GridCellProps) {
-  const { address, row, column, display, isFormula, selected, active, loading, className, title, format, field, overflow, writeState, cellState, renderCell, handlers, left, top, width, height } = props;
+  const { address, row, column, display, booleanValue, isFormula, selected, active, loading, className, title, format, field, overflow, writeState, cellState, renderCell, handlers, left, top, width, height } = props;
   const point: GridPoint = { row, column };
   const context: SpreadsheetCellRenderContext = { address, point, display, field, selected, active, loading };
   const stateTitle = cellState?.state === "diff" ? diffText(cellState) : cellStateLabel(cellState);
@@ -107,10 +112,15 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       {loading ? <span className="loading-placeholder" /> : cellState?.state === "diff" ? <span className="cell-diff">
         {cellState.before !== undefined && <del>{cellState.before}</del>}
         <ins>{cellState.after}</ins>
-      </span> : renderCell?.(context) ?? <span
+      </span> : renderCell?.(context) ?? (booleanValue === undefined ? <span
         className={`${isFormula ? "formula-value" : ""}${display.includes("\n") ? " multiline" : ""}`}
         style={overflow ? { marginLeft: -overflow.left, maxWidth: `calc(100% + ${overflow.left + overflow.right}px)`, textOverflow: "clip" } : undefined}
-      >{display}</span>}
+      >{display}</span> : <span
+        className="cell-boolean"
+        data-boolean={booleanValue ? "true" : "false"}
+        role="img"
+        aria-label={booleanValue ? "True" : "False"}
+      >{booleanValue ? "✓" : ""}</span>)}
       {writeState && <button type="button" className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handlers.current?.badgeClick(address, writeState, event)} />}
     </div>
   );
@@ -119,6 +129,7 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
   && prev.row === next.row
   && prev.column === next.column
   && prev.display === next.display
+  && prev.booleanValue === next.booleanValue
   && prev.isFormula === next.isFormula
   && prev.selected === next.selected
   && prev.active === next.active

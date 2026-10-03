@@ -13,6 +13,10 @@ import {
 
 const mutation = (cells: GridMutation["cells"]): GridMutation => ({ label: "Edit cell", cells, columnWidths: [] });
 
+/** A bulk mutation: the applied cells plus the operation's full target set. */
+const bulk = (intended: GridMutation["intended"], cells: GridMutation["cells"]): GridMutation =>
+  ({ label: "Paste range", cells, intended, columnWidths: [] });
+
 const header = {
   recordIdForRow: (row: number) => `rec-${row}`,
   fields: [
@@ -70,6 +74,55 @@ describe("beforeCellsChange pre-commit gate", () => {
     expect(buildCellChanges(mutation([{ address: "C3", after: "9" }]), header)).toEqual([
       { address: "C3", row: 2, column: 2, recordId: "rec-2", fieldId: undefined, before: undefined, next: "9" },
     ]);
+  });
+});
+
+describe("intended target set (whole-operation veto)", () => {
+  const targets: GridMutation["intended"] = [
+    { address: "B2", before: "1", after: "2" },
+    { address: "B3", before: undefined, after: "3" },
+  ];
+
+  it("reports a target the grid will skip as editable: false", () => {
+    const input = bulk(targets, [{ address: "B2", before: "1", after: "2" }]);
+    expect(buildCellChanges(input, header)).toEqual([
+      { address: "B2", row: 1, column: 1, recordId: "rec-1", fieldId: "amount", before: "1", next: "2" },
+      { address: "B3", row: 2, column: 1, recordId: "rec-2", fieldId: "amount", before: undefined, next: "3", editable: false },
+    ]);
+  });
+
+  it("gates a target set that applies no cells and rejects it as a whole", () => {
+    const hook = vi.fn(() => false);
+    const input = bulk([{ address: "B2", before: "1", after: "2" }], []);
+    expect(resolveBeforeCellsChange(hook, input, "clear", header)).toBeUndefined();
+    expect(hook).toHaveBeenCalledOnce();
+  });
+
+  it("lets the host veto a bulk operation because of a skip-only target", () => {
+    const input = bulk(targets, [{ address: "B2", before: "1", after: "2" }]);
+    const seen: unknown[] = [];
+    const rejected = resolveBeforeCellsChange((changes, source) => {
+      seen.push([source, changes]);
+      return changes.every((change) => change.editable !== false);
+    }, input, "paste", header);
+    expect(rejected).toBeUndefined();
+    expect(seen).toHaveLength(1);
+  });
+
+  it("applies host value replacements to the writable subset only", () => {
+    const input = bulk(targets, [{ address: "B2", before: "1", after: "2" }]);
+    const result = resolveBeforeCellsChange((changes) => {
+      changes[0].next = "20";
+      changes[1].next = "30";
+    }, input, "paste", header);
+    expect(result?.cells).toEqual([{ address: "B2", before: "1", after: "20" }]);
+  });
+
+  it("bypasses the gate when a mutation carries neither cells nor targets", () => {
+    const hook = vi.fn();
+    const input = bulk(undefined, []);
+    expect(resolveBeforeCellsChange(hook, input, "sort", header)).toBe(input);
+    expect(hook).not.toHaveBeenCalled();
   });
 });
 
