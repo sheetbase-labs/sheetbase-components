@@ -14,7 +14,7 @@
  * as inline styles, which — unlike presentation attributes — resolve `var()`.
  */
 import { ROW_ID, preparedRows, visibleRows } from './explore'
-import type { ChartKind, ChartSpec, DataRow, Dataset, ScaleKind } from './types'
+import type { ChartKind, ChartSpec, DataRow, Dataset, FigureMetrics, ScaleKind } from './types'
 
 export type FigureMarker = 'circle' | 'square' | 'triangle'
 
@@ -108,6 +108,59 @@ export const FIGURE_LAYOUT = {
   offScaleLabelDx: 12,
   offScaleLabelDy: 10,
 } as const
+
+/**
+ * Canonical figure metrics: the design's own text, marker and stroke sizes
+ * (canvas/Analysis.dc.html, Notebook.dc.html Figure 1). `spec.metrics`
+ * overrides any of them per figure; the defaults are exactly `FIGURE_LAYOUT`.
+ */
+export const DEFAULT_FIGURE_METRICS = {
+  fontSize: FIGURE_LAYOUT.fontSize,
+  labelFontSize: FIGURE_LAYOUT.fontSize,
+  markerSize: FIGURE_LAYOUT.markerSize,
+  lineWidth: FIGURE_LAYOUT.lineWidth,
+  strokeWidth: FIGURE_LAYOUT.strokeWidth,
+  refStrokeWidth: 1,
+} as const
+
+/** A figure's resolved metrics — every field a concrete number. */
+export interface ResolvedFigureMetrics {
+  fontSize: number
+  labelFontSize: number
+  markerSize: number
+  lineWidth: number
+  strokeWidth: number
+  refStrokeWidth: number
+  /** Triangle marker geometry, scaled from `markerSize` (4.5 / −5 / 8 at 4). */
+  triangleHalf: number
+  triangleApexDy: number
+  triangleHeight: number
+}
+
+function positiveMetric(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+/**
+ * Resolve a spec's `metrics` against the canonical defaults. A non-positive or
+ * non-finite override falls back to the default, so a bad spec never renders a
+ * zero-size figure; the triangle marker scales with `markerSize`.
+ */
+export function resolveFigureMetrics(metrics?: FigureMetrics): ResolvedFigureMetrics {
+  const markerSize = positiveMetric(metrics?.markerSize, DEFAULT_FIGURE_METRICS.markerSize)
+  const fontSize = positiveMetric(metrics?.fontSize, DEFAULT_FIGURE_METRICS.fontSize)
+  return {
+    fontSize,
+    labelFontSize: positiveMetric(metrics?.labelFontSize, fontSize),
+    markerSize,
+    lineWidth: positiveMetric(metrics?.lineWidth, DEFAULT_FIGURE_METRICS.lineWidth),
+    strokeWidth: positiveMetric(metrics?.strokeWidth, DEFAULT_FIGURE_METRICS.strokeWidth),
+    refStrokeWidth: positiveMetric(metrics?.refStrokeWidth, DEFAULT_FIGURE_METRICS.refStrokeWidth),
+    triangleHalf: markerSize * 1.125,
+    triangleApexDy: -markerSize * 1.25,
+    triangleHeight: markerSize * 2,
+  }
+}
 
 export interface FigureBox {
   x: number
@@ -384,7 +437,15 @@ export interface FigureModel {
   violins?: FigureViolin[]
   /** Discrete colour-scale legend for a heatmap. */
   scaleLegend?: FigureScaleLegend
+  /**
+   * Resolved sizing the renderer draws with, from `spec.metrics` — always
+   * present so `FigureSvg` needs no fallback.
+   */
+  metrics: ResolvedFigureMetrics
 }
+
+/** A built figure's geometry before its resolved metrics are attached. */
+type FigureGeometry = Omit<FigureModel, 'metrics'>
 
 export interface FigureOptions {
   /** Figure units (SVG viewBox). Defaults to the design's 844×262. */
@@ -848,7 +909,7 @@ function numericYAxis(spec: ChartSpec, yField: string, domain: readonly [number,
  * Reference lines for a mark. A band x axis has no numeric x scale, so only
  * y-axis lines are placed for the categorical kinds.
  */
-function markRefLines(spec: ChartSpec, xScale: Scale | undefined, yScale: Scale, plot: FigureBox): FigureReferenceLine[] {
+function markRefLines(spec: ChartSpec, metrics: ResolvedFigureMetrics, xScale: Scale | undefined, yScale: Scale, plot: FigureBox): FigureReferenceLine[] {
   const refLines: FigureReferenceLine[] = []
   for (const line of spec.refLines ?? []) {
     const text = referenceText(line.label, line.value, line.unit)
@@ -858,7 +919,7 @@ function markRefLines(spec: ChartSpec, xScale: Scale | undefined, yScale: Scale,
       refLines.push({
         id: line.id, axis: 'x', value: line.value, text,
         x1: px, y1: plot.y, x2: px, y2: plot.y + plot.height,
-        labelX: px, labelY: plot.y + FIGURE_LAYOUT.fontSize,
+        labelX: px, labelY: plot.y + metrics.fontSize,
       })
     } else {
       const py = yScale(line.value)
@@ -889,6 +950,11 @@ function figureRows(dataset: Dataset, spec: ChartSpec): DataRow[] | null {
 
 /** Core builder over pre-pipelined rows, shared by `buildFigure` and the group. */
 function buildFigureFromRows(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+  const figure = buildFigureGeometry(rows, spec, options)
+  return figure ? { ...figure, metrics: resolveFigureMetrics(spec.metrics) } : null
+}
+
+function buildFigureGeometry(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   if (spec.kind === 'histogram') return buildHistogramFigure(rows, spec, options)
   if (spec.kind === 'violin') return buildViolinFigure(rows, spec, options)
 
@@ -901,6 +967,7 @@ function buildFigureFromRows(rows: DataRow[], spec: ChartSpec, options: FigureOp
   if (spec.kind === 'heatmap') return buildHeatmapFigure(rows, spec, options)
 
   const { width, height, plot } = figureFrame(options)
+  const metrics = resolveFigureMetrics(spec.metrics)
 
   const xDomain = options.sharedX?.domain ?? figureDomain(spec.xMin, spec.xMax, fieldExtent(rows, xField))
   const yDomain = figureDomain(spec.yMin, spec.yMax, fieldExtent(rows, yField))
@@ -1003,7 +1070,7 @@ function buildFigureFromRows(rows: DataRow[], spec: ChartSpec, options: FigureOp
       refLines.push({
         id: line.id, axis: 'x', value: line.value, text,
         x1: px, y1: plot.y, x2: px, y2: plot.y + plot.height,
-        labelX: px, labelY: plot.y + FIGURE_LAYOUT.fontSize,
+        labelX: px, labelY: plot.y + metrics.fontSize,
       })
     } else {
       const py = yScale(line.value)
@@ -1038,7 +1105,7 @@ function buildFigureFromRows(rows: DataRow[], spec: ChartSpec, options: FigureOp
  * `barLayout` groups sibling series side by side, or stacks/normalises them
  * within the band; bars rise from a zero baseline.
  */
-function buildBarFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+function buildBarFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   const xField = spec.x
   const yField = spec.y
   if (!xField || !yField) return null
@@ -1185,7 +1252,7 @@ function buildBarFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions
     y,
     gridlines,
     series: [],
-    refLines: markRefLines(spec, undefined, yScale, plot),
+    refLines: markRefLines(spec, resolveFigureMetrics(spec.metrics), undefined, yScale, plot),
     legend,
     bars,
     xTitle: options.showXAxisTitle === false ? '' : x.title,
@@ -1247,7 +1314,7 @@ export function boxSummary(values: number[]): FigureBoxSummary {
  * (and series), with the points beyond the whiskers kept as outliers. The
  * design's spread display is opt-in through `spec.showPoints`.
  */
-function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   const xField = spec.x
   const yField = spec.y
   if (!xField || !yField) return null
@@ -1269,7 +1336,7 @@ function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions
   }))
   const drawnGroups = seriesField ? seriesGroups : seriesGroups.slice(0, 1)
   const slots = drawnGroups.length
-  const gap = Math.max(0, spec.barGap) + FIGURE_LAYOUT.strokeWidth
+  const gap = Math.max(0, spec.barGap) + resolveFigureMetrics(spec.metrics).strokeWidth
   const low = plot.y
   const high = plot.y + plot.height
   const boxes: FigureBoxPlot[] = []
@@ -1336,7 +1403,7 @@ function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions
     y,
     gridlines,
     series: [],
-    refLines: markRefLines(spec, undefined, yScale, plot),
+    refLines: markRefLines(spec, resolveFigureMetrics(spec.metrics), undefined, yScale, plot),
     legend,
     boxes,
     xTitle: options.showXAxisTitle === false ? '' : x.title,
@@ -1352,7 +1419,7 @@ function buildBoxFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions
  * `histogramDensity` plots a probability density rather than counts. A series
  * field (`group`/`color`) shares the bin edges and groups or stacks the bars.
  */
-function buildHistogramFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+function buildHistogramFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   const valueField = spec.x ?? spec.y
   if (!valueField) return null
 
@@ -1489,7 +1556,7 @@ function buildHistogramFigure(rows: DataRow[], spec: ChartSpec, options: FigureO
     y,
     gridlines,
     series: [],
-    refLines: markRefLines(spec, xScale, yScale, plot),
+    refLines: markRefLines(spec, resolveFigureMetrics(spec.metrics), xScale, yScale, plot),
     legend,
     bars,
     bins,
@@ -1507,7 +1574,7 @@ function buildHistogramFigure(rows: DataRow[], spec: ChartSpec, options: FigureO
  * category. `violinBandwidth` sets the KDE bandwidth; it is Silverman's
  * rule-of-thumb otherwise.
  */
-function buildViolinFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+function buildViolinFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   const yField = spec.y
   if (!yField) return null
 
@@ -1570,7 +1637,7 @@ function buildViolinFigure(rows: DataRow[], spec: ChartSpec, options: FigureOpti
   if (!(maxDensity > 0)) maxDensity = 1
 
   const slots = drawnGroups.length
-  const gap = Math.max(0, spec.barGap) + FIGURE_LAYOUT.strokeWidth
+  const gap = Math.max(0, spec.barGap) + resolveFigureMetrics(spec.metrics).strokeWidth
   const violins: FigureViolin[] = buckets.map((bucket, bucketIndex) => {
     const slot = slotFor(band, bucket.position, bucket.seriesIndex, slots, gap)
     const style = seriesStyle(effectiveSeries ? bucket.seriesIndex : 0)
@@ -1622,7 +1689,7 @@ function buildViolinFigure(rows: DataRow[], spec: ChartSpec, options: FigureOpti
     y,
     gridlines,
     series: [],
-    refLines: markRefLines(spec, undefined, yScale, plot),
+    refLines: markRefLines(spec, resolveFigureMetrics(spec.metrics), undefined, yScale, plot),
     legend,
     violins,
     xTitle: options.showXAxisTitle === false ? '' : x.title,
@@ -1647,7 +1714,7 @@ interface HeatmapBucket {
  * sum) or the row count without one. The colour is the discrete, themed
  * sequential scale above.
  */
-function buildHeatmapFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureModel | null {
+function buildHeatmapFigure(rows: DataRow[], spec: ChartSpec, options: FigureOptions): FigureGeometry | null {
   const xField = spec.x
   const yField = spec.y
   if (!xField || !yField) return null

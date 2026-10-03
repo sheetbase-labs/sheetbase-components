@@ -116,6 +116,28 @@ export interface FilterRule {
   values?: string[]
 }
 
+/**
+ * Per-figure sizing overrides, in figure (viewBox) units, for a host that
+ * authors a design screen at a different scale than the canonical 844×262
+ * figure (the ELN's Analysis canvas sizes its text, markers and strokes for a
+ * 0.758 display scale). Every field defaults to the canonical design value, so
+ * omitting `metrics` leaves the figure unchanged.
+ */
+export interface FigureMetrics {
+  /** Text size for tick labels, axis titles and the legend. Default 11. */
+  fontSize?: number
+  /** Text size for data labels (excluded/off-scale, bar and heat). Defaults to `fontSize`. */
+  labelFontSize?: number
+  /** Marker radius / half-size for points and hollow excluded markers. Default 4. */
+  markerSize?: number
+  /** Stroke width for series lines. Default 1.6. */
+  lineWidth?: number
+  /** Stroke width for marker outlines and box/violin strokes. Default 1.4. */
+  strokeWidth?: number
+  /** Stroke width for dashed reference lines. Default 1. */
+  refStrokeWidth?: number
+}
+
 export interface ChartSpec {
   kind: ChartKind
   x?: string
@@ -194,6 +216,11 @@ export interface ChartSpec {
   categoryOrder?: 'auto' | 'value-asc' | 'value-desc' | 'label-asc'
   /** Second numeric measure, drawn as a line on a right-hand y axis. */
   y2?: string
+  /**
+   * Standalone-figure sizing overrides (`Chart`/`buildFigure`); omitted, the
+   * figure uses the design's canonical metrics.
+   */
+  metrics?: FigureMetrics
 }
 
 export interface SavedExploration {

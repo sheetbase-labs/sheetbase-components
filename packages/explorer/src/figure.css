@@ -2,15 +2,17 @@
    Every colour is a theme variable (COMP-01) — load themes/v3.css under a
    `.sheetbase-scope` to retheme these. */
 
-.sb-figure-frame { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* `--sb-figure-font-size` is set inline from `spec.metrics.fontSize`; the
+   theme's meta size is the fallback for a frame mounted without metrics. */
+.sb-figure-frame { --sb-figure-font-size: var(--meta-size); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .sb-figure { display: block; max-width: 100%; height: auto; }
 .sb-figure text { font-family: var(--font-sans); }
-.sb-figure-legend { display: flex; align-items: center; gap: 14px; font-size: var(--meta-size); color: var(--text); }
+.sb-figure-legend { display: flex; align-items: center; gap: 14px; font-size: var(--sb-figure-font-size); color: var(--text); }
 .sb-figure-legend__item { display: inline-flex; align-items: center; gap: 5px; }
 .sb-figure-legend__item svg { flex: 0 0 auto; }
 
 /* Heatmap colour-scale legend: discrete swatches plus the range's ends. */
-.sb-figure-scale { display: flex; align-items: center; gap: 6px; font-size: var(--meta-size); color: var(--muted); }
+.sb-figure-scale { display: flex; align-items: center; gap: 6px; font-size: var(--sb-figure-font-size); color: var(--muted); }
 .sb-figure-scale__label { color: var(--text); }
 .sb-figure-scale__swatches { display: inline-flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
 .sb-figure-scale__swatch { display: block; width: 16px; height: 10px; }

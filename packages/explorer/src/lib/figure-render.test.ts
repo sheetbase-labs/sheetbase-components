@@ -60,4 +60,21 @@ describe('distribution figures render', () => {
     expect(markup.match(/<rect/g)?.length).toBe(2)
     expect(markup).toContain('aria-label="Violin plot of Yield against Train, 8 rows"')
   })
+
+  it('draws the resolved metrics for text, markers and series strokes', () => {
+    const metrics = { fontSize: 15, labelFontSize: 14, markerSize: 5, lineWidth: 1.8, strokeWidth: 1.6 }
+    const scaled = buildFigure(violinDataset, spec({ kind: 'line', x: 'Yield', y: 'Yield', metrics }))
+    if (!scaled) throw new Error('the line figure should build')
+    const scaledMarkup = renderToStaticMarkup(FigureSvg({ figure: scaled }))
+    expect(scaledMarkup).toContain('stroke-width="1.8"')
+    expect(scaledMarkup).toContain('r="5"')
+    expect(scaledMarkup).toContain('font-size:15px')
+
+    const plain = buildFigure(violinDataset, spec({ kind: 'line', x: 'Yield', y: 'Yield' }))
+    if (!plain) throw new Error('the line figure should build')
+    const plainMarkup = renderToStaticMarkup(FigureSvg({ figure: plain }))
+    expect(plainMarkup).toContain('stroke-width="1.6"')
+    expect(plainMarkup).toContain('r="4"')
+    expect(plainMarkup).toContain('font-size:11px')
+  })
 })

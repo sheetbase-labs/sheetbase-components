@@ -301,6 +301,63 @@ describe('labels', () => {
   })
 })
 
+describe('figure metrics', () => {
+  it('defaults to the design canonical metrics', () => {
+    const figure = buildFigure(dataset, turbidity, turbidityOptions)
+    if (!figure) throw new Error('the turbidity figure should build')
+    expect(figure.metrics).toEqual({
+      fontSize: 11, labelFontSize: 11, markerSize: 4, lineWidth: 1.6, strokeWidth: 1.4, refStrokeWidth: 1,
+      triangleHalf: 4.5, triangleApexDy: -5, triangleHeight: 8,
+    })
+  })
+
+  it('leaves the figure unchanged when metrics is absent or empty', () => {
+    const plain = buildFigure(dataset, turbidity, turbidityOptions)
+    const explicit = buildFigure(dataset, { ...turbidity, metrics: {} }, turbidityOptions)
+    expect(explicit).toEqual(plain)
+  })
+
+  it('emits a larger metric set with the triangle marker scaled to it', () => {
+    const figure = buildFigure(dataset, {
+      ...turbidity,
+      metrics: { fontSize: 15, labelFontSize: 14, markerSize: 5, lineWidth: 1.8, strokeWidth: 1.6 },
+    }, turbidityOptions)
+    if (!figure) throw new Error('the turbidity figure should build')
+    expect(figure.metrics).toEqual({
+      fontSize: 15, labelFontSize: 14, markerSize: 5, lineWidth: 1.8, strokeWidth: 1.6, refStrokeWidth: 1,
+      triangleHalf: 5.625, triangleApexDy: -6.25, triangleHeight: 10,
+    })
+  })
+
+  it('moves the x reference-line label with the text-size override', () => {
+    const lineSpec = spec({
+      x: 'Load', y: 'StepYield', xMin: 25, xMax: 175, yMin: 60, yMax: 95,
+      refLines: [{ id: 'design', axis: 'x', value: 100, label: 'Design point' }],
+    })
+    const base = buildFigure(dataset, lineSpec)
+    const large = buildFigure(dataset, { ...lineSpec, metrics: { fontSize: 15 } })
+    if (!base || !large) throw new Error('the reference-line figure should build')
+    expect(base.refLines[0]?.labelY).toBe(20 + 11)
+    expect(large.refLines[0]?.labelY).toBe(20 + 15)
+  })
+
+  it('keeps the canonical values when an override is non-positive', () => {
+    const figure = buildFigure(dataset, { ...turbidity, metrics: { fontSize: 0, markerSize: Number.NaN } }, turbidityOptions)
+    if (!figure) throw new Error('the turbidity figure should build')
+    expect(figure.metrics.fontSize).toBe(11)
+    expect(figure.metrics.markerSize).toBe(4)
+    expect(figure.metrics.labelFontSize).toBe(11)
+  })
+
+  it('changes box geometry with the stroke-width override', () => {
+    const boxSpec = spec({ kind: 'box', x: 'Condition', y: 'StepYield', group: 'Train' })
+    const base = buildFigure(dataset, boxSpec)
+    const wide = buildFigure(dataset, { ...boxSpec, metrics: { strokeWidth: 1.8 } })
+    if (!base || !wide) throw new Error('the box figure should build')
+    expect(wide.boxes?.[0]?.width).not.toBe(base.boxes?.[0]?.width)
+  })
+})
+
 describe('field roles', () => {
   it('reads the assignment out of a spec and writes it back', () => {
     const assigned = specWithRole(stepYield, 'series', 'Train')

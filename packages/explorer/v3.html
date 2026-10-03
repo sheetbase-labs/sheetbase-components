@@ -4,19 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sheetbase v3 chart fixture</title>
-    <!-- The design canvas loads these (canvas/*.dc.html <helmet>); the crop is
-         only comparable if the fixture renders with the same faces. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
+    <!-- The design renders resolve the canvas's `Inter, sans-serif` to the
+         generic `sans-serif` (Helvetica), so the fixture pins `sans-serif`
+         (src/v3-fixture.tsx) and loads no webfont. -->
     <style>
       html,
       body {
         margin: 0;
         padding: 0;
+      }
+      /* Analysis chart 2 is authored in an 844×196 viewBox but displayed in a
+         640×149 box, so the browser scales the same viewBox by 640/844 — the
+         design render scales it identically. Override the SVG's natural
+         width/height attributes to that display box. */
+      .fixture-turbidity {
+        width: 640px;
+      }
+      .fixture-turbidity .sb-figure {
+        width: 640px;
+        height: 149px;
       }
     </style>
   </head>

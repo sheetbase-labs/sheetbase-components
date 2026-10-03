@@ -1,26 +1,56 @@
 /**
- * COMP-03 visual fixture (exit): the Notebook Figure 1 step-yield chart rendered
- * from the design fixture under `themes/v3.css`, compared with a crop of
- * `Notebook-{light,dark}.png`.
+ * COMP-03 visual fixture (exit): the design's step-yield and turbidity figures
+ * rendered from the design fixture under `themes/v3.css`, compared with crops
+ * of the ELN design renders.
  *
- * Crop box (Notebook renders, 1440×1840, scale 1): x=264 y=1134 w=844 h=262 —
- * the chart SVG's own box. Plot 56,20 → 824,220; the figure title and legend sit
- * above it and are not part of the `Chart` figure.
+ * Crop boxes (design renders, scale 1), both the SVG's own display box:
+ * - step-yield (Notebook renders, 1440×1840): x=264 y=1134 w=844 h=262. The
+ *   Notebook canvas draws Figure 1 at its natural 844×262 size.
+ * - turbidity (Analysis renders, 1440×1000): x=482 y=383 w=640 h=149. The
+ *   Analysis canvas authors chart 2 in an 844×196 viewBox (`plot 56,20 → 824,160`)
+ *   but displays it in a 640×149 box, so the browser scales the viewBox by
+ *   640/844 = 0.758 — as does the fixture (src/v3-fixture.tsx, CSS-sized to the
+ *   same box; verified: axis/plot land on the same rows and columns).
+ *
+ * Font: the canvases ask for `Inter, sans-serif`; the design render resolves
+ * that to the generic `sans-serif` (Helvetica in the render's Chromium), so both
+ * fixtures pin `sans-serif` (src/v3-fixture.tsx, v3.html) and load no webfont.
+ * On the step-yield crop this is 0.44% vs 1.21% for `system-ui`.
+ *
+ * Turbidity metrics: the Analysis canvas sizes text/markers/strokes for the
+ * 0.758 display scale (text 15/14 viewBox units, markers r5, series stroke 1.8)
+ * rather than the canonical figure metrics (11, r4, 1.6), so the fixture passes
+ * the matching `spec.metrics` overlay and the figure reproduces the crop.
  */
 import { expect, test } from "@playwright/test";
 import { compareToCrop } from "../../../e2e/visual-compare";
 
 const cropUrl = (name: string) => new URL(`../../../e2e/fixtures/v3/${name}`, import.meta.url).pathname;
 
+const charts = [
+  { name: "step-yield", chart: "step-yield", fixture: "notebook-step-yield" },
+  { name: "turbidity", chart: "turbidity", fixture: "analysis-turbidity" },
+] as const;
+
 for (const theme of ["light", "dark"] as const) {
-  test(`step-yield chart matches the Notebook Figure 1 crop (${theme})`, async ({ page }) => {
-    await page.goto(`/v3.html?theme=${theme}`, { waitUntil: "networkidle" });
-    await page.evaluate(() => document.fonts.ready);
-    const svg = page.locator(".sb-figure").first();
-    await expect(svg).toBeVisible();
-    const result = await compareToCrop(page, svg, cropUrl(`notebook-step-yield-${theme}.png`), {
-      diffPath: `test-results/v3/step-yield-${theme}.diff.png`,
+  for (const { name, chart, fixture } of charts) {
+    test(`${name} chart matches the design crop (${theme})`, async ({ page }) => {
+      await page.goto(`/v3.html?theme=${theme}&chart=${chart}`, { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      const svg = page.locator(".sb-figure").first();
+      await expect(svg).toBeVisible();
+      try {
+        const result = await compareToCrop(page, svg, cropUrl(`${fixture}-${theme}.png`), {
+          diffPath: `test-results/v3/${name}-${theme}.diff.png`,
+        });
+        console.log(
+          `[v3-chart] ${name} ${theme}: ${result.differing}/${result.total} px differ (${(result.ratio * 100).toFixed(3)}%)`,
+        );
+      } catch (error) {
+        // Keep the measured delta visible in the report.
+        console.log(`[v3-chart] ${name} ${theme}: ${(error as Error).message}`);
+        throw error;
+      }
     });
-    console.log(`[v3-chart] ${theme}: ${result.differing}/${result.total} px differ (${(result.ratio * 100).toFixed(3)}%)`);
-  });
+  }
 }

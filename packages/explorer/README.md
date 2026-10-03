@@ -35,6 +35,37 @@ units (`spec.xUnit`/`spec.yUnit`). Colours are theme variables only, so load
 components if you need the numbers, and `describeFigure` produces the
 screen-reader description.
 
+### Figure sizing (`spec.metrics`)
+
+A host that authors a design screen at a different scale than the canonical
+844×262 figure — the ELN's Analysis canvas sizes its text, markers and strokes
+for a 0.758 display scale — passes a `metrics` group on the spec. Every field
+is optional and defaults to the design's own value, so omitting `metrics`
+leaves the figure unchanged.
+
+```ts
+const turbiditySpec: ChartSpec = {
+  // …mapping, refLines, excludeField…
+  metrics: {
+    fontSize: 15, // tick labels, axis titles, legend        (default 11)
+    labelFontSize: 14, // data labels: excluded/off-scale, bar, heat (default = fontSize)
+    markerSize: 5, // marker radius / half-size              (default 4)
+    lineWidth: 1.8, // series polylines                       (default 1.6)
+    strokeWidth: 1.6, // marker outlines, box/violin strokes    (default 1.4)
+    refStrokeWidth: 1, // dashed reference lines                (default 1)
+  },
+}
+```
+
+The resolved numbers land on the model as `figure.metrics` (including the
+triangle marker's `triangleHalf`/`triangleHeight`/`triangleApexDy`, scaled from
+`markerSize`), and both the SVG and the legend/scale text draw from them —
+`Chart` sets `--sb-figure-font-size` on the figure frame for `figure.css`.
+`resolveFigureMetrics` and `DEFAULT_FIGURE_METRICS` expose the resolution if
+you build or inspect a model directly. The axis offset constants (`tickOffset`,
+`titleOffset`, `tickGap`, `yTickBaseline`, `yTitleX`) are fixed layout values:
+a text-size override scales the glyphs but does not move their baselines.
+
 ### Bar, box, heatmap, histogram and violin figures
 
 `kind` selects five further primitives on the same `Chart`/`buildFigure`:
