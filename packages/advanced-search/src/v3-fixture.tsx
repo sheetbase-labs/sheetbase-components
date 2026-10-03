@@ -35,7 +35,19 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <div
       className="sheetbase-scope"
       data-theme={theme}
-      style={{ background: "var(--surface)", padding: 0, WebkitFontSmoothing: "antialiased" }}
+      style={
+        {
+          background: "var(--surface)",
+          padding: 0,
+          WebkitFontSmoothing: "antialiased",
+          // The design reference (sheetbase-eln/scripts/design-reference.mts)
+          // rasterises the popover text in the platform UI font, not the
+          // canvas's `Inter` — its fontsource `Inter` never reaches the string.
+          // The fixture pins `system-ui` so it matches the baseline render
+          // rather than a different Inter build.
+          "--font-sans": "system-ui, sans-serif",
+        } as React.CSSProperties
+      }
     >
       <FilterBuilder fields={fields} node={node} />
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useState, type Ref } from "react";
+import { useEffect, useImperativeHandle, useState, type ChangeEvent, type ReactNode, type Ref } from "react";
 import {
   compileToDatasetQuery,
   emptyCondition,
@@ -187,7 +187,8 @@ export function FilterBuilder({
           className="sb-btn subtle"
           onClick={() => commit(addCondition(draft, fields[0] ?? ""))}
         >
-          <span aria-hidden="true">+</span> Add condition
+          <Icon name="plus" />
+          Add condition
         </button>
         <span className="sb-filter-builder-spacer" />
         <button type="button" className="sb-btn" onClick={handleClear}>
@@ -198,6 +199,66 @@ export function FilterBuilder({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * A select rendered as the v3 design's trigger: a bordered box whose label and
+ * `▾` sit together, with the native `<select>` kept as a transparent overlay so
+ * the control stays a real, keyboard-accessible select. The design canvas uses
+ * a static `<div class="select">Status ▾</div>`; a native select would instead
+ * inset its label and draw its own platform chevron at the box's right edge.
+ */
+function BuilderSelect({
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: string;
+  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <span className="sb-filter-select">
+      <span className="sb-filter-select-value" aria-hidden="true">
+        {label} ▾
+      </span>
+      <select aria-label={ariaLabel} value={value} onChange={onChange}>
+        {children}
+      </select>
+    </span>
+  );
+}
+
+/**
+ * The design system's `Icon` (design-system/components/bundle.js): a 16×16
+ * viewBox stroked in `currentColor` at 1.4. `Button size="sm"` renders it at
+ * 12px, which is what the States canvas uses for the `plus` and `x` icons.
+ */
+const ICON_PATHS = {
+  plus: "M8 3v10M3 8h10",
+  x: "M4 4l8 8M12 4l-8 8",
+} as const;
+
+function Icon({ name, size = 12 }: { name: keyof typeof ICON_PATHS; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={ICON_PATHS[name]} />
+    </svg>
   );
 }
 
@@ -227,9 +288,10 @@ function BuilderRow({
   return (
     <div className={rowClass}>
       {fields.length > 0 ? (
-        <select
-          aria-label="Field"
+        <BuilderSelect
+          ariaLabel="Field"
           value={node.field}
+          label={fieldLabelOf(selected) || "field…"}
           onChange={(e) => {
             const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
             onPatch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
@@ -241,17 +303,22 @@ function BuilderRow({
               {fieldLabelOf(field)}
             </option>
           ))}
-        </select>
+        </BuilderSelect>
       ) : (
         <input aria-label="Field" placeholder="field" value={node.field} onChange={(e) => onPatch({ field: e.target.value })} />
       )}
-      <select aria-label="Operator" value={canon} onChange={(e) => onPatch({ operator: e.target.value as FilterOperator })}>
+      <BuilderSelect
+        ariaLabel="Operator"
+        value={canon}
+        label={operatorShortLabel(canon)}
+        onChange={(e) => onPatch({ operator: e.target.value as FilterOperator })}
+      >
         {ops.map((op) => (
           <option key={op} value={op}>
             {operatorShortLabel(op)}
           </option>
         ))}
-      </select>
+      </BuilderSelect>
       {between ? (
         <>
           <input
@@ -270,9 +337,10 @@ function BuilderRow({
           />
         </>
       ) : nullary ? null : options.length > 0 ? (
-        <select
-          aria-label="Value"
+        <BuilderSelect
+          ariaLabel="Value"
           value={String(node.value ?? "")}
+          label={String(node.value ?? "") || "value…"}
           onChange={(e) => onPatch({ value: e.target.value })}
         >
           <option value="">value…</option>
@@ -281,7 +349,7 @@ function BuilderRow({
               {option}
             </option>
           ))}
-        </select>
+        </BuilderSelect>
       ) : (
         <input
           aria-label="Value"
@@ -291,7 +359,7 @@ function BuilderRow({
         />
       )}
       <button type="button" className="sb-icon-btn sb-filter-builder-remove" title="Remove condition" aria-label="Remove condition" onClick={onRemove}>
-        ×
+        <Icon name="x" />
       </button>
     </div>
   );

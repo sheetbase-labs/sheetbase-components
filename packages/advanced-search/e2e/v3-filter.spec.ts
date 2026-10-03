@@ -6,20 +6,18 @@
  * Crop box (States renders, 1440×1390, scale 1): x=557 y=1087 w=360 h=126 — the
  * `.popover` border box. The canvas declares `padding: 12px`; the render's first
  * control sits at border+12px on both axes, so the popover is 12px-padded and
- * 126px tall (see the reconciliation in the ticket report).
+ * 126px tall.
+ *
+ * The popover text is the platform UI font (`system-ui`): the design reference
+ * renderer loads `@fontsource-variable/inter` as `Inter`, but that never reaches
+ * the canvas string, so the baseline rasterises the labels in the OS UI font.
+ * The fixture pins the same family (see `src/v3-fixture.tsx`); an Inter build
+ * shifts every glyph and re-breaks the comparison.
  */
 import { expect, test } from "@playwright/test";
 import { compareToCrop } from "../../../e2e/visual-compare";
 
 const cropUrl = (name: string) => new URL(`../../../e2e/fixtures/v3/${name}`, import.meta.url).pathname;
-
-// KNOWN MISMATCH (2026-10-03): the design's `.select` is a flex box whose label
-// and `▾` glyph sit together; `FilterBuilder` uses native `<select>` controls,
-// which inset the label and draw the platform chevron at the control's right
-// edge. That is a structural markup difference, not an antialiasing one — the
-// run reports ~7% (light) / ~9% (dark) differing pixels. Remove this annotation
-// once the popover renders the design's trigger (or the comparison is dropped).
-test.fail(true, "native <select> label inset and chevron do not match the design's styled trigger");
 
 for (const theme of ["light", "dark"] as const) {
   test(`filter builder matches the States popover crop (${theme})`, async ({ page }) => {
