@@ -9,6 +9,13 @@
 .sb-figure-legend__item { display: inline-flex; align-items: center; gap: 5px; }
 .sb-figure-legend__item svg { flex: 0 0 auto; }
 
+/* Heatmap colour-scale legend: discrete swatches plus the range's ends. */
+.sb-figure-scale { display: flex; align-items: center; gap: 6px; font-size: var(--meta-size); color: var(--muted); }
+.sb-figure-scale__label { color: var(--text); }
+.sb-figure-scale__swatches { display: inline-flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; }
+.sb-figure-scale__swatch { display: block; width: 16px; height: 10px; }
+.sb-figure-scale__end { font-variant-numeric: tabular-nums; }
+
 .sb-field-roles {
   display: flex;
   flex-direction: column;

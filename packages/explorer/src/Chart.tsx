@@ -11,8 +11,8 @@
  */
 import { useMemo } from 'react'
 import {
-  FIGURE_LAYOUT, FIGURE_TOKENS, buildFigure, buildFigureGroup, type FigureMarkerStyle,
-  type FigureModel, type FigurePadding,
+  FIGURE_LAYOUT, FIGURE_TOKENS, buildFigure, buildFigureGroup, formatValue, type FigureMarkerStyle,
+  type FigureModel, type FigurePadding, type FigureScaleLegend,
 } from './lib/figure'
 import type { ChartSpec, Dataset } from './lib/types'
 
@@ -60,6 +60,112 @@ function FigureLegend({ items }: { items: FigureModel['legend'] }) {
           {item.label}
         </span>
       ))}
+    </div>
+  )
+}
+
+/** Bar marks (kind `bar`): one rectangle per bar, above its own value label. */
+function BarMarks({ bars }: { bars: NonNullable<FigureModel['bars']> }) {
+  return (
+    <g>
+      {bars.map((bar) => (
+        <rect
+          key={`bar-${bar.index}`}
+          x={bar.x}
+          y={bar.y}
+          width={bar.width}
+          height={bar.height}
+          style={{ fill: bar.colour }}
+        />
+      ))}
+      {bars.map((bar) => bar.label === undefined || bar.labelX === undefined || bar.labelY === undefined ? null : (
+        <text key={`bar-label-${bar.index}`} x={bar.labelX} y={bar.labelY} textAnchor="middle" style={MUTED_TEXT}>
+          {bar.label}
+        </text>
+      ))}
+    </g>
+  )
+}
+
+/** Box marks (kind `box`): box, median, whiskers, caps and outlier points. */
+function BoxMarks({ boxes }: { boxes: NonNullable<FigureModel['boxes']> }) {
+  const stroke = { strokeWidth: FIGURE_LAYOUT.strokeWidth }
+  return (
+    <g>
+      {boxes.map((box) => {
+        const boxKey = `${box.category}|${box.seriesId}`
+        const cap = box.width / 2
+        return (
+          <g key={boxKey}>
+            <line x1={box.px} y1={box.yQ1} x2={box.px} y2={box.yWhiskerLow} style={{ ...stroke, stroke: box.colour }} />
+            <line x1={box.px} y1={box.yQ3} x2={box.px} y2={box.yWhiskerHigh} style={{ ...stroke, stroke: box.colour }} />
+            <line x1={box.px - cap / 2} y1={box.yWhiskerLow} x2={box.px + cap / 2} y2={box.yWhiskerLow} style={{ ...stroke, stroke: box.colour }} />
+            <line x1={box.px - cap / 2} y1={box.yWhiskerHigh} x2={box.px + cap / 2} y2={box.yWhiskerHigh} style={{ ...stroke, stroke: box.colour }} />
+            <rect
+              x={box.x}
+              y={Math.min(box.yQ1, box.yQ3)}
+              width={box.width}
+              height={Math.abs(box.yQ3 - box.yQ1)}
+              style={{ fill: box.colour, fillOpacity: 0.16, stroke: box.colour, strokeWidth: FIGURE_LAYOUT.strokeWidth }}
+            />
+            <line
+              x1={box.x}
+              y1={box.yMedian}
+              x2={box.x + box.width}
+              y2={box.yMedian}
+              style={{ stroke: box.colour, strokeWidth: FIGURE_LAYOUT.strokeWidth * 1.5 }}
+            />
+            {box.showOutliers ? box.outliers.map((outlier) => (
+              <circle
+                key={`${boxKey}|${outlier.index}`}
+                cx={outlier.px}
+                cy={outlier.py}
+                r={FIGURE_LAYOUT.markerSize - 1}
+                style={{ fill: box.colour }}
+              />
+            )) : null}
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+/** Heatmap marks (kind `heatmap`): one cell per aggregated grid position. */
+function HeatMarks({ heat }: { heat: NonNullable<FigureModel['heat']> }) {
+  return (
+    <g>
+      {heat.map((cell) => (
+        <rect
+          key={`${cell.x}|${cell.y}`}
+          x={cell.rect.x}
+          y={cell.rect.y}
+          width={cell.rect.width}
+          height={cell.rect.height}
+          style={{ fill: cell.colour }}
+        />
+      ))}
+      {heat.map((cell) => cell.label === undefined || cell.labelX === undefined || cell.labelY === undefined ? null : (
+        <text key={`${cell.x}|${cell.y}|label`} x={cell.labelX} y={cell.labelY} textAnchor="middle" style={MUTED_TEXT}>
+          {cell.label}
+        </text>
+      ))}
+    </g>
+  )
+}
+
+/** The heatmap's discrete colour scale: its steps, with the range's ends. */
+function ScaleLegend({ legend }: { legend: FigureScaleLegend }) {
+  return (
+    <div className="sb-figure-scale">
+      <span className="sb-figure-scale__label">{legend.label}</span>
+      <span className="sb-figure-scale__swatches">
+        {legend.steps.map((step) => (
+          <span key={step.label} className="sb-figure-scale__swatch" style={{ background: step.colour }} title={step.label} />
+        ))}
+      </span>
+      <span className="sb-figure-scale__end">{formatValue(legend.min)}</span>
+      <span className="sb-figure-scale__end">{formatValue(legend.max)}</span>
     </div>
   )
 }
@@ -145,6 +251,9 @@ export function FigureSvg({ figure, ariaLabel, className }: { figure: FigureMode
           {figure.yTitle}
         </text>
       ) : null}
+      {figure.bars?.length ? <BarMarks bars={figure.bars} /> : null}
+      {figure.boxes?.length ? <BoxMarks boxes={figure.boxes} /> : null}
+      {figure.heat?.length ? <HeatMarks heat={figure.heat} /> : null}
       {figure.series.map((entry) => (
         <g key={entry.id || 'series'}>
           {entry.line.length > 1 ? (
@@ -196,6 +305,7 @@ export function Chart({ dataset, spec, width, height, padding, showXAxisTitle, s
   return (
     <div className="sb-figure-frame">
       {legend === 'above' ? <FigureLegend items={figure.legend} /> : null}
+      {legend === 'above' && figure.scaleLegend ? <ScaleLegend legend={figure.scaleLegend} /> : null}
       <FigureSvg figure={figure} ariaLabel={ariaLabel} className={className} />
     </div>
   )
@@ -245,6 +355,7 @@ export function ChartGroup({ dataset, charts, width, padding, xTitle = 'last', y
         <div className="sb-figure-frame" key={figure.y.title}>
           {/* The design legends a shared-axis stack once, above its first chart. */}
           {legend === 'above' && index === 0 ? <FigureLegend items={figure.legend} /> : null}
+          {legend === 'above' && index === 0 && figure.scaleLegend ? <ScaleLegend legend={figure.scaleLegend} /> : null}
           <FigureSvg figure={figure} />
         </div>
       ))}

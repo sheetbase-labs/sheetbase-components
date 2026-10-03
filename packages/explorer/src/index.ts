@@ -11,11 +11,14 @@ export { App, type AppProps } from './App'
 export { Chart, ChartGroup, FigureSvg, type ChartProps, type ChartGroupProps, type ChartGroupEntry } from './Chart'
 export { FieldRolePanel, type FieldRolePanelProps, type FieldRolePanelSource } from './components/FieldRolePanel'
 export {
-  FIGURE_LAYOUT, FIGURE_TOKENS, axisTitle, buildFigure, buildFigureGroup, clipPolyline,
-  describeFigure, figureDomain, formatValue, niceStep, niceTicks, referenceText, seriesStyle,
-  type FigureAxis, type FigureBox, type FigureGroup, type FigureLegendItem, type FigureMarker,
-  type FigureMarkerStyle, type FigureModel, type FigureOptions, type FigurePadding, type FigurePoint,
-  type FigureReferenceLine, type FigureSeries, type FigureStackEntry, type FigureTick,
+  FIGURE_LAYOUT, FIGURE_TOKENS, HEATMAP_SCALE_STEPS, axisTitle, bandScale, boxSummary, buildFigure,
+  buildFigureGroup, clipPolyline, describeFigure, figureDomain, formatValue, heatmapColour, heatmapStep,
+  niceStep, niceTicks, referenceText, seriesStyle,
+  type FigureAxis, type FigureBand, type FigureBandScale, type FigureBar, type FigureBox,
+  type FigureBoxOutlier, type FigureBoxPlot, type FigureBoxSummary, type FigureGroup, type FigureHeatCell,
+  type FigureLegendItem, type FigureMarker, type FigureMarkerStyle, type FigureModel, type FigureOptions,
+  type FigurePadding, type FigurePoint, type FigureReferenceLine, type FigureScaleLegend,
+  type FigureScaleStep, type FigureSeries, type FigureStackEntry, type FigureTick,
 } from './lib/figure'
 export {
   FIELD_ROLES, ROLE_CHIPS, chartFieldsFromDataset, fieldGlyph, fieldHint, roleOf, rolesFromSpec,
