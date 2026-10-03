@@ -103,6 +103,8 @@ export interface ReferenceLine {
   axis: 'x' | 'y'
   value: number
   label?: string
+  /** Unit appended to the reference label ("Target ≥ 80 %"). */
+  unit?: string
 }
 
 export interface FilterRule {
@@ -129,6 +131,9 @@ export interface ChartSpec {
   aggregate: AggregateKind
   xLabel?: string
   yLabel?: string
+  /** Units appended to the axis titles ("Load (L/m²)"); v3 figures draw them. */
+  xUnit?: string
+  yUnit?: string
   xMin?: number
   xMax?: number
   yMin?: number
@@ -168,6 +173,13 @@ export interface ChartSpec {
   lineCurve?: LineCurveKind
   /** Horizontal/vertical guides drawn over the marks. */
   refLines?: ReferenceLine[]
+  /**
+   * Flag field marking points excluded from the decision (v3): those markers
+   * are drawn hollow and, when off-scale, pinned at the plot edge with a label.
+   */
+  excludeField?: string
+  /** Text beside an on-scale excluded marker (design: "flagged"). */
+  excludedLabel?: string
   /** Draw a text label at each mark. */
   labels?: boolean
   /** Field shown in data labels (defaults to the y value). */

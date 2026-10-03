@@ -1,0 +1,148 @@
+/* COMP-03: standalone v3 figures (Chart/ChartGroup) and the field-role panel.
+   Every colour is a theme variable (COMP-01) — load themes/v3.css under a
+   `.sheetbase-scope` to retheme these. */
+
+.sb-figure-frame { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sb-figure { display: block; max-width: 100%; height: auto; }
+.sb-figure text { font-family: var(--font-sans); }
+.sb-figure-legend { display: flex; align-items: center; gap: 14px; font-size: var(--meta-size); color: var(--text); }
+.sb-figure-legend__item { display: inline-flex; align-items: center; gap: 5px; }
+.sb-figure-legend__item svg { flex: 0 0 auto; }
+
+.sb-field-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 10px;
+  color: var(--text);
+  font-size: var(--text-size);
+}
+.sb-field-roles__source { display: flex; flex-direction: column; gap: 4px; }
+.sb-field-roles__caption { padding: 0 8px 4px; color: var(--muted); font-size: var(--meta-size); font-weight: 500; }
+.sb-field-roles__select {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: var(--text-size);
+}
+.sb-field-roles__select select {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+.sb-field-roles__select span { color: var(--muted); }
+.sb-field-roles__note { padding: 0 8px; color: var(--muted); font-size: var(--meta-size); }
+
+.sb-field-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.sb-field {
+  width: 100%;
+  height: 28px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+.sb-field:hover { background: var(--surface-hover); }
+.sb-field.is-assigned { background: var(--selection); }
+.sb-field.is-selected { box-shadow: inset 0 0 0 1px var(--selection-border); }
+.sb-field__type { color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+.sb-field__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-field__hint { color: var(--muted); font-size: var(--meta-size); }
+
+.sb-role-wells { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.sb-role-well {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-size);
+}
+.sb-role-well.is-set { border-style: solid; border-color: var(--border); }
+.sb-role-well.is-drop { border-color: var(--accent); background: var(--selection-subtle); }
+.sb-role-well__label { display: flex; flex-direction: column; color: var(--muted); font-size: 10px; line-height: 1.25; }
+.sb-role-well__label small { color: var(--faint); font-size: 9px; }
+.sb-role-well__value {
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sb-role-well__value:hover { background: var(--surface-hover); }
+.sb-role-well__clear {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sb-role-well__clear:hover { background: var(--surface-hover); color: var(--danger-text); }
+
+.sb-field-add {
+  height: 28px;
+  margin: 8px 8px 0;
+  padding: 0 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.sb-field-add:hover { border-color: var(--accent); color: var(--accent-ink); }
+.sb-calc-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: center;
+  margin: 8px 8px 0;
+  font-size: var(--meta-size);
+}
+.sb-calc-field label { color: var(--muted); }
+.sb-calc-field input {
+  width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.sb-calc-field__actions { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }

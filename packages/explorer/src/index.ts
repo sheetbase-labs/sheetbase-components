@@ -5,8 +5,23 @@ import './ux-overrides.css'
 import './explorer-v2.css'
 import './explorer-v3.css'
 import './explorer-interactions.css'
+import './figure.css'
 
 export { App, type AppProps } from './App'
+export { Chart, ChartGroup, FigureSvg, type ChartProps, type ChartGroupProps, type ChartGroupEntry } from './Chart'
+export { FieldRolePanel, type FieldRolePanelProps, type FieldRolePanelSource } from './components/FieldRolePanel'
+export {
+  FIGURE_LAYOUT, FIGURE_TOKENS, axisTitle, buildFigure, buildFigureGroup, clipPolyline,
+  describeFigure, figureDomain, formatValue, niceStep, niceTicks, referenceText, seriesStyle,
+  type FigureAxis, type FigureBox, type FigureGroup, type FigureLegendItem, type FigureMarker,
+  type FigureMarkerStyle, type FigureModel, type FigureOptions, type FigurePadding, type FigurePoint,
+  type FigureReferenceLine, type FigureSeries, type FigureStackEntry, type FigureTick,
+} from './lib/figure'
+export {
+  FIELD_ROLES, ROLE_CHIPS, chartFieldsFromDataset, fieldGlyph, fieldHint, roleOf, rolesFromSpec,
+  specWithRole, type ChartField, type ChartFieldOptions, type FieldRole, type FieldRoleAssignment,
+  type RoleWell,
+} from './lib/roles'
 export type {
   AggregateBucket, AggregateKind, AggregateQuery, AggregateResponse,
   BarLayout, ChartKind, ChartSpec, ColumnKind, ColumnMeta,

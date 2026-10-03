@@ -10,6 +10,17 @@ versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Explorer**: standalone v3 chart figures — `Chart` (one figure) and
+  `ChartGroup` (charts sharing an x axis), spec in and SVG out with no explorer
+  `App`. Series colours come from `series-a/b/c` with circle/square/triangle
+  markers by series index, `excludeField` points draw hollow (and are pinned at
+  the plot edge with a value label when off-scale), reference lines are dashed
+  and labelled with value and unit, and axis titles carry units
+  (`xUnit`/`yUnit`). `buildFigure`/`buildFigureGroup` expose the geometry model.
+- **Explorer**: `FieldRolePanel` — the Analysis screen's field list and axis
+  wells (drag or pick a field onto x, y, y2 or series, plus calculated `ƒx`
+  fields), with `rolesFromSpec`/`specWithRole`/`chartFieldsFromDataset` mapping
+  the panel onto `ChartSpec`.
 - **Schema editor**: SQL query import — `analyzeSql`/`sqlToGraph` turn pasted
   or dropped SQL into an ERD (source tables, joins, CTEs/subqueries, result
   columns) with dbt support (`{{ ref }}`/`{{ source }}` expansion,

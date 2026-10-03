@@ -39,16 +39,9 @@ import { scalePoint } from '@tanstack/charts/scales/point'
 import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
 import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
 import { resolveThemeColour, resolveThemeColours } from 'sheetbase-shared'
-import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
+import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows, visibleRows } from './explore'
 import type { ChartMark } from '@tanstack/charts'
 import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
-
-function visibleRows(rows: DataRow[], spec: ChartSpec) {
-  const seriesField = spec.color ?? spec.group
-  const hidden = new Set(spec.hiddenSeries ?? [])
-  if (!seriesField || hidden.size === 0) return rows
-  return rows.filter((row) => !hidden.has(String(row[seriesField] ?? '')))
-}
 
 const MAX_SCATTER_POINTS = 8000
 

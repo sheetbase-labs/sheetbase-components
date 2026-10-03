@@ -205,7 +205,7 @@ export function App(props: AppProps = {}) {
     const filtersStale = (current: ChartSpec) => current.filters?.some((rule) => !valid(rule.field)) ?? false
     if (valid(spec.x) && valid(spec.y)) {
       // x/y are fine; still drop any stale channel references from another dataset.
-      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh) || filtersStale(spec)
+      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh) || !valid(spec.excludeField) || filtersStale(spec)
       if (!stale) return
       setSpec((current) => ({
         ...current,
@@ -214,6 +214,7 @@ export function App(props: AppProps = {}) {
         ...(valid(current.facet) ? {} : { facet: undefined }),
         ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
         ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+        ...(valid(current.excludeField) ? {} : { excludeField: undefined }),
         ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
         ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
       }))
@@ -239,6 +240,7 @@ export function App(props: AppProps = {}) {
       ...(valid(current.facet) ? {} : { facet: undefined }),
       ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
       ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+      ...(valid(current.excludeField) ? {} : { excludeField: undefined }),
       ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
       ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
     }))
