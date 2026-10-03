@@ -10,4 +10,7 @@ export * from "./DataGrid";
 export * from "./presentation-state";
 export * from "./TableControls";
 export * from "./filter-conditions";
+export * from "./cell-state";
+export * from "./append-row";
+export * from "./keyboard";
 export * from "../grid/conditional-formatting";

@@ -27,7 +27,15 @@ The table is composed from independent UI sections. The default demo deliberatel
 
 `TableSectionConfig` contains `menuBar`, `toolbar`, `formulaBar`, `sidebar`, `statusBar` and `sheetBar`. Notebook, dataset, embedded and full-workbook surfaces can use different configurations while sharing the same table.
 
-The menu, toolbar, data sidebar and query status are disabled in `minimalTableSections`; they are not part of the default table surface.
+The menu, toolbar, data sidebar and query status are disabled in `minimalTableSections`; they are not part of the default table surface. `notebookTableSections` drops the formula bar and sheet bar too, for a notebook block that is the grid alone.
+
+## Grid states, the append row and the keyboard
+
+`Spreadsheet` takes a `cellState(row, column)` callback returning one of `invalid`, `flagged`, `pending`, `derived`, `readonly`, `unsynced`, or `{ state: "conflict", count }` and `{ state: "diff", before?, after }`. Each state paints from theme variables (`styles/grid.css`): the danger wash and error mark, derived surfaces, the unsynced dotted underline and grey mark, the conflict "2 values" wash and the diff `del`/`ins` pair.
+
+Pass `appendRow` (`true`, or `{ label }`) to render the "New run — type a condition or paste rows" row after the last populated row. Clicking it targets the first writable cell; committing that draft runs the blank-row path and calls `onRecordCreate`. `rowCount` must be large enough to hold the row.
+
+The grid is one tab stop: arrows move between cells, Enter commits an edit and moves down, Escape discards, and Tab walks right, leaving the grid at the last column (Shift+Tab mirrors it at column 0).
 
 ## Integration modes
 

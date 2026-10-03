@@ -76,6 +76,9 @@ import {
 import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
 import { conflictWriteKeys, fieldWritesForMutation, type MutationFieldWrite } from "../data";
 import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
+import { conflictValueLabel, cellStateClassName, resolveCellState, type CellState } from "./cell-state";
+import { appendRowEnabled, appendRowIndex, appendRowLabel, firstWritableColumn, type AppendRowConfig } from "./append-row";
+import { focusOutsideGrid, tabIntent } from "./keyboard";
 
 const DEFAULT_ROW_HEIGHT = 31;
 
@@ -258,6 +261,20 @@ export type SpreadsheetProps = {
   /** Fired whenever the set of held writes changes (hold, replace, flush, discard). */
   onHeldFieldWritesChange?(writes: readonly FieldWrite[]): void;
   onRecordCreate?(record: Readonly<{ row: number; values: Readonly<Record<string, string>> }>): void | Promise<void>;
+  /**
+   * COMP-02.3: per-cell state. Return one of `invalid | flagged | pending |
+   * derived | readonly | unsynced`, or `{ state: "conflict", count }` /
+   * `{ state: "diff", before?, after }` when the cell carries data. Undefined
+   * leaves the cell unstyled.
+   */
+  cellState?(row: number, column: number): CellState | undefined;
+  /**
+   * COMP-02.4: render the "New run" append row after the last populated row.
+   * `true` uses the design copy; pass `{ label }` to override it. Typing into
+   * the row's first writable cell runs the existing blank-row path and calls
+   * `onRecordCreate`. Requires a `rowCount` large enough to hold it.
+   */
+  appendRow?: AppendRowConfig;
   onWriteStateChange?(address: string, status: WriteStatus): void;
   loadingRanges?: readonly SpreadsheetLoadingRange[];
   conditionalFormats?: readonly ConditionalFormatRule[];
@@ -430,6 +447,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   fieldWritePolicy,
   onHeldFieldWritesChange,
   onRecordCreate,
+  cellState,
+  appendRow,
   onWriteStateChange,
   loadingRanges = [],
   conditionalFormats = [],
@@ -689,9 +708,18 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const base = rowHeaderWidth + columnOffsets[column] + extra;
     return column < frozenColumnCount ? `calc(var(--sheet-scroll-left, 0px) + ${base}px)` : base;
   };
+  // COMP-02.4: the append row sits one past the last populated row. When it is
+  // inside the virtual window it renders like any row (with the "+"/"new"
+  // header); at the very end (appendIndex === rowCount) it is painted as an
+  // overlay past the last virtual row instead.
+  const appendIndex = useMemo(() => (readOnly ? undefined : appendRowIndex(data, appendRow)), [appendRow, data, readOnly]);
+  const appendEnabled = appendIndex !== undefined && appendRowEnabled(appendRow);
+  const appendInRows = appendEnabled && appendIndex !== undefined && appendIndex < rowCount;
+  const appendBeyond = appendEnabled && appendIndex !== undefined && appendIndex === rowCount;
+  const draftRow = appendEnabled && editing?.row === appendIndex;
   const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? 20 : 0;
   const contentWidth = rowHeaderWidth + columnVirtualizer.getTotalSize();
-  const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize();
+  const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize() + (appendBeyond ? (rowHeights[rowCount] ?? defaultRowHeight) : 0);
   const virtualRows = rowVirtualizer.getVirtualItems();
   const virtualColumns = columnVirtualizer.getVirtualItems();
   const viewportRange = {
@@ -704,6 +732,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     ...Array.from({ length: Math.min(frozenRowCount, rowCount) }, (_, row) => row),
     ...virtualRows.map((item) => item.index),
   ])];
+  const renderRows = appendInRows && appendIndex !== undefined && !visibleRows.includes(appendIndex)
+    ? [...visibleRows, appendIndex].sort((a, b) => a - b)
+    : visibleRows;
   const renderColumns = [...new Set([
     ...Array.from({ length: Math.min(frozenColumnCount, columnCount) }, (_, column) => column),
     ...virtualColumns.map((item) => item.index),
@@ -1170,6 +1201,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setValidationError(undefined);
   }, [canEdit, data]);
 
+  /** COMP-02.4: click on the append row targets its first writable cell. */
+  const selectAppendRow = useCallback(() => {
+    if (appendIndex === undefined || readOnly) return;
+    const column = firstWritableColumn(datasetHeader?.fields ?? []);
+    setSelection({ anchor: { row: appendIndex, column }, focus: { row: appendIndex, column } });
+    queueMicrotask(() => viewportRef.current?.focus({ preventScroll: true }));
+  }, [appendIndex, datasetHeader, readOnly]);
+
   const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
     if (!editing) return;
     if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
@@ -1526,7 +1565,18 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       move({ row: event.key === "PageDown" ? page : -page, column: 0 }, event.shiftKey);
       return;
     }
-    if (event.key === "Tab") { event.preventDefault(); move({ row: 0, column: event.shiftKey ? -1 : 1 }, false); return; }
+    if (event.key === "Tab") {
+      // COMP-02.5: Tab walks right; at the last column it leaves the grid
+      // rather than trapping focus, so the sheet stays one tab stop.
+      const intent = tabIntent({ shiftKey: event.shiftKey, column: selection.focus.column, columnCount });
+      if (intent === "move") {
+        event.preventDefault();
+        move({ row: 0, column: event.shiftKey ? -1 : 1 }, false);
+      } else if (viewportRef.current && focusOutsideGrid(viewportRef.current, event.shiftKey)) {
+        event.preventDefault();
+      }
+      return;
+    }
     if (event.key === "Enter") {
       event.preventDefault();
       // With a live copy marquee, Enter pastes the internal copy once and
@@ -1823,7 +1873,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }}
   >
     <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight }}>
-      {visibleRows.flatMap((row) => renderColumns.map(({ index: column }) => {
+      {renderRows.flatMap((row) => renderColumns.map(({ index: column }) => {
         const point = { row, column };
         const key = cellKey(point);
         const active = samePoint(point, selection.focus);
@@ -1854,11 +1904,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           : undefined;
         const format = conditionalFormat ? { ...baseFormat, ...conditionalFormat } : baseFormat;
         const value = formatCellDisplay(calculated, format, columnDisplay[column]);
+        const resolvedState = cellState ? resolveCellState(cellState(row, column)) : undefined;
+        // A conflict replaces the value with the design's "2 values" copy.
+        const display = resolvedState?.state === "conflict" ? conflictValueLabel(resolvedState.count ?? 2) : value;
         // Excel-style overflow: single-line text paints across adjacent
         // empty cells. The span clips itself at the first populated,
         // spilled, or still-loading neighbour.
         let overflow: { left: number; right: number } | undefined;
-        if (value !== "" && !value.includes("\n") && !renderCell && !loading) {
+        if (resolvedState === undefined && value !== "" && !value.includes("\n") && !renderCell && !loading) {
           const neighbourEmpty = (r: number, c: number) =>
             (data.get(cellKey({ row: r, column: c })) ?? "") === ""
             && worksheet.spills.value(cellKey({ row: r, column: c })) === undefined
@@ -1884,17 +1937,18 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           address={key}
           row={row}
           column={column}
-          display={value}
+          display={display}
           isFormula={raw.startsWith("=")}
           selected={selected}
           active={active}
           loading={loading}
-          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}`}
+          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}${cellStateClassName(resolvedState)}${row === appendIndex && draftRow ? " draft-row" : ""}`}
           title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
           format={format}
           overflow={overflow}
           field={fieldByColumn.get(column)}
           writeState={writeState}
+          cellState={resolvedState}
           renderCell={renderCell}
           handlers={cellHandlersRef}
           left={columnLeft(column)}
@@ -1904,23 +1958,39 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         />;
       }))}
 
-      {visibleRows.map((row) => (
+      {renderRows.map((row) => {
+        const isAppendRow = appendInRows && row === appendIndex;
+        return (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
         <div
         role="rowheader"
         tabIndex={-1}
-        aria-label={String(row + 1)}
-        aria-selected={row >= range.top && row <= range.bottom}
-        className={`row-header${row >= range.top && row <= range.bottom ? " selected-header" : ""}`}
+        aria-label={isAppendRow ? appendRowLabel(appendRow) : String(row + 1)}
+        aria-selected={!isAppendRow && row >= range.top && row <= range.bottom}
+        className={`row-header${!isAppendRow && row >= range.top && row <= range.bottom ? " selected-header" : ""}${isAppendRow ? " append-row-header" : ""}`}
         key={`row-${row}`}
         style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidth, height: rowHeights[row] ?? defaultRowHeight }}
         onPointerDown={() => {
+          if (isAppendRow) { selectAppendRow(); return; }
           dragSelecting.current = true;
           setSelection({ anchor: { row, column: 0 }, focus: { row, column: columnCount - 1 } });
           viewportRef.current?.focus({ preventScroll: true });
         }}
-        onContextMenu={(event) => { event.preventDefault(); setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
-      >{row + 1}<hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? defaultRowHeight} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} /></div>))}
+        onContextMenu={(event) => { event.preventDefault(); if (!isAppendRow) setContextMenu({ axis: "row", index: row, x: event.clientX, y: event.clientY }); }}
+      >{isAppendRow ? (draftRow ? "new" : "+") : row + 1}{!isAppendRow && <hr className="row-resizer" aria-orientation="horizontal" aria-label={`Resize row ${row + 1}`} aria-valuenow={rowHeights[row] ?? defaultRowHeight} aria-valuemin={20} aria-valuemax={240} tabIndex={0} onPointerDown={(event) => resizeRow(row, event)} onKeyDown={(event) => resizeRowWithKeys(row, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitRow(row); }} />}</div>);
+      })}
+
+      {appendIndex !== undefined && (appendInRows || appendBeyond) && !draftRow && (
+        // biome-ignore lint/a11y/useSemanticElements: virtualised grid — the append row is an absolutely positioned div like every other cell
+        <div
+          className="grid-cell append-row"
+          role="gridcell"
+          tabIndex={-1}
+          aria-label={appendRowLabel(appendRow)}
+          style={{ left: rowHeaderWidth, top: headerHeight + datasetHeaderHeight + rowOffsets[appendIndex], width: Math.max(contentWidth - rowHeaderWidth, 0), height: rowHeights[appendIndex] ?? defaultRowHeight }}
+          onPointerDown={(event) => { event.stopPropagation(); selectAppendRow(); }}
+        >{appendRowLabel(appendRow)}</div>
+      )}
 
       {columnGroups?.map((group) => {
         const cols = group.columns.filter((column) => column >= 0 && column < columnCount);
@@ -2196,7 +2266,17 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           }
           if (event.key === "Escape") { event.preventDefault(); finishEdit(false); }
           if (event.key === "Enter") { event.preventDefault(); finishEdit(true, { row: 1, column: 0 }); }
-          if (event.key === "Tab") { event.preventDefault(); finishEdit(true, { row: 0, column: event.shiftKey ? -1 : 1 }); }
+          if (event.key === "Tab") {
+            event.preventDefault();
+            const intent = tabIntent({ shiftKey: event.shiftKey, column: editing.column, columnCount });
+            if (intent === "move") {
+              finishEdit(true, { row: 0, column: event.shiftKey ? -1 : 1 });
+            } else {
+              const backwards = event.shiftKey;
+              finishEdit(true);
+              queueMicrotask(() => { if (viewportRef.current) focusOutsideGrid(viewportRef.current, backwards); });
+            }
+          }
         }}
       />}
       {editing && activeCustomEditor && <div
