@@ -59,3 +59,34 @@
 }
 .sb-chip-add:hover { background: var(--surface-hover); color: var(--text); }
 .sb-chip-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* COMP-04.1 — filter builder popover (States.dc.html: 360px card, 28px rows). */
+.sb-filter-builder {
+  width: 360px; max-width: 100%;
+  padding: 8px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow);
+  color: var(--text);
+}
+.sb-filter-builder-rows { display: flex; flex-direction: column; gap: 10px; }
+.sb-filter-builder-empty { margin: 0; padding: 2px 0; }
+.sb-filter-builder-row {
+  display: grid; grid-template-columns: 90px 70px minmax(0, 1fr) 24px;
+  gap: 6px; align-items: center;
+}
+.sb-filter-builder-row.between { grid-template-columns: 90px 70px minmax(0, 1fr) minmax(0, 1fr) 24px; }
+.sb-filter-builder-row select, .sb-filter-builder-row input {
+  width: 100%; min-width: 0; height: 28px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-sans); font-size: 13px; outline: none;
+}
+.sb-filter-builder-row select:hover, .sb-filter-builder-row input:hover { border-color: var(--border-strong); }
+.sb-filter-builder-row select:focus, .sb-filter-builder-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.sb-filter-builder-remove { color: var(--faint); font-size: 14px; line-height: 1; }
+.sb-filter-builder-remove:hover { background: var(--surface-hover); color: var(--text); }
+.sb-filter-builder-foot { display: flex; align-items: center; gap: 8px; }
+.sb-filter-builder-spacer { flex: 1 1 auto; }
