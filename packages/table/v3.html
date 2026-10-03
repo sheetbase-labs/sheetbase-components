@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sheetbase v3 grid fixture</title>
+    <title>Sheetbase v3 grid fixtures</title>
     <!-- Faces: the design renders rasterise text in the platform UI font, not
          the Inter the canvas nominally requests (its @fontsource build never
-         reaches the canvas string). The fixture pins the same stack so the
+         reaches the canvas string). The fixture pins the same stack so each
          crop is comparable. -->
     <style>
       html,
@@ -14,14 +14,15 @@
         margin: 0;
         padding: 0;
       }
-      /* The fixture renders the grid at the design's own box so the element
-         screenshot is directly comparable with the crop. */
-      #grid-fixture,
-      #grid-fixture .spreadsheet {
-        width: 855px;
-        height: 293px;
+      /* The dispatcher sizes #grid-fixture to the fixture module's crop box;
+         the grid fills it so the element screenshot is directly comparable
+         with that crop. */
+      #grid-fixture {
+        position: relative;
       }
       #grid-fixture .spreadsheet {
+        width: 100%;
+        height: 100%;
         /* Match the design render's actual face: the platform UI font. */
         --font-sans: system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
