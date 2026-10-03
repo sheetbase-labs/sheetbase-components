@@ -11,6 +11,8 @@ export * from "./presentation-state";
 export * from "./TableControls";
 export * from "./filter-conditions";
 export * from "./cell-state";
+export * from "./source-badge";
+export * from "./row-height";
 export * from "./append-row";
 export * from "./keyboard";
 export * from "../grid/conditional-formatting";

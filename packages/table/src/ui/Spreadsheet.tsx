@@ -79,8 +79,8 @@ import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } fr
 import { conflictValueLabel, cellStateClassName, resolveCellState, type CellState } from "./cell-state";
 import { appendRowEnabled, appendRowIndex, appendRowLabel, firstWritableColumn, type AppendRowConfig } from "./append-row";
 import { focusOutsideGrid, tabIntent } from "./keyboard";
-
-const DEFAULT_ROW_HEIGHT = 31;
+import { CALC_SOURCE_LABEL, SourceBadge, showsComputedMark, type ColumnSource } from "./source-badge";
+import { rebaseAutoRowHeights, useIsomorphicLayoutEffect, useThemeRowHeight } from "./row-height";
 
 const DEFAULT_COLUMN_HEADER_HEIGHT = 31;
 /** Cells per frame slice for large pastes; keeps the viewport responsive while pasting. */
@@ -150,10 +150,29 @@ export type SpreadsheetState = Readonly<{
 
 export type SpreadsheetHydrationCell = Readonly<{ display: string; binding: CellBinding }>;
 export type SpreadsheetFormatEntry = Readonly<{ range: import("../engine").CellRange; value: CellFormat }>;
+/** One column's field metadata in the dataset header. */
+export type DatasetFieldHeader = Readonly<{
+  id: string;
+  label: string;
+  column: number;
+  writable?: boolean;
+  computed?: boolean;
+  /** Provenance for the v3 `Source` badge; omitted columns render none. */
+  source?: ColumnSource;
+  /** Badge label, e.g. "DS-0311 · S-15". `calc` defaults to "ƒx". */
+  sourceLabel?: string;
+  dataType?: CellDataType;
+  required?: boolean;
+  options?: readonly string[];
+  multiple?: boolean;
+  unit?: string;
+  precision?: number;
+  numberFormat?: CellFormat["numberFormat"];
+}>;
 export type DatasetHeaderConfig = Readonly<{
   datasetId?: string;
   recordIdForRow?(row: number): string | undefined;
-  fields: readonly Readonly<{ id: string; label: string; column: number; writable?: boolean; computed?: boolean; dataType?: CellDataType; required?: boolean; options?: readonly string[]; multiple?: boolean; unit?: string; precision?: number; numberFormat?: CellFormat["numberFormat"] }>[];
+  fields: readonly DatasetFieldHeader[];
 }>;
 export type FieldWrite = Readonly<{ address: string; row: number; datasetId?: string; recordId?: string; fieldId: string; value: string }>;
 export type WriteStatus = "pending" | "saved" | "conflict" | "failed";
@@ -216,7 +235,7 @@ export type SpreadsheetProps = {
   initialColumnWidths?: readonly number[];
   /** Per-row initial heights by index; absent entries (or the whole prop) mean automatic height. */
   initialRowHeights?: readonly number[];
-  /** Default row height in px (UI system v3: 28). */
+  /** Default row height in px; omitted means the theme's `--row-height` (v3: 28, default: 31). */
   defaultRowHeight?: number;
   /** Column header height in px (v3: 31). */
   headerHeight?: number;
@@ -420,12 +439,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   columnCount = 18,
   fieldColumns: _fieldColumns = new Set(),
   calculationAuthority = "client",
-  computedColumns: _computedColumns = new Set(),
+  computedColumns = new Set(),
   frozenRows: initialFrozenRows = 0,
   frozenColumns: initialFrozenColumns = 0,
   initialColumnWidths,
   initialRowHeights,
-  defaultRowHeight = DEFAULT_ROW_HEIGHT,
+  defaultRowHeight: defaultRowHeightProp,
   headerHeight = DEFAULT_COLUMN_HEADER_HEIGHT,
   columnGroups,
   rowHeaderWidth = DEFAULT_ROW_HEADER_WIDTH,
@@ -468,6 +487,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   contextMenuActions,
 }, forwardedRef) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  // Row height: an explicit prop wins; otherwise the theme's `--row-height`
+  // (v3 preset: 28px, default preset: 31px) so a themed host needs no JS prop.
+  const themedRowHeight = useThemeRowHeight(viewportRef);
+  const defaultRowHeight = defaultRowHeightProp ?? themedRowHeight;
   const dragSelecting = useRef(false);
   const past = useRef<GridMutation[]>([]);
   const future = useRef<GridMutation[]>([]);
@@ -522,6 +545,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
     ? [...initialState.rowHeights]
     : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? defaultRowHeight));
+  // The theme's `--row-height` is measured after mount, so rows seeded with
+  // the fallback are re-baked once the real height arrives. Explicit heights
+  // (`initialState`/`initialRowHeights` or a hand resize) and hidden rows (`0`)
+  // are left alone.
+  const autoRowHeightRef = useRef(defaultRowHeight);
+  useIsomorphicLayoutEffect(() => {
+    const previous = autoRowHeightRef.current;
+    autoRowHeightRef.current = defaultRowHeight;
+    setRowHeights((current) => rebaseAutoRowHeights(current, previous, defaultRowHeight, (row) => initialState?.rowHeights?.[row] ?? initialRowHeights?.[row]));
+  }, [defaultRowHeight, initialState, initialRowHeights]);
   const [frozenRowCount, setFrozenRowCount] = useState(initialState?.frozenRows ?? initialFrozenRows);
   const [frozenColumnCount, setFrozenColumnCount] = useState(initialState?.frozenColumns ?? initialFrozenColumns);
   const [contextMenu, setContextMenu] = useState<{ axis: "row" | "column"; index: number; x: number; y: number }>();
@@ -1872,7 +1905,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       event.currentTarget.style.setProperty("--sheet-scroll-left", `${event.currentTarget.scrollLeft}px`);
     }}
   >
-    <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight }}>
+    <div className="grid-canvas" style={{ width: contentWidth, height: contentHeight, backgroundSize: `140px ${defaultRowHeight}px` }}>
       {renderRows.flatMap((row) => renderColumns.map(({ index: column }) => {
         const point = { row, column };
         const key = cellKey(point);
@@ -2011,12 +2044,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         );
       })}
 
-      {renderColumns.map(({ index: column }) => (
+      {renderColumns.map(({ index: column }) => {
+        const field = fieldByColumn.get(column);
+        const computed = Boolean(field?.computed) || computedColumns.has(column);
+        const showComputedMark = showsComputedMark(computed, field?.source, field?.sourceLabel);
+        return (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
         <div
         role="columnheader"
         tabIndex={-1}
-        aria-label={`${columnLabel(column)} ${datasetHeader?.fields.find((field) => field.column === column)?.label ?? columnLabel(column)}`}
+        aria-label={`${columnLabel(column)} ${field?.label ?? columnLabel(column)}`}
         aria-selected={column >= range.left && column <= range.right}
         className={`column-header${column >= range.left && column <= range.right ? " selected-header" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}`}
         key={`column-${column}`}
@@ -2044,7 +2081,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData("application/x-sheetbase-column")); if (Number.isInteger(from) && from !== column) onColumnMove?.(from, column); }}
       >
         <span className="column-coordinate">{columnLabel(column)}</span>
-        <span className="column-name">{datasetHeader?.fields.find((field) => field.column === column)?.label ?? columnLabel(column)}</span>
+        <span className="column-heading">
+          <span className="column-name">{field?.label ?? columnLabel(column)}</span>
+          {field?.source && <SourceBadge source={field.source} label={field.sourceLabel} />}
+        </span>
+        {showComputedMark && <span className="fx column-fx" aria-hidden="true">{CALC_SOURCE_LABEL}</span>}
         {fieldIds[column] && <button type="button"
           className={`column-sort${query.sort?.some((sort) => sort.fieldId === fieldIds[column]) ? " active" : ""}`}
           aria-label={`Sort ${fieldIds[column]}`}
@@ -2072,7 +2113,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           }}
         >{query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "asc" ? "▲" : query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "desc" ? "▼" : "↕"}</button>}
         <hr className="column-resizer" aria-orientation="vertical" aria-label={`Resize column ${columnLabel(column)}`} aria-valuenow={columnWidths[column]} aria-valuemin={72} aria-valuemax={480} tabIndex={0} onPointerDown={(event) => resizeColumn(column, event)} onKeyDown={(event) => resizeColumnWithKeys(column, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitColumn(column); }} />
-      </div>))}
+      </div>);
+      })}
 
       {findPanel && <search className="find-panel">
         <input ref={focusOnMount} aria-label="Find" placeholder="Find" value={findQuery} onChange={(event) => setFindQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") findText(findQuery); }} />
