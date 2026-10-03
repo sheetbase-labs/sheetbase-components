@@ -28,7 +28,13 @@ const headers: readonly Header[] = [
   ["adj_yield", "Adj. yield (%)", "local", "Local", true],
 ];
 
-const widths = [107, 103, 108, 107, 133, 99, 91, 82];
+// The design's table is `width:100%` with auto layout, so its columns land on
+// fractional (content-driven) widths. These are the measured fractions from
+// that render, including the row-number gutter; hard-coding the integers the
+// crop's grid lines suggest shifts every glyph by up to 0.5px and breaks the
+// pixel comparison.
+const rowHeaderWidth = 24.5625;
+const widths = [107.4844, 103.125, 107.4844, 107.4844, 132.5469, 98.9375, 91.2969, 94.5781];
 
 const rows: readonly (readonly string[])[] = [
   ["A-50", "MAT-0418 A", "50", "6.2", "7.4 × 10¹¹", "86.0", "Clear", "85"],
@@ -42,6 +48,12 @@ const rows: readonly (readonly string[])[] = [
   ["C-150", "MAT-0420 C", "150", "61.5", "5.4 × 10¹¹", "62.8", "Hazy", "—"],
 ];
 
+// The design right-aligns the numeric columns (`.der r` / `.r` on every cell).
+const formats = new RangeStore<CellFormat>();
+for (const column of [2, 3, 4, 5, 7]) {
+  formats.write({ start: { row: 0, column }, end: { row: rows.length - 1, column } }, { horizontalAlign: "right" });
+}
+
 const data = new Map<string, string>();
 rows.forEach((row, rowIndex) => {
   row.forEach((value, column) => {
@@ -51,7 +63,7 @@ rows.forEach((row, rowIndex) => {
 
 const initialState: SpreadsheetState = {
   data,
-  formats: new RangeStore<CellFormat>(),
+  formats,
   columnWidths: widths,
   rowHeights: rows.map(() => 28),
   // The design's active cell is Visual clarity · A-150 (row 3, column G).
@@ -75,7 +87,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         columnCount={headers.length}
         headerHeight={40}
         defaultRowHeight={28}
-        rowHeaderWidth={25}
+        rowHeaderWidth={rowHeaderWidth}
         fieldColumns={new Set(headers.map((_, index) => index))}
         computedColumns={new Set([5])}
         datasetHeader={{
@@ -92,6 +104,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         }}
         // The design's C-150 turbidity is the invalid cell (danger wash).
         cellState={(row, column) => (row === 8 && column === 3 ? "invalid" : undefined)}
+        // The design's record column renders each value in the link colour.
+        renderCell={({ point, display }) => point.column === 1
+          ? <span style={{ color: "var(--link)" }}>{display}</span>
+          : undefined}
       />
     </div>
   </React.StrictMode>,

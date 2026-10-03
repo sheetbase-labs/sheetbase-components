@@ -28,4 +28,4 @@
 .stage:has(.table-surface[data-theme="dark"], .table-layout[data-theme="dark"]) .demo-section-head a { color: var(--accent); }
 .table-surface-table > .table-layout { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .table-layout[data-theme="dark"] { color-scheme: dark; color: var(--text); border-color: var(--border-strong); background: var(--app); box-shadow: var(--shadow); }
-.spreadsheet[data-theme="dark"] { color-scheme: dark; color: var(--text); border-color: var(--border-strong); background: var(--canvas); box-shadow: var(--shadow); }
+.spreadsheet[data-theme="dark"] { color-scheme: dark; color: var(--text); border-color: var(--grid-frame-color, var(--border-strong)); background: var(--grid-frame-surface, var(--canvas)); box-shadow: var(--shadow); }

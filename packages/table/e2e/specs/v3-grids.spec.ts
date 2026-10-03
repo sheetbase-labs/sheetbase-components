@@ -18,14 +18,6 @@ const cropUrl = (name: string) => new URL(`../../../../e2e/fixtures/v3/${name}`,
 
 test.skip(({ browserName }) => browserName !== "chromium", "design renders are Chromium screenshots");
 
-// KNOWN MISMATCH (2026-10-03): the v3 preset answers `--accent-soft` for
-// `.column-header`/`.row-header` (base.css), so headers render blue where the
-// design's `.g th`/`.g .rn` are neutral `surface-muted`/`text-muted`; the
-// component also draws 1px-per-column width offsets and truncates long header
-// labels the design fits. Remove this annotation once COMP-02 header chrome
-// lands and the fixture matches (the run currently reports ~78% differing).
-test.fail(true, "v3 grid header chrome and per-column offsets still differ from the design render");
-
 for (const theme of ["light", "dark"] as const) {
   test(`SheetWorking grid matches the design crop (${theme})`, async ({ page }) => {
     await page.goto(`/v3.html?theme=${theme}`, { waitUntil: "networkidle" });

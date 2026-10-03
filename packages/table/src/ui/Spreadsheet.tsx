@@ -1909,6 +1909,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {renderRows.flatMap((row) => renderColumns.map(({ index: column }) => {
         const point = { row, column };
         const key = cellKey(point);
+        const field = fieldByColumn.get(column);
+        const derived = field?.source === "dataset" || field?.source === "calc";
         const active = samePoint(point, selection.focus);
         const selected = row >= range.top && row <= range.bottom && column >= range.left && column <= range.right;
         const raw = data.get(key) ?? "";
@@ -1975,11 +1977,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           selected={selected}
           active={active}
           loading={loading}
-          className={`grid-cell${loading ? " loading-cell" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}${cellStateClassName(resolvedState)}${row === appendIndex && draftRow ? " draft-row" : ""}`}
+          className={`grid-cell${loading ? " loading-cell" : ""}${derived ? " dataset-derived" : ""}${row < frozenRowCount ? " frozen-row" : ""}${row === frozenRowCount - 1 ? " freeze-row-edge" : ""}${column < frozenColumnCount ? " frozen-column" : ""}${column === frozenColumnCount - 1 ? " freeze-column-edge" : ""}${row > 0 && rowHeights[row - 1] === 0 ? " after-hidden-row" : ""}${column > 0 && columnWidths[column - 1] === 0 ? " after-hidden-column" : ""}${writeState ? ` write-${writeState.status}` : ""}${annotation ? " annotated" : ""}${!canEdit(point) ? " read-only" : ""}${selected ? " in-selection" : ""}${active ? " active-cell" : ""}${overflow ? " spills" : ""}${cellStateClassName(resolvedState)}${row === appendIndex && draftRow ? " draft-row" : ""}`}
           title={annotation ? [annotation.author, annotation.text].filter(Boolean).join(": ") : undefined}
           format={format}
           overflow={overflow}
-          field={fieldByColumn.get(column)}
+          field={field}
           writeState={writeState}
           cellState={resolvedState}
           renderCell={renderCell}

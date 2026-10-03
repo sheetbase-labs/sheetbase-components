@@ -63,14 +63,16 @@ button { border: 0; background: transparent; cursor: pointer; }
 .sheet-wrap { min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); display: grid; grid-template-rows: 52px 1fr; }
 .query-status { height: 52px; display: flex; align-items: center; gap: 10px; padding-left: 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
 .query-status span { background: var(--text); color: var(--panel); border-radius: 16px; padding: 6px 11px; }
-.spreadsheet { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; background: var(--canvas); cursor: cell; user-select: none; overscroll-behavior: contain; }
+.spreadsheet { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; background: var(--grid-frame-surface, var(--canvas)); cursor: cell; user-select: none; overscroll-behavior: contain; border-top: var(--grid-frame-width, 0px) solid var(--border); border-left: var(--grid-frame-width, 0px) solid var(--border); border-radius: var(--grid-frame-radius, 0); }
 .spreadsheet:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent); }
-.grid-canvas { position: relative; background-color: var(--canvas); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); }
+.grid-canvas { position: relative; background-color: var(--canvas); background-image: linear-gradient(var(--grid-line-color, var(--border)) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line-color, var(--border)) 1px, transparent 1px); }
 .grid-cell, .row-header, .column-header, .grid-corner, .selection-outline, .cell-editor { position: absolute; }
-.grid-cell { z-index: 1; display: flex; align-items: center; gap: 7px; padding: 0 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--canvas); font-size: var(--text-size); }
+.grid-cell { z-index: 1; display: flex; align-items: center; gap: 7px; padding: 0 var(--grid-cell-padding-x, 9px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--grid-line-color, var(--border)); border-bottom: 1px solid var(--grid-line-color, var(--border)); background: var(--grid-cell-surface, var(--canvas)); font-size: var(--text-size); font-variant-numeric: var(--grid-font-variant-numeric, normal); }
 .grid-cell > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.grid-cell.in-selection { background: var(--panel-2); }
-.grid-cell.field-cell { color: var(--muted); font-weight: 500; background: var(--panel); }
+/* Selection paints as an overlay so the cell keeps its own surface (v3). */
+.grid-cell.in-selection { background-image: linear-gradient(var(--grid-selection-fill, var(--panel-2)), var(--grid-selection-fill, var(--panel-2))); }
+.grid-cell.dataset-derived { --grid-cell-surface: var(--grid-derived-surface, var(--canvas)); }
+.grid-cell.field-cell { color: var(--muted); font-weight: 500; background: var(--grid-cell-field-surface, var(--panel)); }
 .grid-cell.frozen-row { z-index: 4; box-shadow: 0 1px 0 var(--border); }
 .grid-cell.frozen-column { z-index: 4; box-shadow: 1px 0 0 var(--border); }
 .grid-cell.frozen-row.frozen-column { z-index: 5; }
@@ -87,21 +89,22 @@ button { border: 0; background: transparent; cursor: pointer; }
 .formula-value { color: var(--accent-dark); }
 .cell-type { flex: 0 0 auto; color: var(--accent); font-size: 12px; font-weight: 600; }
 .cell-type.computed { color: var(--green); }
-.row-header, .column-header, .grid-corner { z-index: 5; display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--panel-2); color: var(--faint); font-size: var(--text-size); }
-.row-header { justify-content: flex-end; padding-right: 10px; color: var(--accent); background: var(--accent-soft); font-weight: 500; font-variant-numeric: tabular-nums; }
-.column-header { justify-content: flex-start; gap: 7px; padding: 0 10px; color: var(--accent-ink); background: var(--accent-soft); font-size: var(--text-size); font-weight: 500; }
-.column-coordinate { flex: 0 0 auto; color: var(--accent); font: 500 var(--meta-size) var(--font-mono); }
+.row-header, .column-header, .grid-corner { z-index: 5; display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--grid-line-color, var(--border)); border-bottom: 1px solid var(--grid-line-color, var(--border)); background: var(--panel-2); color: var(--faint); font-size: var(--text-size); }
+.row-header { justify-content: flex-end; padding-right: var(--grid-row-header-padding-x, 10px); color: var(--grid-row-header-ink, var(--accent)); background: var(--grid-header-surface, var(--accent-soft)); font-weight: 500; font-variant-numeric: tabular-nums; font-size: var(--grid-header-size, var(--text-size)); }
+.column-header { justify-content: flex-start; gap: 7px; padding: 0 var(--grid-header-padding-x, 10px); color: var(--grid-column-header-ink, var(--accent-ink)); background: var(--grid-header-surface, var(--accent-soft)); font-size: var(--grid-header-size, var(--text-size)); font-weight: 500; font-variant-numeric: var(--grid-font-variant-numeric, normal); }
+.column-coordinate { display: var(--grid-column-coordinate-display, inline); flex: 0 0 auto; color: var(--accent); font: 500 var(--meta-size) var(--font-mono); }
 .column-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.spreadsheet .src { display: inline-flex; align-items: center; gap: 3px; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 400; line-height: 14px; white-space: nowrap; }
+.spreadsheet .src { display: inline-flex; align-items: center; gap: 3px; padding: 0; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 400; line-height: 14px; white-space: nowrap; }
 .spreadsheet .src.local { color: var(--accent); }
 .column-header .fx { flex: 0 0 auto; height: auto; margin: 0; padding: 0 3px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-style: normal; line-height: 14px; }
 .column-sort { position: absolute; right: 8px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 4px; color: var(--purple); font-size: 9px; opacity: 0; }
 .column-header:hover .column-sort, .column-sort:focus-visible, .column-sort.active { opacity: 1; }
 .column-sort:hover { background: var(--accent-soft); color: var(--accent-dark); }
-.row-header.selected-header, .column-header.selected-header { color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
-.grid-corner { z-index: 8; background: var(--accent-soft); cursor: pointer; }
-.grid-corner:hover { background: var(--accent-soft); }
+.row-header.selected-header { color: var(--grid-row-selected-ink, var(--accent-ink)); background: var(--grid-row-selected-surface, var(--accent-soft)); font-weight: 600; }
+.column-header.selected-header { color: var(--grid-column-selected-ink, var(--accent-ink)); background: var(--grid-column-selected-surface, var(--accent-soft)); font-weight: 600; }
+.grid-corner { z-index: 8; background: var(--grid-header-surface, var(--accent-soft)); cursor: pointer; }
+.grid-corner:hover { background: var(--grid-header-surface, var(--accent-soft)); }
 .column-resizer { position: absolute; right: -3px; top: 0; width: 7px; height: 100%; margin: 0; padding: 0; border: 0; cursor: col-resize; z-index: 10; }
 .column-resizer:hover { background: color-mix(in oklab, var(--accent) 25%, transparent); }
 .selection-outline { z-index: 3; border: 2px solid var(--accent); pointer-events: none; box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 8%, transparent); }

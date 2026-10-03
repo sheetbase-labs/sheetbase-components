@@ -126,6 +126,34 @@
   --radius-lg: 10px;
   --row-height: 28px;
   --control-height: 28px;
+
+  /* Table grid (COMP-02): map the grid chrome onto the v3 design. The table
+     package reads each with a default fallback, so the non-v3 preset (which
+     never loads this file) keeps its own values. */
+  --grid-cell-surface: var(--surface);
+  --grid-derived-surface: var(--surface-derived);
+  --grid-cell-padding-x: 8px;
+  --grid-font-variant-numeric: tabular-nums;
+  --grid-line-color: var(--grid-line);
+  --grid-frame-width: 1px;
+  --grid-frame-radius: 6px 0 0 6px;
+  --grid-frame-surface: var(--surface);
+  --grid-frame-color: var(--border);
+  --grid-selection-fill: transparent;
+  --grid-invalid-surface: var(--danger-soft);
+  --grid-invalid-ink: var(--danger-text);
+  --grid-header-surface: var(--surface-muted);
+  --grid-row-header-ink: var(--muted);
+  --grid-column-header-ink: var(--muted);
+  --grid-row-header-padding-x: 8px;
+  --grid-header-padding-x: 8px;
+  --grid-header-size: var(--meta-size);
+  --grid-column-coordinate-display: none;
+  --grid-column-selected-surface: var(--selection-subtle);
+  --grid-column-selected-ink: var(--muted);
+  --grid-row-selected-surface: var(--surface-muted);
+  --grid-row-selected-ink: var(--muted);
+  --grid-invalid-mark-size: 0px;
   --shadow: 0 8px 24px rgba(15, 20, 28, 0.12);
 }
 

@@ -4,14 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sheetbase v3 grid fixture</title>
-    <!-- The design canvas loads these (canvas/SheetWorking.dc.html <helmet>);
-         the crop is only comparable if the fixture renders with the same faces. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
+    <!-- Faces: the design renders rasterise text in the platform UI font, not
+         the Inter the canvas nominally requests (its @fontsource build never
+         reaches the canvas string). The fixture pins the same stack so the
+         crop is comparable. -->
     <style>
       html,
       body {
@@ -26,6 +22,8 @@
         height: 293px;
       }
       #grid-fixture .spreadsheet {
+        /* Match the design render's actual face: the platform UI font. */
+        --font-sans: system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
     </style>
