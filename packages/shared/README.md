@@ -1,4 +1,4 @@
-# sheetbase-shared
+# @sheetbase-labs/sheetbase-shared
 
 Canonical Sheetbase field, query and chrome primitives.
 
@@ -10,9 +10,9 @@ import {
   toFieldDataType,
   PaneLayout,
   SheetbaseShell,
-} from "sheetbase-shared";
-import "sheetbase-shared/theme.css";
-import "sheetbase-shared/shell.css";
+} from "@sheetbase-labs/sheetbase-shared";
+import "@sheetbase-labs/sheetbase-shared/theme.css";
+import "@sheetbase-labs/sheetbase-shared/shell.css";
 // PaneLayout owns its styles: panes.css ships with the import above.
 ```
 
@@ -20,13 +20,13 @@ import "sheetbase-shared/shell.css";
 
 Every package reads its colours, fonts and sizes from CSS custom properties
 declared on the `.sheetbase-scope` / `.sheetbase-explorer` wrapper, so a host
-can retheme without forking. `sheetbase-shared/theme.css` is the default preset
-(the packages' own look); `sheetbase-shared/themes/v3.css` is the UI system v3
+can retheme without forking. `@sheetbase-labs/sheetbase-shared/theme.css` is the default preset
+(the packages' own look); `@sheetbase-labs/sheetbase-shared/themes/v3.css` is the UI system v3
 preset whose values are the design tokens verbatim.
 
 ```ts
-import "sheetbase-shared/theme.css";       // default preset
-import "sheetbase-shared/themes/v3.css";   // v3 preset — load after the default
+import "@sheetbase-labs/sheetbase-shared/theme.css";       // default preset
+import "@sheetbase-labs/sheetbase-shared/themes/v3.css";   // v3 preset — load after the default
 ```
 
 Add `data-theme="dark"` (or the `.dark` class) on the scope for the dark set.
@@ -226,7 +226,7 @@ remote dataflow.
 `bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and
 `dist-types`. The `types` export resolves to `src` so type-checking the
 monorepo needs no prebuild; `import` resolves to the compiled lib. Consumers of
-the compiled lib must load the styles (`sheetbase-shared/theme.css`,
+the compiled lib must load the styles (`@sheetbase-labs/sheetbase-shared/theme.css`,
 `shell.css`, `panes.css`).
 
 See the repository README for the vocabulary (`text` not `string`, `isNull` not

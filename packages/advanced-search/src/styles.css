@@ -60,12 +60,14 @@
 .sb-chip-add:hover { background: var(--surface-hover); color: var(--text); }
 .sb-chip-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* COMP-04.1 — filter builder popover (States.dc.html: 360px card, 28px rows). */
+/* COMP-04.1 — filter builder popover (States.dc.html: 360px card, 28px rows).
+   Padding is 12px, as the canvas declares and the render measures (first control
+   at border+12px on both axes; card 360×126). */
 .sb-filter-builder {
   width: 360px; max-width: 100%;
-  padding: 8px; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-md); box-shadow: var(--shadow);
+  border-radius: 8px; box-shadow: var(--shadow);
   color: var(--text);
 }
 .sb-filter-builder-rows { display: flex; flex-direction: column; gap: 10px; }

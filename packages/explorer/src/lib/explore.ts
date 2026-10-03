@@ -1,4 +1,4 @@
-import { testCondition, toFilterClause } from 'sheetbase-shared'
+import { testCondition, toFilterClause } from '@sheetbase-labs/sheetbase-shared'
 import type { ChartSpec, DataRow, Dataset, FilterRule } from './types'
 
 export const ROW_ID = '__sheetbaseRowId'

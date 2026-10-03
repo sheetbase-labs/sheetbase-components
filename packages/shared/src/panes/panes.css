@@ -3,7 +3,7 @@
  *
  * Shares the theme tokens and chrome primitives in theme.css/shell.css:
  * `.sb-frame`, `.sb-topbar`, `.sb-subbar`, `.sb-panel-heading`. Import after
- * `sheetbase-shared/theme.css`.
+ * `@sheetbase-labs/sheetbase-shared/theme.css`.
  */
 
 /* ── Shell ─────────────────────────────────────────────────────────────── */

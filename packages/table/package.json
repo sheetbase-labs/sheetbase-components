@@ -1,7 +1,16 @@
 {
-  "name": "sheetbase-table",
+  "name": "@sheetbase-labs/sheetbase-table",
   "version": "0.1.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/table"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist-lib/sheetbase-table.js",
   "module": "./dist-lib/sheetbase-table.js",
@@ -31,7 +40,7 @@
   },
   "dependencies": {
     "rbush": "^4.0.1",
-    "sheetbase-shared": "workspace:*"
+    "@sheetbase-labs/sheetbase-shared": "workspace:*"
   },
   "peerDependencies": {
     "@tanstack/react-virtual": "^3.14.10",

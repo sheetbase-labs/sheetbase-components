@@ -6,4 +6,4 @@ export {
   countNodes,
   emptyRoot,
   compileToDatasetQuery,
-} from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-shared";

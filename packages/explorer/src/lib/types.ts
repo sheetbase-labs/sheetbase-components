@@ -1,4 +1,4 @@
-import type { FilterOperator, GroupNode, SummaryKind } from 'sheetbase-shared'
+import type { FilterOperator, GroupNode, SummaryKind } from '@sheetbase-labs/sheetbase-shared'
 
 export type { FilterOperator }
 

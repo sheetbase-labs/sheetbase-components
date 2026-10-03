@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { createHttpAdapter } from 'sheetbase-shared'
+import { createHttpAdapter } from '@sheetbase-labs/sheetbase-shared'
 import type { ChartSpec, SavedExploration } from './types'
 
 /**
  * Versioned persistence boundary for the explorer session.
  *
- * Borrowed from sheetbase-table's `TablePresentationAdapter` concept:
+ * Borrowed from @sheetbase-labs/sheetbase-table's `TablePresentationAdapter` concept:
  * versioned serialisable state, registered migrations, a localStorage
  * adapter for the default host, an HTTP adapter for database-backed hosts,
  * and idle-scheduled saves so typing never blocks on storage.

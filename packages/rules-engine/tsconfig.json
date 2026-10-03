@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "sheetbase-shared": ["../shared/src/index.ts"]
+      "@sheetbase-labs/sheetbase-shared": ["../shared/src/index.ts"]
     },
     "isolatedModules": true,
     "esModuleInterop": true,

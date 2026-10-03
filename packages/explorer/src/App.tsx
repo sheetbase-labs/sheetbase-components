@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
-import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from 'sheetbase-shared'
+import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from '@sheetbase-labs/sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'

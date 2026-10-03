@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { compileToDatasetQuery, type ConditionNode, type GroupNode, type SheetbaseField } from "sheetbase-shared";
+import { compileToDatasetQuery, type ConditionNode, type GroupNode, type SheetbaseField } from "@sheetbase-labs/sheetbase-shared";
 import {
   addCondition,
   applyFilter,

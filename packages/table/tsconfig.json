@@ -16,7 +16,7 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
-      "sheetbase-shared": ["../shared/src/index.ts"]
+      "@sheetbase-labs/sheetbase-shared": ["../shared/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"],

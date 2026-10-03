@@ -1,6 +1,6 @@
 # Sheetbase Explorer
 
-Chart-first exploration workspace for Sheetbase. Import data, query it with SQL, and build analytical charts with TanStack Charts. Filter operators come from `sheetbase-shared`.
+Chart-first exploration workspace for Sheetbase. Import data, query it with SQL, and build analytical charts with TanStack Charts. Filter operators come from `@sheetbase-labs/sheetbase-shared`.
 
 ```bash
 bun run dev
@@ -17,7 +17,7 @@ Analysis screen's step-yield and turbidity charts), so the same load sits at
 the same pixel in every chart.
 
 ```tsx
-import { Chart, ChartGroup, FieldRolePanel, buildFigure, specWithRole } from 'sheetbase-explorer'
+import { Chart, ChartGroup, FieldRolePanel, buildFigure, specWithRole } from '@sheetbase-labs/sheetbase-explorer'
 
 <Chart dataset={dataset} spec={spec} />                       {/* 844×262 design figure */}
 <ChartGroup dataset={dataset} charts={[{ spec: yieldSpec }, { spec: turbiditySpec, height: 196 }]} />
@@ -29,7 +29,7 @@ with circle, square and triangle markers by series index; points whose
 plot edge with a value label); reference lines are dashed and labelled with
 their value and unit; axes are quiet with fine gridlines; axis titles carry
 units (`spec.xUnit`/`spec.yUnit`). Colours are theme variables only, so load
-`sheetbase-shared/themes/v3.css` (or map the variables onto your own) as usual.
+`@sheetbase-labs/sheetbase-shared/themes/v3.css` (or map the variables onto your own) as usual.
 
 `buildFigure` / `buildFigureGroup` return the plain geometry model behind the
 components if you need the numbers, and `describeFigure` produces the

@@ -1,4 +1,4 @@
-import { operatorShortLabel, operatorsForField, type FilterOperator } from "sheetbase-shared";
+import { operatorShortLabel, operatorsForField, type FilterOperator } from "@sheetbase-labs/sheetbase-shared";
 import type { ColumnKind } from "./types";
 
 /** Operators for the explorer filter popover, aligned with the shared field contract. */

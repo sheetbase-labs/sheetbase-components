@@ -15,7 +15,7 @@ import {
   type GroupNode,
   type SheetbaseField,
   type SortClause,
-} from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-shared";
 
 export type FilterBuilderFieldInput = string | SheetbaseField;
 

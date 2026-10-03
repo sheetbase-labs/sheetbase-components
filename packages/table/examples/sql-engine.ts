@@ -1,4 +1,4 @@
-import type { ConditionNode, FilterNode, GroupNode } from "sheetbase-shared";
+import type { ConditionNode, FilterNode, GroupNode } from "@sheetbase-labs/sheetbase-shared";
 
 /**
  * `filterTree` → parameterised SQL — the reference host-executor

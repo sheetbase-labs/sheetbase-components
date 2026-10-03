@@ -7,8 +7,8 @@ import {
   type PagedDataAdapter,
   type SpreadsheetHandle,
   type SpreadsheetSelection,
-} from "sheetbase-table";
-import { useWorkspace } from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-table";
+import { useWorkspace } from "@sheetbase-labs/sheetbase-shared";
 
 /**
  * A table pane driven by the shared workspace: it reads `fields` and `query`,

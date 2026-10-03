@@ -14,7 +14,7 @@ import {
   type PaneSpec,
   type PersistenceAdapter,
   type ThemeMode,
-} from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-shared";
 import type { PipelineRule, Row, RuleActionDef, RuleApplyResult, RuleCondition, RuleOperator, RulesRemoteSource, RuleWrite } from "./types";
 import { parseNaturalLanguageRule, RuleParseError } from "./language";
 import { dryRun, ruleWritesForRows } from "./engine";

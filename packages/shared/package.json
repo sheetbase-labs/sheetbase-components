@@ -1,7 +1,16 @@
 {
-  "name": "sheetbase-shared",
+  "name": "@sheetbase-labs/sheetbase-shared",
   "version": "0.1.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/shared"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist-lib/sheetbase-shared.js",
   "module": "./dist-lib/sheetbase-shared.js",

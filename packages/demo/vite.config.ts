@@ -21,12 +21,12 @@ export default defineConfig({
   // directly so a fresh clone needs no `build:lib` pass (mirrors tsconfig paths).
   resolve: {
     alias: [
-      { find: /^sheetbase-table$/, replacement: sibling("table") },
-      { find: /^sheetbase-explorer$/, replacement: sibling("explorer") },
-      { find: /^sheetbase-schemaeditor$/, replacement: sibling("schema-editor") },
-      { find: /^sheetbase-rulesengine$/, replacement: sibling("rules-engine") },
-      { find: /^sheetbase-advanced-search$/, replacement: sibling("advanced-search") },
-      { find: /^sheetbase-shared$/, replacement: sibling("shared") },
+      { find: /^@sheetbase-labs\/sheetbase-table$/, replacement: sibling("table") },
+      { find: /^@sheetbase-labs\/sheetbase-explorer$/, replacement: sibling("explorer") },
+      { find: /^@sheetbase-labs\/sheetbase-schemaeditor$/, replacement: sibling("schema-editor") },
+      { find: /^@sheetbase-labs\/sheetbase-rulesengine$/, replacement: sibling("rules-engine") },
+      { find: /^@sheetbase-labs\/sheetbase-advanced-search$/, replacement: sibling("advanced-search") },
+      { find: /^@sheetbase-labs\/sheetbase-shared$/, replacement: sibling("shared") },
     ],
   },
   server: {

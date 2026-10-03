@@ -1,6 +1,15 @@
 {
-  "name": "sheetbase-explorer",
+  "name": "@sheetbase-labs/sheetbase-explorer",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/explorer"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "version": "0.1.0",
   "type": "module",
   "main": "./dist-lib/sheetbase-explorer.js",
@@ -34,8 +43,8 @@
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
     "papaparse": "^5.5.3",
-    "sheetbase-shared": "workspace:*",
-    "sheetbase-table": "workspace:*"
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-table": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

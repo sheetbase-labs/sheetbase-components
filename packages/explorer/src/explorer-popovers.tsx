@@ -1,4 +1,4 @@
-import { resolveThemeColour } from 'sheetbase-shared'
+import { resolveThemeColour } from '@sheetbase-labs/sheetbase-shared'
 import { FileUploadIcon } from './components/icons'
 import { useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
 import { FieldSelect } from './components/FieldSelect'

@@ -9,8 +9,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
-      { find: /^sheetbase-shared$/, replacement: sheetbaseShared },
-      { find: /^sheetbase-table$/, replacement: sheetbaseTable },
+      { find: /^@sheetbase-labs\/sheetbase-shared$/, replacement: sheetbaseShared },
+      { find: /^@sheetbase-labs\/sheetbase-table$/, replacement: sheetbaseTable },
     ],
   },
   server: {

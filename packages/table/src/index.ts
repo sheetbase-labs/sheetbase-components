@@ -1,4 +1,4 @@
-import "sheetbase-shared/theme.css";
+import "@sheetbase-labs/sheetbase-shared/theme.css";
 import "./ui/styles.css";
 
 export * from "./engine";

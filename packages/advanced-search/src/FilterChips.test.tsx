@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ConditionNode, FilterNode, SheetbaseField } from "sheetbase-shared";
+import type { ConditionNode, FilterNode, SheetbaseField } from "@sheetbase-labs/sheetbase-shared";
 import { describeCondition, FilterChips } from "./FilterChips";
 
 const STATUS: SheetbaseField = { id: "status", label: "Status", dataType: "text" };

@@ -12,7 +12,7 @@ export default defineConfig({
       cssFileName: "style",
     },
     rollupOptions: {
-      external: ["react", "react-dom", "react/jsx-runtime", "sheetbase-shared", "sheetbase-table"],
+      external: ["react", "react-dom", "react/jsx-runtime", "@sheetbase-labs/sheetbase-shared", "@sheetbase-labs/sheetbase-table"],
     },
   },
 });

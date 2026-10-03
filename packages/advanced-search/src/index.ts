@@ -1,5 +1,5 @@
-import "sheetbase-shared/theme.css";
-import "sheetbase-shared/shell.css";
+import "@sheetbase-labs/sheetbase-shared/theme.css";
+import "@sheetbase-labs/sheetbase-shared/shell.css";
 import "./styles.css";
 
 export * from "./types";
@@ -23,4 +23,4 @@ export type {
   FilterBuilderFieldInput,
 } from "./FilterBuilder";
 export type { AdvancedSearchProps, AdvancedSearchHandle, SearchFieldInput } from "./AdvancedSearch";
-export { MoonIcon, SunIcon, ThemeToggleButton, type ThemeMode } from "sheetbase-shared";
+export { MoonIcon, SunIcon, ThemeToggleButton, type ThemeMode } from "@sheetbase-labs/sheetbase-shared";

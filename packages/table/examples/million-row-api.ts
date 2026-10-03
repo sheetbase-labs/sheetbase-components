@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 // Filter trees are evaluated with the shared predicate so example semantics
 // can't drift from the contract. Requires `bun run build:lib` in packages/shared
 // first (the workspace import resolves to dist-lib).
-import { buildPredicate, type FilterNode } from "sheetbase-shared";
+import { buildPredicate, type FilterNode } from "@sheetbase-labs/sheetbase-shared";
 import { DATASET_COLUMNS, createDataset, filterTreeToSql, filtersToSql, insertRecord, quoteField, sortToSql } from "./sql-engine";
 
 // Two engines serve the same wire contract. The default `sql` engine seeds a

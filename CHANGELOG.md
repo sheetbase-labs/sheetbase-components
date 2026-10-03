@@ -37,10 +37,16 @@ versions follow [SemVer](https://semver.org/).
 
 ### Changed
 
+- **Packaging**: the six libraries are now scoped `@sheetbase-labs/*` and
+  publish privately to GitHub Packages (each manifest sets `publishConfig` to
+  `https://npm.pkg.github.com` with `access: restricted`). The release workflow
+  authenticates with the built-in Actions token (`permissions: packages: write`,
+  `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`) instead of a public-npm
+  `NPM_TOKEN`, and no publish path passes `--access public`.
 - Schema editor dev demo fills the viewport with a small margin.
 - Schema editor query-import nodes drop the green left stripe; the green
   header and kind chip carry the distinction.
-- Schema editor dev server pre-bundles `sheetbase-shared` (one library module
+- Schema editor dev server pre-bundles `@sheetbase-labs/sheetbase-shared` (one library module
   instead of ~20 source modules) and gains `bun run dev:bundled`, a watch-build
   + preview mode the orb portal uses: the page went from 40 requests / 4.0s to
   3 requests / ~0.6s at 250ms RTT. Production builds are byte-identical.

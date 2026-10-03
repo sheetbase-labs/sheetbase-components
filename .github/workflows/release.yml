@@ -1,9 +1,15 @@
 name: Release
 
-# Publishes the six libraries in dependency order when a v* tag lands.
-# Requires an NPM_TOKEN secret; without it the verify steps still run and
-# the publish step fails fast — which is the intended dry-run mode until
-# the first real release.
+# Publishes the six libraries to GitHub Packages (private, scoped to
+# `sheetbase-labs`) in dependency order when a v* tag lands.
+#
+# Auth is the built-in Actions token — `permissions: packages: write` plus
+# `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` — so there is no long-lived
+# NPM_TOKEN secret to rotate. Nothing is ever published to public npm: the
+# `--access public` flow is gone and every manifest carries
+# `publishConfig.access: restricted` against https://npm.pkg.github.com.
+#
+# `workflow_dispatch` runs the same pipeline minus the tag↔version check.
 
 on:
   push:
@@ -12,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   publish:
@@ -19,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,11 +59,13 @@ jobs:
           PKG=$(node -p "require('./packages/shared/package.json').version")
           [ "$TAG" = "$PKG" ] || { echo "tag $GITHUB_REF_NAME but package.json is $PKG — run bun scripts/version.mjs first"; exit 1; }
 
-      - name: Registry auth
-        run: echo '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > ~/.npmrc
+      - name: GitHub Packages auth
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          echo "@sheetbase-labs:registry=https://npm.pkg.github.com" >> ~/.npmrc
 
-      - name: Publish in dependency order
+      - name: Publish in dependency order (private, GitHub Packages)
         run: |
           for pkg in shared table advanced-search explorer schema-editor rules-engine; do
-            (cd "packages/$pkg" && bun publish --access public)
+            (cd "packages/$pkg" && bun publish --access restricted)
           done

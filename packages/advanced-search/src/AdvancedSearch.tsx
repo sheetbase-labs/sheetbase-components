@@ -29,8 +29,8 @@ import {
   loadInitialState,
   useIdleSave,
   type PersistenceAdapter,
-} from "sheetbase-shared";
-import { DataGrid } from "sheetbase-table";
+} from "@sheetbase-labs/sheetbase-shared";
+import { DataGrid } from "@sheetbase-labs/sheetbase-table";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
 

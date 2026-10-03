@@ -1,6 +1,6 @@
-# sheetbase-advanced-search
+# @sheetbase-labs/sheetbase-advanced-search
 
-Nested AND / OR / NOT search with grouping, sorting, limit, and a live table preview. Filter evaluation lives in `sheetbase-shared`.
+Nested AND / OR / NOT search with grouping, sorting, limit, and a live table preview. Filter evaluation lives in `@sheetbase-labs/sheetbase-shared`.
 
 ```bash
 bun install
@@ -8,8 +8,8 @@ bun run dev:search   # http://localhost:5203/
 ```
 
 ```tsx
-import { AdvancedSearch, applySearch } from "sheetbase-advanced-search"
-import "sheetbase-advanced-search/styles.css"
+import { AdvancedSearch, applySearch } from "@sheetbase-labs/sheetbase-advanced-search"
+import "@sheetbase-labs/sheetbase-advanced-search/styles.css"
 ```
 
 ## Filter popover (v3)
@@ -20,7 +20,7 @@ the table: one chip per condition with a named remove label, then "+ Add filter"
 Both render theme variables only, so a `.sheetbase-scope` (or the v3 preset) themes them.
 
 ```tsx
-import { FilterBuilder, FilterChips, applyFilter } from "sheetbase-advanced-search"
+import { FilterBuilder, FilterChips, applyFilter } from "@sheetbase-labs/sheetbase-advanced-search"
 
 <FilterBuilder
   node={filter}                        // the applied AND root

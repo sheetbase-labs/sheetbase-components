@@ -4,7 +4,7 @@ Sheetbase components share one accessibility contract: every view is operable by
 keyboard, every state change a pointer user can see is also announced or exposed
 to assistive technology, and every visualisation has a non-visual equivalent.
 
-## Table (`sheetbase-table`)
+## Table (`@sheetbase-labs/sheetbase-table`)
 
 The grid is the deepest surface; its full contract lives in
 `packages/table/docs/accessibility.md`. Summary:
@@ -17,7 +17,7 @@ The grid is the deepest surface; its full contract lives in
   validation failures also render `role="alert"`.
 - `SpreadsheetHandle.focus()` returns focus to the grid.
 
-## Panes (`sheetbase-shared`, `PaneLayout`)
+## Panes (`@sheetbase-labs/sheetbase-shared`, `PaneLayout`)
 
 - Tab strips are `role="tablist"`/`role="tab"`; ArrowLeft/ArrowRight move
   between tabs on the focused strip.
@@ -29,7 +29,7 @@ The grid is the deepest surface; its full contract lives in
 - Layout changes announce through a visually-hidden `aria-live` region
   (`.sb-pane-live`).
 
-## Schema editor (`sheetbase-schemaeditor`)
+## Schema editor (`@sheetbase-labs/sheetbase-schemaeditor`)
 
 The canvas is fully keyboard-operable — pointer drag is not the only path.
 
@@ -62,7 +62,7 @@ The canvas is fully keyboard-operable — pointer drag is not the only path.
 - Edges are drawn with one arrow marker per relation kind (reference, join,
   lineage) and the canvas legend names the kinds present.
 
-## Explorer (`sheetbase-explorer`)
+## Explorer (`@sheetbase-labs/sheetbase-explorer`)
 
 - Charts render through a chart library that emits `role="img"`,
   `aria-roledescription="chart"`, and `tabindex="0"` on the chart root.
@@ -77,14 +77,14 @@ The canvas is fully keyboard-operable — pointer drag is not the only path.
   `aria-valuenow`; its collapse toggle exposes `aria-expanded`.
 - Remote datasets show a text note where raw rows are not materialised.
 
-## Rules engine (`sheetbase-rulesengine`)
+## Rules engine (`@sheetbase-labs/sheetbase-rulesengine`)
 
 - The dry-run counts line (`N rows · M matched`) and the apply outcome are
   polite live regions, so re-evaluations announce without moving focus.
 - Applying writes requires an explicit `window.confirm` — no destructive
   action on a stray keypress.
 
-## Advanced search (`sheetbase-advanced-search`)
+## Advanced search (`@sheetbase-labs/sheetbase-advanced-search`)
 
 - The combinator toggle is a labelled `role="group"`; field, operator, and
   value inputs each carry an `aria-label`.

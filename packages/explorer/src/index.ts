@@ -1,5 +1,5 @@
-import 'sheetbase-shared/theme.css'
-import 'sheetbase-shared/shell.css'
+import '@sheetbase-labs/sheetbase-shared/theme.css'
+import '@sheetbase-labs/sheetbase-shared/shell.css'
 import './styles.css'
 import './ux-overrides.css'
 import './explorer-v2.css'
@@ -29,7 +29,7 @@ export type {
   FilterRule, PaletteKind, RemoteDatasetSource, RemotePage, RemotePageQuery,
   SavedExploration,
 } from './lib/types'
-export type { AnalysisView, SummaryKind } from 'sheetbase-shared'
+export type { AnalysisView, SummaryKind } from '@sheetbase-labs/sheetbase-shared'
 export { sampleAdapter } from './lib/adapters/sample'
 export { datasetFromFile } from './lib/adapters/file'
 export { inferColumns } from './lib/schema'

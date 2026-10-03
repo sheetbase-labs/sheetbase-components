@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { RulesEngine, type PipelineRule } from "sheetbase-rulesengine";
-import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
-import { AdvancedSearch } from "sheetbase-advanced-search";
+import { RulesEngine, type PipelineRule } from "@sheetbase-labs/sheetbase-rulesengine";
+import { SchemaEditor, type SchemaGraph } from "@sheetbase-labs/sheetbase-schemaeditor";
+import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";
 import { Explorer, DemoTable, ruleActions, ruleFields, rulesStarter, schemaStarter, searchFields, searchRows, createExplorerDataset, sampleRows } from "./showcase";
 
 interface PropRow { name: string; type: string; desc: string }
@@ -24,9 +24,9 @@ const SECTIONS: Section[] = [
   {
     id: "table",
     title: "Table",
-    pkg: "sheetbase-table",
+    pkg: "@sheetbase-labs/sheetbase-table",
     blurb: "The data grid — virtualised to a million rows, paged data sources, formulas, conditional formats, bound or unbound writes. Bound grids delegate persistence to the host via recordIdForRow.",
-    snippet: `import { Spreadsheet, createHttpAdapter } from "sheetbase-table";\n\n<Spreadsheet\n  datasetHeader={{ fields, recordIdForRow }}\n  adapter={persistence}\n  onFieldWrite={commit}\n/>`,
+    snippet: `import { Spreadsheet, createHttpAdapter } from "@sheetbase-labs/sheetbase-table";\n\n<Spreadsheet\n  datasetHeader={{ fields, recordIdForRow }}\n  adapter={persistence}\n  onFieldWrite={commit}\n/>`,
     props: [
       { name: "datasetHeader", type: "{ fields, recordIdForRow? }", desc: "Field contract; supplying recordIdForRow makes the grid host-bound." },
       { name: "onFieldWrite(s)", type: "(writes) => void", desc: "Cell/bulk writes through the runFieldWrite path — hosts commit." },
@@ -38,9 +38,9 @@ const SECTIONS: Section[] = [
   {
     id: "explorer",
     title: "Explorer",
-    pkg: "sheetbase-explorer",
+    pkg: "@sheetbase-labs/sheetbase-explorer",
     blurb: "Charting and aggregation over a Dataset — local rows or a remote source that aggregates (and now pages) on the server. A host-provided AnalysisView overrides the chart spec's slice.",
-    snippet: `import { Explorer, createHttpExplorerAdapter } from "sheetbase-explorer";\n\n<Explorer\n  dataset={dataset}\n  view={view} onViewChange={setView}\n/>`,
+    snippet: `import { Explorer, createHttpExplorerAdapter } from "@sheetbase-labs/sheetbase-explorer";\n\n<Explorer\n  dataset={dataset}\n  view={view} onViewChange={setView}\n/>`,
     props: [
       { name: "dataset", type: "Dataset", desc: "Columns + rows; remote sources pass rows: [] plus a remote block." },
       { name: "remote.aggregate / remote.page", type: "fns", desc: "Server-side aggregation and optional first-page row preview." },
@@ -52,9 +52,9 @@ const SECTIONS: Section[] = [
   {
     id: "schema",
     title: "Schema editor",
-    pkg: "sheetbase-schemaeditor",
+    pkg: "@sheetbase-labs/sheetbase-schemaeditor",
     blurb: "A canvas for table models — nodes, relationship edges, inspector edits. Emits Postgres-flavoured DDL and provisioning payloads, imports create-table DDL back into a graph, and draws query SQL — Trino, Postgres, dbt — as an ERD.",
-    snippet: `import { SchemaEditor, graphToDdl, ddlToGraph, analyzeSql } from "sheetbase-schemaeditor";\n\n<SchemaEditor\n  value={graph} onChange={setGraph}\n  onHeaderFieldsChange={(fields) => setTableFields(fields)}\n/>`,
+    snippet: `import { SchemaEditor, graphToDdl, ddlToGraph, analyzeSql } from "@sheetbase-labs/sheetbase-schemaeditor";\n\n<SchemaEditor\n  value={graph} onChange={setGraph}\n  onHeaderFieldsChange={(fields) => setTableFields(fields)}\n/>`,
     props: [
       { name: "value / initialGraph", type: "SchemaGraph", desc: "Controlled graph or uncontrolled seed." },
       { name: "onHeaderFieldsChange", type: "(fields, model) => void", desc: "Selected model → SheetbaseField[] — the schema→grid materialisation path." },
@@ -67,9 +67,9 @@ const SECTIONS: Section[] = [
   {
     id: "rules",
     title: "Rules engine",
-    pkg: "sheetbase-rulesengine",
+    pkg: "@sheetbase-labs/sheetbase-rulesengine",
     blurb: "A natural-language rule pipeline — 'when status is failed then set triage to urgent'. Dry-run evaluates every rule over the dataset; auto-apply commits transform writes live through the host.",
-    snippet: `import { RulesEngine, parseNaturalLanguageRule } from "sheetbase-rulesengine";\n\n<RulesEngine\n  value={rules} onChange={setRules}\n  rows={rows} recordIdOf={recordIdOf}\n  onApplyWrites={commitWrites}\n/>`,
+    snippet: `import { RulesEngine, parseNaturalLanguageRule } from "@sheetbase-labs/sheetbase-rulesengine";\n\n<RulesEngine\n  value={rules} onChange={setRules}\n  rows={rows} recordIdOf={recordIdOf}\n  onApplyWrites={commitWrites}\n/>`,
     props: [
       { name: "value / initialRules", type: "PipelineRule[]", desc: "Controlled rules or uncontrolled seed." },
       { name: "rows + recordIdOf", type: "Row[] + fn", desc: "Dataset for the dry-run pane; recordIdOf resolves rows to host record ids." },
@@ -81,9 +81,9 @@ const SECTIONS: Section[] = [
   {
     id: "search",
     title: "Advanced search",
-    pkg: "sheetbase-advanced-search",
+    pkg: "@sheetbase-labs/sheetbase-advanced-search",
     blurb: "Nested boolean filter trees — groups, combinators, per-field operators. Compiles to a DatasetQuery for the host pipeline and previews live matches.",
-    snippet: `import { AdvancedSearch } from "sheetbase-advanced-search";\n\n<AdvancedSearch\n  fields={fields} rows={rows}\n  onDatasetQueryChange={setQuery}\n/>`,
+    snippet: `import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";\n\n<AdvancedSearch\n  fields={fields} rows={rows}\n  onDatasetQueryChange={setQuery}\n/>`,
     props: [
       { name: "fields", type: "SearchFieldInput[]", desc: "Field objects with dataType — numeric/date fields get range operators." },
       { name: "rows", type: "SearchRow[]", desc: "Rows for the live match preview pane." },
@@ -123,9 +123,9 @@ export function DocsSite() {
             <h1>Sheetbase components</h1>
             <p>Six packages, one design system: a virtualised grid, a charting explorer, a schema canvas, a natural-language rules pipeline, a nested-filter search, and the shared contracts/shell they all compose through.</p>
             <h2>Install</h2>
-            <pre><code>bun add sheetbase-shared sheetbase-table sheetbase-explorer sheetbase-schemaeditor sheetbase-rulesengine sheetbase-advanced-search</code></pre>
+            <pre><code>bun add @sheetbase-labs/sheetbase-shared @sheetbase-labs/sheetbase-table @sheetbase-labs/sheetbase-explorer @sheetbase-labs/sheetbase-schemaeditor @sheetbase-labs/sheetbase-rulesengine @sheetbase-labs/sheetbase-advanced-search</code></pre>
             <h2>Contracts</h2>
-            <p>Shared types live in <code>sheetbase-shared</code>: <code>SheetbaseField</code> / <code>FieldDataType</code>, <code>FilterNode</code> trees, <code>DatasetQuery</code> + <code>queryKey</code>, <code>buildPredicate</code>, and the theme CSS every component scopes via <code>.sheetbase-scope</code>. Cross-component state flows through <code>AnalysisView</code> and <code>DatasetQuery.filterTree</code> — the tree is authoritative where both forms exist.</p>
+            <p>Shared types live in <code>@sheetbase-labs/sheetbase-shared</code>: <code>SheetbaseField</code> / <code>FieldDataType</code>, <code>FilterNode</code> trees, <code>DatasetQuery</code> + <code>queryKey</code>, <code>buildPredicate</code>, and the theme CSS every component scopes via <code>.sheetbase-scope</code>. Cross-component state flows through <code>AnalysisView</code> and <code>DatasetQuery.filterTree</code> — the tree is authoritative where both forms exist.</p>
             <p>The workbench in this repo composes all five components against one dataset — open the <strong>Pane layout</strong> view for the multiplexer, or <strong>Stacked</strong> for all five on a page.</p>
           </article>
         ) : active ? (

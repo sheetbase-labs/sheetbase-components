@@ -1,4 +1,4 @@
-import { buildPredicate, testCondition } from "sheetbase-shared";
+import { buildPredicate, testCondition } from "@sheetbase-labs/sheetbase-shared";
 import type { CellBinding, Scalar } from "../engine";
 import type { CommitResult, DatasetPage, PageRequest, PagedDataAdapter, RecordFieldWrite } from "./adapter";
 

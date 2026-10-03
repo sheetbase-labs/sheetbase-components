@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { resolveThemeColour, resolveThemeColours } from "sheetbase-shared";
+import { resolveThemeColour, resolveThemeColours } from "@sheetbase-labs/sheetbase-shared";
 import type { CellFormat, CellRange } from "../engine";
 import { usePortalPopover } from "./use-portal-popover";
 import type { ConditionalFormatOperator, ConditionalFormatRule } from "../grid/conditional-formatting";

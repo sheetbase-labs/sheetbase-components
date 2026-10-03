@@ -1,5 +1,5 @@
 import { useEffect, useState, type SetStateAction } from "react";
-import { createHttpAdapter, resolveTheme, useResolvedTheme, type ResolvedTheme, type ThemeMode } from "sheetbase-shared";
+import { createHttpAdapter, resolveTheme, useResolvedTheme, type ResolvedTheme, type ThemeMode } from "@sheetbase-labs/sheetbase-shared";
 import type { ConditionalFormatRule } from "../grid/conditional-formatting";
 import type { SpreadsheetFormatEntry } from "./Spreadsheet";
 import { normaliseCellAnnotations, type CellAnnotation } from "./annotations";

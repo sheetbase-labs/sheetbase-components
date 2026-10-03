@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyView, type AnalysisView, type FilterNode, type GroupNode } from 'sheetbase-shared'
+import { applyView, type AnalysisView, type FilterNode, type GroupNode } from '@sheetbase-labs/sheetbase-shared'
 import { filteredRows } from './explore'
 import { inferColumns } from './schema'
 import { filtersFromTree, treeFromFilters } from './view'

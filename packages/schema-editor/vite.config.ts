@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 const sheetbaseShared = fileURLToPath(new URL("../shared/src/index.ts", import.meta.url));
 
 /**
- * `sheetbase-shared` resolves to workspace source so dev and build both see the
+ * `@sheetbase-labs/sheetbase-shared` resolves to workspace source so dev and build both see the
  * sibling package directly. Serving that source unbundled costs ~20 separate
  * module requests though, and imports are only discovered level by level: on a
  * high-latency link (the orb portal, ~250ms RTT) each level serialises and the
@@ -18,10 +18,10 @@ const sheetbaseShared = fileURLToPath(new URL("../shared/src/index.ts", import.m
  */
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: [{ find: /^sheetbase-shared$/, replacement: sheetbaseShared }] },
+  resolve: { alias: [{ find: /^@sheetbase-labs\/sheetbase-shared$/, replacement: sheetbaseShared }] },
   optimizeDeps: {
     // Linked workspace packages are skipped by default — opt this one in.
-    include: ["sheetbase-shared"],
+    include: ["@sheetbase-labs/sheetbase-shared"],
   },
   server: {
     host: "0.0.0.0",

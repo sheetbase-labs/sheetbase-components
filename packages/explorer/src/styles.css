@@ -7,7 +7,7 @@
   color: var(--text);
   background: transparent;
   font-synthesis: none;
-  /* Surface tokens come from sheetbase-shared/theme.css (imported first); explorer keeps only chart vars below. */
+  /* Surface tokens come from @sheetbase-labs/sheetbase-shared/theme.css (imported first); explorer keeps only chart vars below. */
   --ts-chart-1: var(--accent);
   --ts-chart-2: var(--green);
   --ts-chart-3: var(--orange);
@@ -17,7 +17,7 @@
 }
 .sheetbase-explorer[data-theme="dark"] {
   color-scheme: dark;
-  /* Dark surface tokens come from sheetbase-shared/theme.css. */
+  /* Dark surface tokens come from @sheetbase-labs/sheetbase-shared/theme.css. */
 }
 :where(.sheetbase-explorer), :where(.sheetbase-explorer) * { box-sizing: border-box; }
 .sheetbase-explorer { width: 100%; height: 100%; }

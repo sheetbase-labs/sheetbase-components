@@ -4,7 +4,7 @@ import {
   type FilterNode,
   type FilterOperator,
   type SheetbaseField,
-} from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-shared";
 
 export type FilterChipsFieldInput = string | SheetbaseField;
 
