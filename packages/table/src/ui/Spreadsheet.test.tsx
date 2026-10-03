@@ -13,4 +13,16 @@ describe("Spreadsheet gridline background", () => {
   it("follows an explicit row height instead of the literal 31px", () => {
     expect(render({ defaultRowHeight: 28 })).toContain("background-size:140px 28px");
   });
+
+  it("accepts the host hooks without disturbing the default render", () => {
+    const html = render({
+      beforeCellsChange: () => false,
+      clipboard: { onCopy: () => false, onCutStatusChange: () => {} },
+      columnMenuItems: [{ label: "Open record", onSelect: () => {} }],
+      onSortChange: () => {},
+      onFiltersChange: () => {},
+      datasetHeader: { fields: [{ id: "owner", label: "Owner", column: 0, displayText: () => undefined }] },
+    });
+    expect(html).toContain("grid-canvas");
+  });
 });

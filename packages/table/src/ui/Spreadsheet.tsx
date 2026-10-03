@@ -67,13 +67,27 @@ import {
 import { CellStore } from "../grid/cell-store";
 import { resolveConditionalFormat, type ConditionalFormatRule } from "../grid/conditional-formatting";
 import { columnDisplayDefaults, formatCellDisplay } from "./column-display";
+import {
+  cellDisplayText,
+  enabledMenuActions,
+  resolveBeforeCellsChange,
+  resolveClipboardPayload,
+  sameClauses,
+  selectCustomEditor,
+  type SpreadsheetBeforeCellsChange,
+  type SpreadsheetClipboard,
+  type SpreadsheetClipboardPayload,
+  type SpreadsheetCutStatus,
+  type SpreadsheetEditorMatch,
+  type SpreadsheetMutationSource,
+} from "./host-hooks";
 import { removeAnnotation as removeFromAnnotations, setAnnotation as setAnnotationIn, type CellAnnotation } from "./annotations";
 import { GridCell, type GridCellHandlers } from "./GridCell";
 import {
   holdFieldWrite,
   type HeldFieldWrite,
 } from "./held-field-writes";
-import type { DatasetQuery, FilterClause, FilterOperator } from "../data";
+import type { DatasetQuery, FilterClause, FilterOperator, SortClause } from "../data";
 import { conflictWriteKeys, fieldWritesForMutation, type MutationFieldWrite } from "../data";
 import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
 import { conflictValueLabel, cellStateClassName, resolveCellState, type CellState } from "./cell-state";
@@ -134,6 +148,8 @@ export type SpreadsheetHandle = {
   clearWriteState(address: string): void;
   setFilter(filter: FilterClause): void;
   clearFilter(fieldId: string): void;
+  /** The live query, including the current sorts and filters. */
+  getQuery(): DatasetQuery;
 };
 
 export type SpreadsheetState = Readonly<{
@@ -168,6 +184,12 @@ export type DatasetFieldHeader = Readonly<{
   unit?: string;
   precision?: number;
   numberFormat?: CellFormat["numberFormat"];
+  /**
+   * Display-only label for a stored value (record label, category label).
+   * Returning `undefined` keeps the built-in rendering. Never rewrites the
+   * stored value, so bound writes keep the real value (id/key).
+   */
+  displayText?: (storedValue: string) => string | undefined;
 }>;
 export type DatasetHeaderConfig = Readonly<{
   datasetId?: string;
@@ -255,11 +277,23 @@ export type SpreadsheetProps = {
   onEditChange?(value: string): void;
   /** Audit/provenance hook: fired synchronously for every committed, undone, redone, or conflict-resolved mutation. Never blocks the grid when the sink throws. */
   onMutation?(mutation: GridMutation & { at: string; revision?: string }): void;
+  /**
+   * Pre-commit gate for every cell mutation (edit, paste, fill, clear, move,
+   * replace, structural edit, local sort). Runs *before* the change is applied.
+   * Return `false` to reject the whole change set (no history entry, no bound
+   * field writes, no `onMutation`); assign to `change.next` to replace
+   * individual proposed values.
+   */
+  beforeCellsChange?: SpreadsheetBeforeCellsChange;
   onViewportChange?(viewport: SpreadsheetViewport): void;
   bindingResolver?: BindingResolver;
   fieldIds?: readonly (string | undefined)[];
   query?: DatasetQuery;
   onQueryChange?(query: DatasetQuery): void;
+  /** Notified with the current sort clauses whenever they change (also inside `onQueryChange`). */
+  onSortChange?(sorts: readonly SortClause[]): void;
+  /** Notified with the current filter clauses whenever they change (also inside `onQueryChange`). */
+  onFiltersChange?(filters: readonly FilterClause[]): void;
   sortMode?: "local" | "server";
   datasetHeader?: DatasetHeaderConfig;
   onFieldWrite?(write: FieldWrite): void | Promise<void>;
@@ -317,6 +351,13 @@ export type SpreadsheetProps = {
   customEditors?: readonly SpreadsheetCustomEditor[];
   /** Extra actions appended to the column and row context menus. */
   contextMenuActions?: readonly SpreadsheetMenuAction[];
+  /** Extra entries appended to the column header menu (the richer header-menu surface). */
+  columnMenuItems?: readonly SpreadsheetMenuAction[];
+  /**
+   * Clipboard gates: before copy/cut/paste the host may cancel (`false`) or
+   * transform the payload, and receive cut status updates.
+   */
+  clipboard?: SpreadsheetClipboard;
 };
 
 function menuKeys(onClose: () => void) {
@@ -348,30 +389,45 @@ export type SpreadsheetCellRenderContext = Readonly<{
 }>;
 
 export type SpreadsheetMenuAction = Readonly<{
+  /** Stable id for host bookkeeping; the label is used when omitted. */
+  id?: string;
   label: string;
+  /** Hidden from the menu when true. */
+  disabled?(): boolean;
   onSelect(context: { axis: "row" | "column"; index: number; fieldId?: string }): void;
 }>;
 
 export type SpreadsheetCustomEditorContext = Readonly<{
   point: GridPoint;
   address: string;
+  /** Stable column id (`fieldIds[point.column]`), present for bound/local columns. */
+  columnId?: string;
   field?: DatasetHeaderConfig["fields"][number];
+  /** The cell's current stored value (not the display label). */
+  storedValue: string;
   initialDraft: string;
   commit(value: string): void;
   cancel(): void;
 }>;
 
 export type SpreadsheetCustomEditor = Readonly<{
-  matches(context: { point: GridPoint; field?: DatasetHeaderConfig["fields"][number] }): boolean;
+  matches(context: SpreadsheetEditorMatch<DatasetHeaderConfig["fields"][number]>): boolean;
   render(context: SpreadsheetCustomEditorContext): ReactNode;
 }>;
 
+/** Result of applying a grid mutation through the pre-commit gate. */
+export type SpreadsheetCommitOutcome =
+  | Readonly<{ status: "applied"; mutation: GridMutation }>
+  | Readonly<{ status: "empty" }>
+  | Readonly<{ status: "rejected" }>;
 
-function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFit, onHide, onMove, onFreeze, onUnfreeze, onFormat, actions, onClose }: Readonly<{
+
+function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFit, onHide, onMove, onFreeze, onUnfreeze, onFormat, headerActions, actions, onClose }: Readonly<{
   x: number; y: number; column: number;
   field?: DatasetHeaderConfig["fields"][number]; query: DatasetQuery;
   onQueryChange?(query: DatasetQuery): void; onAutoFit(): void; onHide?(): void;
   onMove?(direction: -1 | 1): void; onFreeze(): void; onUnfreeze?(): void; onFormat?(): void; onClose(): void;
+  headerActions?: readonly SpreadsheetMenuAction[];
   actions?: readonly SpreadsheetMenuAction[];
 }>) {
   const existing = field ? query.filters?.find((filter) => filter.fieldId === field.id) : undefined;
@@ -423,7 +479,7 @@ function ColumnContextMenu({ x, y, column, field, query, onQueryChange, onAutoFi
         <div className="column-menu-actions"><button type="button" className="primary" onClick={applyFilter}>Apply</button>{existing && <button type="button" onClick={clearFilter}>Remove</button>}</div>
       </section>
     </>}
-    <section className="column-menu-list"><button type="button" onClick={onAutoFit}>Auto-fit width</button>{onMove && <><button type="button" onClick={() => onMove(-1)}>Move left</button><button type="button" onClick={() => onMove(1)}>Move right</button></>}{onHide && <button type="button" onClick={onHide}>Hide column</button>}<button type="button" onClick={onFreeze}>Freeze through column</button>{onUnfreeze && <button type="button" onClick={onUnfreeze}>Unfreeze columns</button>}{onFormat && <button type="button" onClick={onFormat}>Conditional formatting…</button>}{actions?.map((action) => <button type="button" key={action.label} onClick={() => { action.onSelect({ axis: "column", index: column, fieldId: field?.id }); onClose(); }}>{action.label}</button>)}</section>
+    <section className="column-menu-list"><button type="button" onClick={onAutoFit}>Auto-fit width</button>{onMove && <><button type="button" onClick={() => onMove(-1)}>Move left</button><button type="button" onClick={() => onMove(1)}>Move right</button></>}{onHide && <button type="button" onClick={onHide}>Hide column</button>}<button type="button" onClick={onFreeze}>Freeze through column</button>{onUnfreeze && <button type="button" onClick={onUnfreeze}>Unfreeze columns</button>}{onFormat && <button type="button" onClick={onFormat}>Conditional formatting…</button>}{enabledMenuActions([...(headerActions ?? []), ...(actions ?? [])]).map((action) => <button type="button" key={action.id ?? action.label} onClick={() => { action.onSelect({ axis: "column", index: column, fieldId: field?.id }); onClose(); }}>{action.label}</button>)}</section>
   </div>;
 }
 
@@ -454,11 +510,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   onSelectionChange,
   onEditChange,
   onMutation,
+  beforeCellsChange,
   onViewportChange,
   bindingResolver,
   fieldIds = [],
   query = defaultQuery,
   onQueryChange,
+  onSortChange,
+  onFiltersChange,
   sortMode = "local",
   datasetHeader,
   onFieldWrite,
@@ -485,6 +544,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   renderCell,
   customEditors,
   contextMenuActions,
+  columnMenuItems,
+  clipboard,
 }, forwardedRef) {
   const viewportRef = useRef<HTMLDivElement>(null);
   // Row height: an explicit prop wins; otherwise the theme's `--row-height`
@@ -573,6 +634,20 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     window.clearTimeout(announcerTimer.current);
     announcerTimer.current = window.setTimeout(() => setAnnouncement(message), 150);
   }, []);
+  // Every sort/filter change flows through one place so the host's dedicated
+  // notifications fire exactly when those surfaces change, alongside the whole
+  // query callback.
+  const applyQuery = useCallback((next: DatasetQuery) => {
+    if (!sameClauses(query.sort, next.sort)) onSortChange?.(next.sort ?? []);
+    if (!sameClauses(query.filters, next.filters)) onFiltersChange?.(next.filters ?? []);
+    onQueryChange?.(next);
+  }, [onFiltersChange, onQueryChange, onSortChange, query]);
+  const cutStatusRef = useRef<SpreadsheetCutStatus | null>(null);
+  const updateCutStatus = useCallback((next: SpreadsheetCutStatus | null) => {
+    if (next === null && cutStatusRef.current === null) return;
+    cutStatusRef.current = next;
+    clipboard?.onCutStatusChange?.(next);
+  }, [clipboard]);
   const writeStateTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const clickTimingFrame = useRef<number | undefined>(undefined);
   useEffect(() => () => {
@@ -723,7 +798,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     ...referencedRanges,
   ];
   const editingField = editing ? datasetHeader?.fields.find((field) => field.column === editing.column) : undefined;
-  const activeCustomEditor = editing && customEditors ? customEditors.find((editor) => editor.matches({ point: editing, field: editingField })) : undefined;
+  const editingColumnId = editing ? fieldIds[editing.column] : undefined;
+  const activeCustomEditor = editing
+    ? selectCustomEditor(customEditors, { point: editing, columnId: editingColumnId, field: editingField })
+    : undefined;
   const columnOffsets = useMemo(() => {
     const offsets = [0];
     for (const width of columnWidths) offsets.push(offsets[offsets.length - 1] + width);
@@ -931,18 +1009,22 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
    * `emitFieldWrites: false` is for mutations that must not persist — the
    * single-edit path dispatches its own write, and structure/sort mutations
    * move values between addresses so row→record identity no longer holds.
+   * The pre-commit gate runs first: a rejected mutation applies nothing.
    */
-  const commitMutation = useCallback((mutation: GridMutation, options?: { emitFieldWrites?: boolean }) => {
-    if (!pushHistory(mutation)) return;
-    const writes = options?.emitFieldWrites === false ? [] : fieldWritesForMutation(mutation, datasetHeader);
-    applyWorksheetMutation(worksheet, mutation);
-    setData((current) => applyCellMutation(current, mutation));
+  const commitMutation = useCallback((mutation: GridMutation, options?: { emitFieldWrites?: boolean; source?: SpreadsheetMutationSource }): SpreadsheetCommitOutcome => {
+    const resolved = resolveBeforeCellsChange(beforeCellsChange, mutation, options?.source ?? "edit", datasetHeader);
+    if (!resolved) return { status: "rejected" };
+    if (!pushHistory(resolved)) return { status: "empty" };
+    const writes = options?.emitFieldWrites === false ? [] : fieldWritesForMutation(resolved, datasetHeader);
+    applyWorksheetMutation(worksheet, resolved);
+    setData((current) => applyCellMutation(current, resolved));
     emitFieldWrites(writes);
-  }, [datasetHeader, emitFieldWrites, pushHistory, worksheet]);
+    return { status: "applied", mutation: resolved };
+  }, [beforeCellsChange, datasetHeader, emitFieldWrites, pushHistory, worksheet]);
 
-  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>, options?: { emitFieldWrites?: boolean }) => {
+  const commit = useCallback((next: ReadonlyMap<string, string>, label = "Edit cells", affectedAddresses?: Iterable<string>, options?: { emitFieldWrites?: boolean; source?: SpreadsheetMutationSource }) => {
     const mutation = cellMutation(label, data, next, affectedAddresses);
-    commitMutation(mutation, options);
+    return commitMutation(mutation, options);
   }, [commitMutation, data]);
 
 
@@ -1024,7 +1106,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       address: key,
       before: data.get(key),
       after: value === "" ? undefined : value,
-    }]));
+    }]), { source: "edit" });
   }, [canEdit, commitMutation, data, readOnly, selection.focus]);
 
   const applyFormat = useCallback((patch: Partial<CellFormat>) => {
@@ -1056,12 +1138,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   }, [worksheet]);
 
   const setFilter = useCallback((filter: FilterClause) => {
-    onQueryChange?.({ ...query, filters: [...(query.filters ?? []).filter((item) => item.fieldId !== filter.fieldId), filter] });
-  }, [onQueryChange, query]);
+    applyQuery({ ...query, filters: [...(query.filters ?? []).filter((item) => item.fieldId !== filter.fieldId), filter] });
+  }, [applyQuery, query]);
 
   const clearFilter = useCallback((fieldId: string) => {
-    onQueryChange?.({ ...query, filters: (query.filters ?? []).filter((item) => item.fieldId !== fieldId) });
-  }, [onQueryChange, query]);
+    applyQuery({ ...query, filters: (query.filters ?? []).filter((item) => item.fieldId !== fieldId) });
+  }, [applyQuery, query]);
 
   useEffect(() => {
     if (bindingResolver) worksheet.setBindingResolver(bindingResolver);
@@ -1114,7 +1196,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           if (moved) {
             // The mutation diff only covers listed addresses — the source
             // cells must be included or their cleared values never apply.
-            commit(moved.data, "Move range", [...selectionAddresses(source), ...selectionAddresses(moved.selection)]);
+            commit(moved.data, "Move range", [...selectionAddresses(source), ...selectionAddresses(moved.selection)], { source: "move" });
             setSelection(moved.selection);
             setCopyRange(undefined);
             copyBuffer.current = null;
@@ -1123,8 +1205,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       }
       if (!readOnly && fillOrigin.current && fillTargetRef.current) {
         const filled = fillSelection(data, fillOrigin.current, fillTargetRef.current, rowCount, columnCount, canEdit);
-        commit(filled.data, "Autofill", selectionAddresses(filled.selection));
-        setSelection(filled.selection);
+        const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection), { source: "fill" });
+        if (outcome.status !== "rejected") setSelection(filled.selection);
       }
       fillOrigin.current = null;
       fillTargetRef.current = null;
@@ -1227,12 +1309,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (!canEdit(point)) return;
     setSelection({ anchor: point, focus: point });
     setCopyRange(undefined);
+    updateCutStatus(null);
     setEditing(point);
     setDraft(replaceWith ?? data.get(cellKey(point)) ?? "");
     setSuggestionIndex(0);
     setFormulaReference(null);
     setValidationError(undefined);
-  }, [canEdit, data]);
+  }, [canEdit, data, updateCutStatus]);
 
   /** COMP-02.4: click on the append row targets its first writable cell. */
   const selectAppendRow = useCallback(() => {
@@ -1256,17 +1339,22 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       // The single-edit write goes through runFieldWrite below, which carries
       // the blank-row record-create semantics — commitMutation must not also
       // dispatch a bulk write for this mutation.
-      commitMutation(cellChangesMutation("Edit cell", [{
+      const outcome = commitMutation(cellChangesMutation("Edit cell", [{
         address: key,
         before,
         after: completedDraft === "" ? undefined : completedDraft,
-      }]), { emitFieldWrites: false });
+      }]), { emitFieldWrites: false, source: "edit" });
+      // A rejected edit applies nothing and leaves the editor open so the host
+      // can show its own feedback; replaced values are the ones that persisted.
+      if (outcome.status === "rejected") return;
+      const appliedCell = outcome.status === "applied" ? outcome.mutation.cells.find((cell) => cell.address === key) : undefined;
+      const appliedValue = appliedCell ? appliedCell.after ?? "" : completedDraft;
       const recordId = datasetHeader?.recordIdForRow?.(editing.row);
       // Skip the write entirely when the edit changed nothing — an unchanged
       // commit still bumps the server revision and pollutes held writes.
-      if (field && (!rowWasBlank || recordId) && (before ?? "") !== completedDraft) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: completedDraft }, before);
-      if (rowWasBlank && datasetHeader && completedDraft !== "") {
-        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? completedDraft : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
+      if (field && (!rowWasBlank || recordId) && (before ?? "") !== appliedValue) runFieldWrite({ address: key, row: editing.row, datasetId: datasetHeader?.datasetId, recordId, fieldId: field.id, value: appliedValue }, before);
+      if (rowWasBlank && datasetHeader && appliedValue !== "") {
+        const values = Object.fromEntries(datasetHeader.fields.map((item) => [item.id, item.column === editing.column ? appliedValue : data.get(cellKey({ row: editing.row, column: item.column })) ?? ""]));
         if (onRecordCreate) Promise.resolve(onRecordCreate({ row: editing.row, values })).catch(() => undefined);
       }
     }
@@ -1294,12 +1382,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     // Structure moves values between addresses; in a bound grid that desyncs
     // row→record identity (writes would target the wrong records).
     if (readOnly || bound) return;
-    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
+    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false, source: "structure" });
   }, [bound, commit, data, range.bottom, range.top, readOnly]);
 
   const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
     if (readOnly || bound) return;
-    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false });
+    commit(changeGridStructure(data, { axis: "column", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} column${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false, source: "structure" });
   }, [bound, commit, data, range.left, range.right, readOnly]);
 
   const autoFitColumn = useCallback((column = selection.focus.column) => {
@@ -1321,8 +1409,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (readOnly || range.bottom === range.top) return;
     const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.top, column: range.right } };
     const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    commit(filled.data, "Fill down", selectionAddresses(filled.selection));
-    setSelection(filled.selection);
+    const outcome = commit(filled.data, "Fill down", selectionAddresses(filled.selection), { source: "fill" });
+    if (outcome.status !== "rejected") setSelection(filled.selection);
     announce("Filled down");
   }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
 
@@ -1330,8 +1418,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (readOnly || range.right === range.left) return;
     const source: GridSelection = { anchor: { row: range.top, column: range.left }, focus: { row: range.bottom, column: range.left } };
     const filled = fillSelection(data, source, { row: range.bottom, column: range.right }, rowCount, columnCount, canEdit);
-    commit(filled.data, "Fill right", selectionAddresses(filled.selection));
-    setSelection(filled.selection);
+    const outcome = commit(filled.data, "Fill right", selectionAddresses(filled.selection), { source: "fill" });
+    if (outcome.status !== "rejected") setSelection(filled.selection);
     announce("Filled right");
   }, [announce, canEdit, columnCount, commit, data, range.bottom, range.left, range.right, range.top, readOnly, rowCount]);
 
@@ -1357,7 +1445,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         count += replaced.count;
       }
     }
-    if (count) commit(next, "Replace all");
+    if (count) commit(next, "Replace all", undefined, { source: "replace" });
     return count;
   }, [commit, data, readOnly]);
 
@@ -1425,6 +1513,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     clearWriteState,
     setFilter,
     clearFilter,
+    getQuery: () => query,
     setAnnotation: annotate,
     removeAnnotation: removeAnnotationAt,
     heldFieldWrites: () => [...heldWritesRef.current.values()].map((entry) => entry.write),
@@ -1442,7 +1531,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       setHeldWrites(empty);
       onHeldFieldWritesChange?.([]);
     },
-  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, selection, setFilter, undo, writeActiveCell]);
+  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, query, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, selection, setFilter, undo, writeActiveCell]);
 
   useEffect(() => {
     if (editing) onEditChange?.(draft);
@@ -1486,6 +1575,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       copyBuffer.current = null;
       moveDrag.current = null;
       setMovePreview(null);
+      updateCutStatus(null);
       return;
     }
     // Ctrl/Cmd+A selects the populated region first, then the whole sheet.
@@ -1616,10 +1706,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       // dismisses it (Excel); otherwise Enter moves the selection down.
       if (!readOnly && copyRange && copyBuffer.current) {
         const pasted = pasteTsv(data, selection.focus, copyBuffer.current.tsv, rowCount, columnCount, canEdit);
-        commit(pasted.data, "Paste range", selectionAddresses(pasted.selection));
-        setSelection(pasted.selection);
+        const outcome = commit(pasted.data, "Paste range", selectionAddresses(pasted.selection), { source: "paste" });
+        if (outcome.status !== "rejected") setSelection(pasted.selection);
         setCopyRange(undefined);
         copyBuffer.current = null;
+        updateCutStatus(null);
         return;
       }
       move({ row: event.shiftKey ? -1 : 1, column: 0 }, false);
@@ -1637,7 +1728,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       return;
     }
     if (event.key === "Backspace" || event.key === "Delete") {
-      event.preventDefault(); setCopyRange(undefined); copyBuffer.current = null; if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection)); return;
+      event.preventDefault(); setCopyRange(undefined); copyBuffer.current = null; updateCutStatus(null); if (!readOnly) commit(clearSelection(data, selection, canEdit), "Clear range", selectionAddresses(selection), { source: "clear" }); return;
     }
     if (!command && !event.altKey && event.key.length === 1) {
       if (readOnly) return;
@@ -1645,26 +1736,53 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }
   };
 
-  const onCopy = (event: React.ClipboardEvent) => {
-    event.preventDefault();
-    const tsv = selectionToTsv(data, selection);
-    event.clipboardData.setData("text/plain", tsv);
+  const clipboardPayloadFor = useCallback((source: GridSelection): SpreadsheetClipboardPayload => {
+    const text = selectionToTsv(data, source);
+    const bounds = normaliseSelection(source);
+    const columnIds: (string | undefined)[] = [];
+    for (let column = bounds.left; column <= bounds.right; column += 1) columnIds.push(fieldIds[column]);
+    return {
+      text,
+      values: parseTsv(text),
+      range: { top: bounds.top, left: bounds.left, bottom: bounds.bottom, right: bounds.right, columnIds },
+    };
+  }, [data, fieldIds]);
+
+  /** Writes both clipboard channels: raw TSV plus the calculated-values channel Excel re-paste uses. */
+  const writeClipboard = useCallback((event: React.ClipboardEvent, payload: SpreadsheetClipboardPayload, source: GridSelection) => {
+    event.clipboardData.setData("text/plain", payload.text);
     const calculated = new Map<string, string>();
-    for (const address of selectionAddresses(selection)) {
+    for (const address of selectionAddresses(source)) {
       const point = parseAddress(address);
       const input = data.get(address) ?? "";
       calculated.set(address, input.startsWith("=") ? displayValue(worksheet, point) : input);
     }
-    event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, selection));
-    copyBuffer.current = { tsv };
+    event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, source));
+  }, [data, worksheet]);
+
+  const onCopy = (event: React.ClipboardEvent) => {
+    event.preventDefault();
+    const payload = clipboardPayloadFor(selection);
+    const resolved = resolveClipboardPayload(clipboard?.onCopy?.(payload), payload);
+    if (!resolved) return;
+    writeClipboard(event, resolved, selection);
+    copyBuffer.current = { tsv: resolved.text };
     setCopyRange(normaliseSelection(selection));
+    updateCutStatus(null);
     announce(`Copied ${selectionLabel(selection)}`);
   };
   const onCut = (event: React.ClipboardEvent) => {
-    if (readOnly) { event.preventDefault(); return; }
-    onCopy(event);
+    event.preventDefault();
+    if (readOnly) return;
+    const payload = clipboardPayloadFor(selection);
+    const resolved = resolveClipboardPayload(clipboard?.onCut?.(payload), payload);
+    if (!resolved) return;
+    writeClipboard(event, resolved, selection);
+    copyBuffer.current = { tsv: resolved.text };
+    setCopyRange(normaliseSelection(selection));
+    updateCutStatus({ label: `Cut ${selectionLabel(selection)}`, range: resolved.range });
     announce(`Cut ${selectionLabel(selection)}`);
-    commit(clearSelection(data, selection, canEdit), "Cut range", selectionAddresses(selection));
+    commit(clearSelection(data, selection, canEdit), "Cut range", selectionAddresses(selection), { source: "clear" });
   };
   const onPaste = (event: React.ClipboardEvent) => {
     event.preventDefault();
@@ -1672,14 +1790,23 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const values = event.clipboardData.getData("application/x-sheetbase-values");
     const asValues = pasteValuesNext.current && values !== "";
     pasteValuesNext.current = false;
-    const tsv = asValues ? values : event.clipboardData.getData("text/plain");
+    const sourceText = asValues ? values : event.clipboardData.getData("text/plain");
+    const payload: SpreadsheetClipboardPayload = {
+      text: sourceText,
+      values: parseTsv(sourceText),
+      range: { top: selection.focus.row, left: selection.focus.column, bottom: selection.focus.row, right: selection.focus.column, columnIds: [fieldIds[selection.focus.column]] },
+    };
+    const resolved = resolveClipboardPayload(clipboard?.onPaste?.(payload, { row: selection.focus.row, column: selection.focus.column }), payload);
+    if (!resolved) return;
+    const tsv = resolved.text;
     const rows = parseTsv(tsv);
     const totalCells = rows.reduce((sum, row) => sum + row.length, 0);
     const chunkRows = Math.max(1, Math.floor(PASTE_CHUNK_CELLS / Math.max(1, rows[0]?.length ?? 1)));
     if (totalCells <= PASTE_CHUNK_CELLS) {
       const pasted = pasteTsv(data, selection.focus, tsv, rowCount, columnCount, canEdit);
-      commit(pasted.data, asValues ? "Paste values" : "Paste range", selectionAddresses(pasted.selection));
-      setSelection(pasted.selection);
+      const outcome = commit(pasted.data, asValues ? "Paste values" : "Paste range", selectionAddresses(pasted.selection), { source: "paste" });
+      if (outcome.status !== "rejected") setSelection(pasted.selection);
+      updateCutStatus(null);
       return;
     }
     // Large pastes apply in frame-sized slices so the viewport keeps painting.
@@ -1693,7 +1820,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       const start = { row: selection.focus.row + rowIndex, column: selection.focus.column };
       const applied = applyTsvRows(working, start, slice, rowCount, columnCount, canEdit);
       working = applied.data;
-      commit(applied.data, pasteLabel, selectionAddresses(applied.selection));
+      commit(applied.data, pasteLabel, selectionAddresses(applied.selection), { source: "paste" });
       rowIndex += slice.length;
       bottom = Math.max(bottom, applied.selection.focus.row);
       right = Math.max(right, applied.selection.focus.column);
@@ -1702,6 +1829,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         window.setTimeout(applyChunk, 0);
         return;
       }
+      updateCutStatus(null);
       setSelection({ anchor: selection.focus, focus: { row: bottom, column: right } });
     };
     applyChunk();
@@ -1879,7 +2007,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       if (event.shiftKey) {
         // A badge revert is a local-only gesture — the failed/conflicted
         // write never landed, so nothing should be re-persisted.
-        commitMutation(cellChangesMutation("Revert failed write", [{ address, before: data.get(address), after: writeState.before }]), { emitFieldWrites: false });
+        commitMutation(cellChangesMutation("Revert failed write", [{ address, before: data.get(address), after: writeState.before }]), { emitFieldWrites: false, source: "revert" });
         setWriteStates((current) => { const next = new Map(current); next.delete(address); return next; });
       } else if (writeState.status === "failed" || writeState.status === "conflict") runFieldWrite(writeState.write, writeState.before);
     },
@@ -1941,7 +2069,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         const value = formatCellDisplay(calculated, format, columnDisplay[column]);
         const resolvedState = cellState ? resolveCellState(cellState(row, column)) : undefined;
         // A conflict replaces the value with the design's "2 values" copy.
-        const display = resolvedState?.state === "conflict" ? conflictValueLabel(resolvedState.count ?? 2) : value;
+        const display = resolvedState?.state === "conflict"
+          ? conflictValueLabel(resolvedState.count ?? 2)
+          : cellDisplayText(field, calculated, value);
         // Excel-style overflow: single-line text paints across adjacent
         // empty cells. The span clips itself at the first populated,
         // spilled, or still-loading neighbour.
@@ -2104,14 +2234,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
               // grids sort server-side via the query change below.
               if (next) {
                 if (!sortBaselineRef.current) sortBaselineRef.current = data;
-                commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`, undefined, { emitFieldWrites: false });
+                commit(sortGridRows(sortBaselineRef.current, column, next), `Sort ${fieldId} ${next === "asc" ? "ascending" : "descending"}`, undefined, { emitFieldWrites: false, source: "sort" });
               } else if (sortBaselineRef.current) {
-                commit(sortBaselineRef.current, `Clear ${fieldId} sort`, undefined, { emitFieldWrites: false });
+                commit(sortBaselineRef.current, `Clear ${fieldId} sort`, undefined, { emitFieldWrites: false, source: "sort" });
                 sortBaselineRef.current = undefined;
               }
             }
             const otherSorts = (query.sort ?? []).filter((sort) => sort.fieldId !== fieldId);
-            onQueryChange?.({ ...query, sort: next ? [...otherSorts, { fieldId, direction: next }] : otherSorts });
+            applyQuery({ ...query, sort: next ? [...otherSorts, { fieldId, direction: next }] : otherSorts });
           }}
         >{query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "asc" ? "▲" : query.sort?.find((sort) => sort.fieldId === fieldIds[column])?.direction === "desc" ? "▼" : "↕"}</button>}
         <hr className="column-resizer" aria-orientation="vertical" aria-label={`Resize column ${columnLabel(column)}`} aria-valuenow={columnWidths[column]} aria-valuemin={72} aria-valuemax={480} tabIndex={0} onPointerDown={(event) => resizeColumn(column, event)} onKeyDown={(event) => resizeColumnWithKeys(column, event)} onDoubleClick={(event) => { event.stopPropagation(); autoFitColumn(column); }} />
@@ -2126,7 +2256,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {findPanel === "replace" && !readOnly && <button type="button" onClick={() => replaceAll(findQuery, replacement)}>Replace all</button>}
         <button type="button" aria-label="Close find" onClick={() => { setFindPanel(undefined); viewportRef.current?.focus(); }}>×</button>
       </search>}
-      {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={onQueryChange} actions={contextMenuActions} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { const fieldId = fieldIds[contextMenu.index]; if (!fieldId) return; onColumnVisibilityChange(fieldId, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
+      {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={applyQuery} actions={contextMenuActions} headerActions={columnMenuItems} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { const fieldId = fieldIds[contextMenu.index]; if (!fieldId) return; onColumnVisibilityChange(fieldId, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
       {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} ref={focusOnMount} onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
         {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
         {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
@@ -2136,7 +2266,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeights[contextMenu.index - 1] === 0 && <button type="button" onClick={() => { const next = [...rowHeights]; next[contextMenu.index - 1] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
         {(frozenRowCount > 0 || frozenColumnCount > 0) && <button type="button" onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
-        {contextMenuActions?.map((action) => <button type="button" key={action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
+        {enabledMenuActions(contextMenuActions).map((action) => <button type="button" key={action.id ?? action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
       </div>}
 
 
@@ -2180,8 +2310,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
             const targetRow = Math.max(extent(range.left - 1), extent(range.right + 1));
             if (targetRow <= range.bottom) return;
             const filled = fillSelection(data, selection, { row: targetRow, column: range.right }, rowCount, columnCount, canEdit);
-            commit(filled.data, "Autofill", selectionAddresses(filled.selection));
-            setSelection(filled.selection);
+            const outcome = commit(filled.data, "Autofill", selectionAddresses(filled.selection), { source: "fill" });
+            if (outcome.status !== "rejected") setSelection(filled.selection);
           }}
         />}
       </div>
@@ -2335,7 +2465,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {activeCustomEditor.render({
           point: editing,
           address: cellKey(editing),
+          columnId: editingColumnId,
           field: editingField,
+          storedValue: data.get(cellKey(editing)) ?? "",
           initialDraft: draft,
           commit: (value) => finishEdit(true, undefined, value),
           cancel: () => finishEdit(false),

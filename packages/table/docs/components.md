@@ -112,8 +112,8 @@ Both popovers render through portals (they cannot be clipped by the table wrappe
 
 Hosts can customise cells, editing and menus without forking the grid:
 
-- `renderCell(context)` replaces the content of a cell. Returning `undefined` keeps the built-in rendering. The context carries `address`, `point`, `display`, `field`, `selected`, `active` and `loading`; selection, keyboard handling and write-state badges are unaffected.
-- `customEditors` replaces the built-in input for matched fields. `matches({ point, field })` selects the editor; `render({ point, address, field, initialDraft, commit, cancel })` renders any input UI and calls `commit(value)` to save or `cancel()` to discard.
+- `renderCell(context)` replaces the content of a cell. Returning `undefined` keeps the built-in rendering. The context carries `address`, `point`, `display`, `field`, `selected`, `active` and `loading`; selection, keyboard handling and write-state badges are unaffected. `display` already includes a field's `displayText` label.
+- `customEditors` replaces the built-in input for matched fields. `matches({ point, columnId, field })` selects the editor; `render({ point, address, columnId, field, storedValue, initialDraft, commit, cancel })` renders any input UI and calls `commit(value)` to save or `cancel()` to discard. `columnId` is the stable `fieldIds[column]` id, so record pickers and formula-reference editors can target a column by id even when it has no dataset field.
 
 ```tsx
 <Spreadsheet
@@ -130,8 +130,126 @@ Hosts can customise cells, editing and menus without forking the grid:
 ```
 
 - `contextMenuActions` appends host actions to the column and row context menus. `onSelect({ axis, index, fieldId })` receives the menu target; Escape and the arrow-key navigation treat host actions like built-in items.
+- `columnMenuItems` appends host entries to the column header menu only. Both action types accept an optional `id` (used as the React key) and `disabled?(): boolean`; disabled entries are hidden.
 
 The plain demo (`/`) uses `renderCell` for status badges and a `Copy column name` context-menu action as a working reference.
+
+## Host hooks
+
+A bound host (an ELN sheet, an external dataset) keeps its own data-integrity
+rules in front of the grid's local commit pipeline through six seams. They are
+additive: omitting all of them preserves the current behaviour exactly.
+
+### Pre-commit mutation veto — `beforeCellsChange`
+
+Runs *before* a cell mutation is applied (edit, paste, fill, clear, move,
+replace, structural edit, local sort). Return `false` to reject the whole
+change set — no history entry, no bound field writes, no `onMutation`; assign
+to `change.next` to replace individual proposed values. A rejected single-cell
+edit applies nothing and leaves the editor open.
+
+```ts
+beforeCellsChange?(
+  changes: SpreadsheetCellChange[],
+  source: SpreadsheetMutationSource,
+): boolean | void;
+
+type SpreadsheetCellChange = {
+  address: string; row: number; column: number;
+  recordId?: string; fieldId?: string;      // bound identity, when known
+  before?: string; next?: string;           // previously/next stored values
+};
+
+type SpreadsheetMutationSource =
+  | "edit" | "paste" | "fill" | "clear"
+  | "move" | "replace" | "structure" | "sort" | "revert";
+```
+
+### Clipboard before-hooks — `clipboard`
+
+`onCopy` / `onCut` / `onPaste` fire before the payload is written, cleared or
+applied. Return `false` to cancel, nothing/`true` to accept, or a payload to
+transform (`values` are re-parsed from replaced `text`). `onCutStatusChange`
+surfaces cut status (`{ label, range }`) and `null` when the cut is dismissed,
+so a host can render its own cut status.
+
+```ts
+clipboard?: {
+  onCopy?(payload: SpreadsheetClipboardPayload): boolean | SpreadsheetClipboardPayload | void;
+  onCut?(payload: SpreadsheetClipboardPayload): boolean | SpreadsheetClipboardPayload | void;
+  onPaste?(
+    payload: SpreadsheetClipboardPayload,
+    target: { row: number; column: number },
+  ): boolean | SpreadsheetClipboardPayload | void;
+  onCutStatusChange?(status: SpreadsheetCutStatus | null): void;
+};
+
+type SpreadsheetClipboardPayload = {
+  text: string;                               // TSV written to / read from the clipboard
+  values: readonly (readonly string[])[];     // the same content, parsed
+  range: SpreadsheetClipboardRange;           // display range plus stable column ids
+};
+```
+
+### Header menu hook — `columnMenuItems`
+
+Host entries appended to the column header menu; the list is filtered through
+`disabled?.()` before rendering. Use `contextMenuActions` for the row/column
+context menus.
+
+```ts
+columnMenuItems?: readonly SpreadsheetMenuAction[];
+
+type SpreadsheetMenuAction = {
+  id?: string; label: string; disabled?(): boolean;
+  onSelect(context: { axis: "row" | "column"; index: number; fieldId?: string }): void;
+};
+```
+
+### Editor hooks — `customEditors`
+
+The first editor whose `matches({ point, columnId, field })` is true replaces
+the built-in input. `render` receives `columnId` and the cell's `storedValue`
+(not the display label) alongside `initialDraft`, `commit` and `cancel` — the
+hook a record picker or formula-reference editor uses.
+
+```ts
+customEditors?: readonly SpreadsheetCustomEditor[];
+
+type SpreadsheetCustomEditor = {
+  matches(context: { point: GridPoint; columnId?: string; field?: DatasetFieldHeader }): boolean;
+  render(context: {
+    point: GridPoint; address: string; columnId?: string; field?: DatasetFieldHeader;
+    storedValue: string; initialDraft: string;
+    commit(value: string): void; cancel(): void;
+  }): ReactNode;
+};
+```
+
+### Stored value vs display text — `DatasetFieldHeader.displayText`
+
+A column may map its stored value to display text. The grid renders the label
+while the stored value is untouched, so bound writes keep the real value (a
+record id, a category key). `renderCell`'s `display` also carries the label.
+
+```ts
+type DatasetFieldHeader = {
+  /* … */
+  displayText?: (storedValue: string) => string | undefined;
+};
+```
+
+### Sort/filter surface — `onSortChange` / `onFiltersChange`
+
+`query` / `onQueryChange` carry the full `DatasetQuery`; these two fire only
+when the sort or filter clauses actually change, and `getQuery()` on the ref
+reads the live query.
+
+```ts
+onSortChange?(sorts: readonly SortClause[]): void;
+onFiltersChange?(filters: readonly FilterClause[]): void;
+// ref: spreadsheetRef.current?.getQuery()
+```
 
 ## Multi-select option fields and large pastes
 

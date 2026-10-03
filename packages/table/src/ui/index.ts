@@ -1,4 +1,5 @@
 export * from "./Spreadsheet";
+export * from "./host-hooks";
 export * from "./TableSections";
 export * from "./SheetbaseTable";
 export * from "./TableWorkbook";
