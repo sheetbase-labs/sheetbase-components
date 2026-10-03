@@ -137,8 +137,9 @@ The plain demo (`/`) uses `renderCell` for status badges and a `Copy column name
 ## Host hooks
 
 A bound host (an ELN sheet, an external dataset) keeps its own data-integrity
-rules in front of the grid's local commit pipeline through six seams. They are
-additive: omitting all of them preserves the current behaviour exactly.
+rules in front of the grid's local commit pipeline through the seams below.
+They are additive: omitting all of them preserves the current behaviour
+exactly.
 
 ### Pre-commit mutation veto — `beforeCellsChange`
 
@@ -177,6 +178,20 @@ applied. Return `false` to cancel, nothing/`true` to accept, or a payload to
 transform (`values` are re-parsed from replaced `text`). `onCutStatusChange`
 surfaces cut status (`{ label, range }`) and `null` when the cut is dismissed,
 so a host can render its own cut status.
+
+The transform is a replacement, not just a veto — the returned payload is what
+reaches the clipboard (copy/cut) or the grid (paste). A paste hook can therefore
+rewrite formula relative references:
+
+```ts
+clipboard={{
+  onPaste: (payload, target) => ({
+    ...payload,
+    text: payload.text.replace(/([A-Z]+)(\d+)/g, (_m, column, row) =>
+      `${column}${Number(row) + target.row - payload.range.top}`),
+  }),
+}}
+```
 
 ```ts
 clipboard?: {
@@ -326,6 +341,145 @@ beforeCellsChange: (changes) => changes.every((change) => change.editable !== fa
 - A paste larger than 20,000 cells is applied in frame-sized slices, and its
   whole target set is gated once before the first slice lands.
 
+### Structural row hooks — `onBeforeRowsInsert` / `onRowsInserted` / `onBeforeRowsRemove` / `onRowsRemoved`
+
+The row menu and `ref.insertRows()` / `ref.deleteRows()` route through one
+decision that fires these hooks. **They fire for bound grids too** — the row
+menu's insert/delete entries are no longer hidden when `recordIdForRow` is set,
+so a bound host's deletion preflight and persistence always run.
+
+```ts
+onBeforeRowsInsert?(rowIndex: number, count: number): boolean | void;
+onRowsInserted?(rowIndex: number, count: number): void;
+onBeforeRowsRemove?(rowIndex: number, count: number): boolean | void;
+onRowsRemoved?(rowIndex: number, count: number): void;
+```
+
+- `rowIndex` is the **stored** row (the record), resolved through a local view;
+  `count` is the number of rows acted on. Return `false` from the preflight to
+  block the whole operation.
+- The row menu acts on one row. A multi-row `ref.deleteRows(index, count)` under
+  an active local view reports the stored row of the first displayed row and the
+  displayed count; resolve records through `recordIdForRow` when a sorted or
+  filtered view could make the stored span non-contiguous.
+- **Unbound grid** — the mutation is applied locally (undoable) and the
+  after-hook fires only when it applied.
+- **Bound grid** (`datasetHeader.recordIdForRow`) — `data` is never reordered,
+  so nothing is applied locally: the after-hook fires and the host persists
+  (delete/create records) and pushes the rebuilt rows back through
+  `replaceData`. Writes can never target the wrong record.
+- Read-only grids, and a displayed row a local view hides, are no-ops.
+
+```tsx
+<Spreadsheet
+  datasetHeader={header}
+  onBeforeRowsRemove={(rowIndex) => canDelete(localRows[rowIndex])}
+  onRowsRemoved={(rowIndex, count) => deleteRecords(localRows, rowIndex, count)}
+  onRowsInserted={() => refetchRows()}
+  {...props}
+/>
+```
+
+## Layout, focus and the formula engine
+
+### `height`, `stretch`, `rowHeaders`
+
+```ts
+height?: number | "fill";          // fixed px, or "fill" (height: 100%); omitted fills the layout cell
+stretch?: "none" | "last" | "all"; // default "none": keep the configured widths
+rowHeaders?: boolean;              // default true; false frees the row-header column
+```
+
+- `height` sets the scroll container's height inline. `"fill"` writes
+  `height: 100%`, so the host's parent must be a sized box (the default
+  `TableLayout` cell already is).
+- `stretch` measures the scroll container and distributes slack width:
+  `"last"` gives it all to the last visible column, `"all"` shares it equally.
+  Hidden columns (`width: 0`) stay hidden and a column is never shrunk below
+  its configured width; a resize still writes the *configured* width, so the
+  host's persisted widths are unaffected.
+- `rowHeaders: false` removes the row-number column and the select-all corner
+  and shifts every column left by the header width.
+
+### Initial column order — `orderColumnsById`
+
+The grid is positional: `fieldIds[i]`, `datasetHeader.fields[].column`,
+`initialData` addresses, `columnWidths[i]` and `onColumnMove(from, to)` all
+index the same column, and the host already rebuilds those arrays when it
+persists a move. There is therefore no separate in-component display order to
+set — the order **is** the order of the host's arrays. For a saved initial
+order, order the host's columns before mapping:
+
+```ts
+import { orderColumnsById } from "@sheetbase-labs/sheetbase-table";
+
+const columns = orderColumnsById(allColumns, presentation.columnOrder);
+// then build fieldIds / datasetHeader / initialData from `columns`, as usual
+```
+
+`orderColumnsById(columns, order)` puts ids named by `order` first (unknown and
+duplicate ids dropped), then the remaining columns in their existing order.
+
+### Formula-engine seams — `formulaEngine`
+
+The package owns calculation (ADR-0048 option (b)) — it compiles and evaluates
+`"=…"` inputs itself — so a host's *engine instance* cannot be injected; the
+supported "host owns calculation" mode remains `calculationAuthority: "host"`
+(formulas stay inert text, values arrive through hydration). What can be
+configured are the seams of the engine that does run:
+
+```ts
+type SpreadsheetFormulaEngine = {
+  /** Resolves qualified cross-sheet references (`Sheet1!A1`) to a scalar. */
+  referenceResolver?: ReferenceResolver;
+  /** Rewrites formula text before compilation, after structured-token substitution. */
+  formulaNormalizer?: FormulaNormalizer;
+};
+```
+
+`formulaNormalizer` receives the text *after* the built-in `[fieldId]` → range
+substitution; both seams are read at mount, and a changed `formulaNormalizer`
+renormalises the sheet (remount to reset `initialData`-style state).
+
+There is deliberately no way to inject a foreign engine instance or a
+`sheetName`: one `Spreadsheet` is one sheet backed by the package's engine, and
+multi-sheet ownership stays with the host (the package's `TableWorkbook`
+composes several). The transitional ELN `formulas: { engine, sheetName }` is
+obsolete under ADR-0048 option (b) — the server adopts this engine, so
+calculation lives in (or behind) the grid, and `calculationAuthority: "host"`
+covers a host that still owns calculation.
+
+### Imperative handle — select and scroll
+
+`SpreadsheetHandle` (the `ref`, or the handle passed to `onReady`) exposes the
+interaction commands a host needs after it changes its own rows:
+
+```ts
+selectCell(row: number, column: number, options?: { extend?: boolean }): void;
+selectCellAddress(address: string, options?: { extend?: boolean }): boolean;
+scrollCellIntoView(row: number, column: number): void;
+```
+
+`selectCell` takes **displayed** coordinates, clamps them to the grid, moves the
+selection (extending from the anchor when `extend` is true), scrolls the cell
+into view and focuses the grid. `selectCellAddress` takes a **stored** A1
+address, resolves it through a local sort/filter view, and returns `false` when
+the address is malformed or the row is hidden. `scrollCellIntoView` scrolls
+without touching the selection or focus.
+
+```tsx
+const [table, setTable] = useState<SpreadsheetHandle | null>(null);
+// later, after appending a row:
+table?.selectCellAddress(`A${rows.length}`);
+```
+
+`onReady(handle)` fires once after mount for hosts that hold no ref; the same
+handle is available through `ref`.
+
+`selectCell`/`selectCellAddress` clamp against the row count of the latest
+render, so call them after a data change has rendered (e.g. in an effect that
+runs when the rows change, or after `await`ing the state update) — calling them
+synchronously after `replaceData` in the same tick clamps to the old row count.
 
 ## Multi-select option fields and large pastes
 

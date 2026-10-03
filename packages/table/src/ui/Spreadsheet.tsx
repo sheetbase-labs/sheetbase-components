@@ -73,16 +73,19 @@ import { resolveConditionalFormat, type ConditionalFormatRule } from "../grid/co
 import { booleanCellValue, columnDisplayDefaults, formatCellDisplay } from "./column-display";
 import {
   enabledMenuActions,
+  planRowStructure,
   resolveBeforeCellsChange,
   resolveClipboardPayload,
   sameClauses,
   selectCustomEditor,
   type SpreadsheetBeforeCellsChange,
+  type SpreadsheetBeforeRowsChange,
   type SpreadsheetClipboard,
   type SpreadsheetClipboardPayload,
   type SpreadsheetCutStatus,
   type SpreadsheetEditorMatch,
   type SpreadsheetMutationSource,
+  type SpreadsheetRowsChanged,
 } from "./host-hooks";
 import { removeAnnotation as removeFromAnnotations, setAnnotation as setAnnotationIn, type CellAnnotation } from "./annotations";
 import { GridCell, type GridCellHandlers } from "./GridCell";
@@ -98,6 +101,9 @@ import { appendRowEnabled, appendRowIndex, appendRowLabel, firstWritableColumn, 
 import { focusOutsideGrid, tabIntent } from "./keyboard";
 import { CALC_SOURCE_LABEL, SourceBadge, showsComputedMark, type ColumnSource } from "./source-badge";
 import { rebaseAutoRowHeights, useIsomorphicLayoutEffect, useThemeRowHeight } from "./row-height";
+import { clampGridPoint, selectionForPoint } from "./grid-focus";
+import { stretchColumnWidths, type ColumnStretch } from "./column-layout";
+import { composeFormulaNormalizer, type SpreadsheetFormulaEngine } from "./formula-engine";
 
 const DEFAULT_COLUMN_HEADER_HEIGHT = 31;
 /** Cells per frame slice for large pastes; keeps the viewport responsive while pasting. */
@@ -144,6 +150,19 @@ export type SpreadsheetHandle = {
   replaceAll(query: string, replacement: string): number;
   applyFormat(format: Partial<CellFormat>): void;
   focus(): void;
+  /**
+   * Select a *displayed* cell and reveal it (scroll into view + focus the
+   * grid). Coordinates are clamped to the grid. `extend` keeps the current
+   * anchor, extending the selection (Shift-click semantics).
+   */
+  selectCell(row: number, column: number, options?: { extend?: boolean }): void;
+  /**
+   * Select a *stored* cell by A1 address and reveal it. Returns `false` when
+   * the address is malformed or a local view hides that row.
+   */
+  selectCellAddress(address: string, options?: { extend?: boolean }): boolean;
+  /** Scroll a displayed cell into view without changing the selection or focus. */
+  scrollCellIntoView(row: number, column: number): void;
   hydrate(cells: ReadonlyMap<string, SpreadsheetHydrationCell>): void;
   /** Replace all cells (e.g. after a server query change) instead of merging. */
   replaceData(cells: ReadonlyMap<string, SpreadsheetHydrationCell>): void;
@@ -153,6 +172,15 @@ export type SpreadsheetHandle = {
   clearFilter(fieldId: string): void;
   /** The live query, including the current sorts and filters. */
   getQuery(): DatasetQuery;
+  /** Per-cell provenance notes / review comments, keyed by stored address. */
+  setAnnotation(address: string, note: string, meta?: { author?: string; createdAt?: string }): void;
+  removeAnnotation(address: string): void;
+  /** Field writes held back by `fieldWritePolicy` ("hold"), awaiting host commit. */
+  heldFieldWrites(): readonly FieldWrite[];
+  /** Persist every held write through `onFieldWrite` and clear the hold. */
+  commitHeldFieldWrites(): void;
+  /** Drop every held write without persisting it. */
+  discardHeldFieldWrites(): void;
 };
 
 export type SpreadsheetState = Readonly<{
@@ -271,6 +299,25 @@ export type SpreadsheetProps = {
   columnGroups?: readonly { label: string; columns: readonly number[] }[];
   /** Row header width in px (v3: 50). */
   rowHeaderWidth?: number;
+  /** Render the row-number header column. Default true; `false` frees the width. */
+  rowHeaders?: boolean;
+  /**
+   * Fixed grid height in px, or `"fill"` to fill the parent (`height: 100%`).
+   * Omitted, the grid fills its layout cell (the default table composition).
+   */
+  height?: number | "fill";
+  /**
+   * Distribute slack container width across columns instead of leaving it
+   * empty. `"last"` gives it all to the last visible column, `"all"` shares it
+   * equally. Default `"none"` (configured widths). Never shrinks a column.
+   */
+  stretch?: ColumnStretch;
+  /**
+   * Engine seams for the grid's own formula engine (cross-sheet reference
+   * resolver, host formula normalizer). Read at mount — see
+   * `SpreadsheetFormulaEngine`.
+   */
+  formulaEngine?: SpreadsheetFormulaEngine;
   readOnlyRows?: ReadonlySet<number>;
   /** Blocks value/structure mutations; selection, copy, sorting and filtering stay live. */
   readOnly?: boolean;
@@ -361,6 +408,25 @@ export type SpreadsheetProps = {
    * transform the payload, and receive cut status updates.
    */
   clipboard?: SpreadsheetClipboard;
+  /**
+   * Fired once, after mount, with the imperative handle — the non-ref way to
+   * drive selection/scroll from a host that owns no ref.
+   */
+  onReady?(handle: SpreadsheetHandle): void;
+  /**
+   * Preflight for row insertion; return `false` to block. Fires for bound grids
+   * too (where the host persists the new record). `rowIndex` is the stored row.
+   */
+  onBeforeRowsInsert?: SpreadsheetBeforeRowsChange;
+  /** Fired after rows are inserted locally, or for a bound grid (host persists). */
+  onRowsInserted?: SpreadsheetRowsChanged;
+  /**
+   * Preflight for row removal; return `false` to block. Fires for bound grids
+   * too, so a bound host's deletion preflight always runs.
+   */
+  onBeforeRowsRemove?: SpreadsheetBeforeRowsChange;
+  /** Fired after rows are removed locally, or for a bound grid (host deletes records). */
+  onRowsRemoved?: SpreadsheetRowsChanged;
 };
 
 function menuKeys(onClose: () => void) {
@@ -515,6 +581,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   headerHeight = DEFAULT_COLUMN_HEADER_HEIGHT,
   columnGroups,
   rowHeaderWidth = DEFAULT_ROW_HEADER_WIDTH,
+  rowHeaders = true,
+  height,
+  stretch = "none",
+  formulaEngine,
   readOnlyRows = new Set(),
   readOnly = false,
   theme = "light",
@@ -557,8 +627,16 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   contextMenuActions,
   columnMenuItems,
   clipboard,
+  onReady,
+  onBeforeRowsInsert,
+  onRowsInserted,
+  onBeforeRowsRemove,
+  onRowsRemoved,
 }, forwardedRef) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  // The last-built imperative handle, so `onReady` can hand it to a host that
+  // owns no ref.
+  const handleRef = useRef<SpreadsheetHandle | null>(null);
   // Row height: an explicit prop wins; otherwise the theme's `--row-height`
   // (v3 preset: 28px, default preset: 31px) so a themed host needs no JS prop.
   const themedRowHeight = useThemeRowHeight(viewportRef);
@@ -570,15 +648,21 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const fillTargetRef = useRef<GridPoint | null>(null);
   const pasteValuesNext = useRef(false);
   const structuredRangesRef = useRef(new Map<string, string>());
+  // The host normalizer is read through a ref so a prop change (followed by
+  // `renormalizeFormulas`) takes effect without rebuilding the worksheet.
+  const formulaEngineRef = useRef(formulaEngine);
+  formulaEngineRef.current = formulaEngine;
   const sortBaselineRef = useRef<ReadonlyMap<string, string> | undefined>(undefined);
   const [data, setData] = useState<ReadonlyMap<string, string>>(() => CellStore.from(initialState?.data ?? initialData));
   const worksheetRef = useRef<Worksheet | null>(null);
   if (!worksheetRef.current) {
     const initialWorksheet = new Worksheet(
       bindingResolver,
-      undefined,
-      (expression) =>
-        expression.replace(/\[([^\]]+)\]/g, (token, fieldId: string) => structuredRangesRef.current.get(fieldId) ?? token),
+      formulaEngine?.referenceResolver,
+      composeFormulaNormalizer(
+        (fieldId) => structuredRangesRef.current.get(fieldId),
+        (expression) => formulaEngineRef.current?.formulaNormalizer?.(expression) ?? expression,
+      ),
       { formulaMode: calculationAuthority === "host" ? "literal" : "evaluate" },
     );
     for (const [address, input] of initialState?.data ?? initialData) initialWorksheet.setInput(address, input);
@@ -617,6 +701,31 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const [rowHeights, setRowHeights] = useState<number[]>(() => initialState?.rowHeights
     ? [...initialState.rowHeights]
     : Array.from({ length: rowCount }, (_, row) => initialRowHeights?.[row] ?? defaultRowHeight));
+  // `rowHeaders: false` frees the header column's width everywhere it is laid
+  // out (offsets, cells, fill handle) without renumbering any column.
+  const rowHeaderWidthResolved = rowHeaders ? rowHeaderWidth : 0;
+  // Stretching measures the scroll container; `"none"` never measures.
+  const [viewportWidth, setViewportWidth] = useState(0);
+  useIsomorphicLayoutEffect(() => {
+    if (stretch === "none") {
+      setViewportWidth(0);
+      return;
+    }
+    const element = viewportRef.current;
+    if (!element) return;
+    const measure = () => setViewportWidth(element.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [stretch]);
+  // Widths the renderer lays out: configured widths, or their stretched fill of
+  // the container. A hand resize and every host callback keep the base widths.
+  const renderColumnWidths = useMemo(
+    () => stretchColumnWidths(columnWidths, viewportWidth - rowHeaderWidthResolved, stretch),
+    [columnWidths, rowHeaderWidthResolved, stretch, viewportWidth],
+  );
   // The theme's `--row-height` is measured after mount, so rows seeded with
   // the fallback are re-baked once the real height arrives. Explicit heights
   // (`initialState`/`initialRowHeights` or a hand resize) and hidden rows (`0`)
@@ -722,6 +831,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // presence is the bound signal — a header passed for display metadata alone
   // leaves the grid unbound.
   const bound = datasetHeader?.recordIdForRow !== undefined;
+  // A bound grid has no local structure mutation to apply, so the row menu's
+  // insert/delete entries only appear when the host can take over via a hook.
+  const canInsertRows = !bound || onBeforeRowsInsert !== undefined || onRowsInserted !== undefined;
+  const canRemoveRows = !bound || onBeforeRowsRemove !== undefined || onRowsRemoved !== undefined;
   // Lookups hoisted out of the per-cell render loop and the local view.
   const fieldByColumn = useMemo(
     () => new Map((datasetHeader?.fields ?? []).map((field) => [field.column, field])),
@@ -805,7 +918,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     horizontal: true,
     count: columnCount,
     getScrollElement: () => viewportRef.current,
-    estimateSize: (column) => columnWidths[column] ?? 140,
+    estimateSize: (column) => renderColumnWidths[column] ?? 140,
     overscan: 3,
     useFlushSync: false,
   });
@@ -893,9 +1006,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     : undefined;
   const columnOffsets = useMemo(() => {
     const offsets = [0];
-    for (const width of columnWidths) offsets.push(offsets[offsets.length - 1] + width);
+    for (const width of renderColumnWidths) offsets.push(offsets[offsets.length - 1] + width);
     return offsets;
-  }, [columnWidths]);
+  }, [renderColumnWidths]);
   const rowOffsets = useMemo(
     () => rowOffsetTable(viewRowCount, (index) => rowHeightAt(index)),
     [rowHeightAt, viewRowCount],
@@ -904,7 +1017,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // (set in onScroll), the same way frozen rows ride --sheet-scroll-top — so
   // scroll never needs a React state update just to reposition them.
   const columnLeft = (column: number, extra = 0): number | string => {
-    const base = rowHeaderWidth + columnOffsets[column] + extra;
+    const base = rowHeaderWidthResolved + columnOffsets[column] + extra;
     return column < frozenColumnCount ? `calc(var(--sheet-scroll-left, 0px) + ${base}px)` : base;
   };
   // COMP-02.4: the append row sits one past the last populated row. When it is
@@ -921,7 +1034,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const appendBeyond = appendDisplayIndex !== undefined && (view !== undefined || appendIndex === rowCount);
   const draftRow = appendEnabled && editing?.row === appendDisplayIndex;
   const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? 20 : 0;
-  const contentWidth = rowHeaderWidth + columnVirtualizer.getTotalSize();
+  const contentWidth = rowHeaderWidthResolved + columnVirtualizer.getTotalSize();
   const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize() + (appendBeyond ? (rowHeights[rowCount] ?? defaultRowHeight) : 0);
   const virtualRows = rowVirtualizer.getVirtualItems();
   const virtualColumns = columnVirtualizer.getVirtualItems();
@@ -1247,6 +1360,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     if (bindingResolver) worksheet.setBindingResolver(bindingResolver);
   }, [bindingResolver, worksheet]);
 
+  // Cross-sheet reference resolution comes from `formulaEngine`; re-applying
+  // invalidates dependent formulas so a changed resolver takes effect.
+  useEffect(() => {
+    if (formulaEngine?.referenceResolver) worksheet.setReferenceResolver(formulaEngine.referenceResolver);
+  }, [formulaEngine?.referenceResolver, worksheet]);
+
+  // A changed host normalizer needs every formula recompiled; the normalizer
+  // itself reads the latest prop through `formulaEngineRef`.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the normalizer identity is the recompile trigger, not a capture
+  useEffect(() => {
+    worksheet.renormalizeFormulas();
+  }, [formulaEngine?.formulaNormalizer, worksheet]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: structuredRangeSignature is the content signature of the structuredRanges map; it is the renormalisation trigger, not a capture
   useEffect(() => {
     worksheet.renormalizeFormulas();
@@ -1327,10 +1453,10 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     return () => window.removeEventListener("pointerup", finishDrag);
   }, [canEdit, columnCount, commit, data, keyFor, readOnly, viewRowCount]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: columnWidths is a deliberate re-measure trigger, not a capture
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the rendered widths are a deliberate re-measure trigger, not a capture
   useEffect(() => {
     columnVirtualizer.measure();
-  }, [columnVirtualizer, columnWidths]);
+  }, [columnVirtualizer, renderColumnWidths]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: rowHeights is a deliberate re-measure trigger, not a capture
   useEffect(() => {
@@ -1381,6 +1507,36 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     rowVirtualizer.scrollToIndex(point.row, { align: "auto" });
     columnVirtualizer.scrollToIndex(point.column, { align: "auto" });
   }, [columnVirtualizer, rowVirtualizer]);
+
+  // Imperative selection/scroll for hosts (e.g. after adding a row). Rows are
+  // displayed positions, so a stored row is resolved through the local view.
+  const selectCellInternal = useCallback((row: number, column: number, extend: boolean) => {
+    const point = clampGridPoint({ row, column }, viewRowCount, columnCount);
+    setSelection((current) => selectionForPoint(current, point, extend));
+    setCopyRange(undefined);
+    updateCutStatus(null);
+    queueMicrotask(() => {
+      reveal(point);
+      viewportRef.current?.focus({ preventScroll: true });
+    });
+  }, [columnCount, reveal, updateCutStatus, viewRowCount]);
+
+  const selectCellAddress = useCallback((address: string, options?: { extend?: boolean }): boolean => {
+    let parsed: GridPoint;
+    try {
+      parsed = parseAddress(address);
+    } catch {
+      return false;
+    }
+    const row = displayRowOf(parsed.row);
+    if (row < 0) return false;
+    selectCellInternal(row, parsed.column, options?.extend ?? false);
+    return true;
+  }, [displayRowOf, selectCellInternal]);
+
+  const scrollCellIntoView = useCallback((row: number, column: number) => {
+    reveal(clampGridPoint({ row, column }, viewRowCount, columnCount));
+  }, [columnCount, reveal, viewRowCount]);
 
   const move = useCallback((delta: GridPoint, extend: boolean) => {
     const current = selectionRef.current;
@@ -1516,11 +1672,26 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const next = [...rowHeights]; next[source] = after; setRowHeights(next); onRowHeightsChange?.(next);
   }, [data, defaultRowHeight, onRowHeightsChange, rowHeights, selection.focus.row, sourceRowOf]);
   const changeRows = useCallback((kind: "insert" | "delete", index = range.top, count = range.bottom - range.top + 1) => {
-    // Structure moves values between addresses; in a bound grid that desyncs
-    // row→record identity (writes would target the wrong records).
-    if (readOnly || bound) return;
-    commit(changeGridStructure(data, { axis: "row", index, count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false, source: "structure" });
-  }, [bound, commit, data, range.bottom, range.top, readOnly]);
+    const plan = planRowStructure({
+      kind: kind === "insert" ? "insert" : "remove",
+      index,
+      count,
+      readOnly,
+      bound,
+      sourceRowOf,
+      before: kind === "insert" ? onBeforeRowsInsert : onBeforeRowsRemove,
+    });
+    if (plan.action === "none") return;
+    const after = kind === "insert" ? onRowsInserted : onRowsRemoved;
+    if (plan.action === "notify") {
+      // A bound grid keeps `data` in record order: the host persists the
+      // insert/delete against the record and pushes the rebuilt rows back.
+      after?.(plan.rowIndex, plan.count);
+      return;
+    }
+    const outcome = commit(changeGridStructure(data, { axis: "row", index: plan.rowIndex, count: plan.count, kind }), `${kind === "insert" ? "Insert" : "Delete"} row${plan.count === 1 ? "" : "s"}`, undefined, { emitFieldWrites: false, source: "structure" });
+    if (outcome.status === "applied") after?.(plan.rowIndex, plan.count);
+  }, [bound, commit, data, onBeforeRowsInsert, onBeforeRowsRemove, onRowsInserted, onRowsRemoved, range.bottom, range.top, readOnly, sourceRowOf]);
 
   const changeColumns = useCallback((kind: "insert" | "delete", index = range.left, count = range.right - range.left + 1) => {
     if (readOnly || bound) return;
@@ -1632,7 +1803,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     });
   }, []);
 
-  useImperativeHandle(forwardedRef, () => ({
+  useImperativeHandle(forwardedRef, () => (handleRef.current = {
     undo,
     redo,
     setActiveInput: writeActiveCell,
@@ -1650,6 +1821,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     replaceAll,
     applyFormat,
     focus: () => viewportRef.current?.focus(),
+    selectCell: (row, column, options) => selectCellInternal(row, column, options?.extend ?? false),
+    selectCellAddress,
+    scrollCellIntoView,
     hydrate,
     replaceData,
     clearWriteState,
@@ -1673,7 +1847,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       setHeldWrites(empty);
       onHeldFieldWritesChange?.([]);
     },
-  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, query, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, selection, setFilter, undo, writeActiveCell]);
+  }), [annotate, annotations, clearWriteState, emitFieldWrite, onHeldFieldWritesChange, applyFormat, autoFitColumn, autoFitRow, changeColumns, changeRows, clearFilter, columnWidths, data, editActiveInput, findText, finishEdit, formats, frozenColumnCount, frozenRowCount, hydrate, query, replaceData, redo, removeAnnotationAt, replaceAll, rowHeights, scrollCellIntoView, selectCellAddress, selectCellInternal, selection, setFilter, undo, writeActiveCell]);
+
+  // `onReady` fires once with the handle. It runs after `useImperativeHandle`
+  // (both are layout effects) so the handle exists; a later `onReady` identity
+  // does not re-fire, matching the ref contract.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const readyNotified = useRef(false);
+  useIsomorphicLayoutEffect(() => {
+    if (readyNotified.current || !handleRef.current) return;
+    readyNotified.current = true;
+    onReadyRef.current?.(handleRef.current);
+  }, []);
 
   useEffect(() => {
     if (editing) onEditChange?.(draft);
@@ -2140,11 +2326,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         && point.column >= range.left && point.column <= range.right
       ) {
         const cellBox = event.currentTarget.getBoundingClientRect();
-        const x = rowHeaderWidth + columnOffsets[point.column] + (event.clientX - cellBox.left);
+        const x = rowHeaderWidthResolved + columnOffsets[point.column] + (event.clientX - cellBox.left);
         const y = headerHeight + datasetHeaderHeight + rowOffsets[point.row] + (event.clientY - cellBox.top);
         const edge = Math.min(
-          x - (rowHeaderWidth + columnOffsets[range.left]),
-          rowHeaderWidth + columnOffsets[range.right + 1] - x,
+          x - (rowHeaderWidthResolved + columnOffsets[range.left]),
+          rowHeaderWidthResolved + columnOffsets[range.right + 1] - x,
           y - (headerHeight + datasetHeaderHeight + rowOffsets[range.top]),
           headerHeight + datasetHeaderHeight + rowOffsets[range.bottom + 1] - y,
         );
@@ -2204,6 +2390,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   return <div
     className={`sheetbase-scope spreadsheet${readOnly ? " spreadsheet-read-only" : ""}`}
     data-theme={theme}
+    style={height === undefined ? undefined : { height: height === "fill" ? "100%" : `${Math.max(0, height)}px` }}
     ref={viewportRef}
     tabIndex={0}
     role="grid"
@@ -2286,14 +2473,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           if (format?.horizontalAlign !== "right") {
             for (let c = column + 1; c < columnCount && c - column <= 12; c++) {
               if (!neighbourEmpty(row, c)) break;
-              right += columnWidths[c];
+              right += renderColumnWidths[c];
             }
           }
           let left = 0;
           if (format?.horizontalAlign === "right" || format?.horizontalAlign === "center") {
             for (let c = column - 1; c >= 0 && column - c <= 12; c--) {
               if (!neighbourEmpty(row, c)) break;
-              left += columnWidths[c];
+              left += renderColumnWidths[c];
             }
           }
           if (left > 0 || right > 0) overflow = { left, right };
@@ -2320,12 +2507,12 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           handlers={cellHandlersRef}
           left={columnLeft(column)}
           top={row < frozenRowCount ? `calc(var(--sheet-scroll-top, 0px) + ${headerHeight + datasetHeaderHeight + rowOffsets[row]}px)` : headerHeight + datasetHeaderHeight + rowOffsets[row]}
-          width={columnWidths[column]}
+          width={renderColumnWidths[column]}
           height={rowHeightAt(row)}
         />;
       }))}
 
-      {renderRows.map((row) => {
+      {rowHeaders && renderRows.map((row) => {
         const isAppendRow = appendInRows && row === appendDisplayIndex;
         return (
         // biome-ignore lint/a11y/useSemanticElements: virtualised grid — header roles on divs are the sanctioned ARIA pattern here
@@ -2336,7 +2523,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         aria-selected={!isAppendRow && row >= range.top && row <= range.bottom}
         className={`row-header${!isAppendRow && row >= range.top && row <= range.bottom ? " selected-header" : ""}${isAppendRow ? " append-row-header" : ""}`}
         key={`row-${row}`}
-        style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidth, height: rowHeightAt(row) }}
+        style={{ left: "var(--sheet-scroll-left, 0px)", top: headerHeight + datasetHeaderHeight + rowOffsets[row], width: rowHeaderWidthResolved, height: rowHeightAt(row) }}
         onPointerDown={() => {
           if (isAppendRow) { selectAppendRow(); return; }
           dragSelecting.current = true;
@@ -2354,7 +2541,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           role="gridcell"
           tabIndex={-1}
           aria-label={appendRowLabel(appendRow)}
-          style={{ left: rowHeaderWidth, top: headerHeight + datasetHeaderHeight + rowOffsets[appendDisplayIndex], width: Math.max(contentWidth - rowHeaderWidth, 0), height: rowHeights[appendSourceRow] ?? defaultRowHeight }}
+          style={{ left: rowHeaderWidthResolved, top: headerHeight + datasetHeaderHeight + rowOffsets[appendDisplayIndex], width: Math.max(contentWidth - rowHeaderWidthResolved, 0), height: rowHeights[appendSourceRow] ?? defaultRowHeight }}
           onPointerDown={(event) => { event.stopPropagation(); selectAppendRow(); }}
         >{appendRowLabel(appendRow)}</div>
       )}
@@ -2365,7 +2552,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         const start = Math.min(...cols);
         const end = Math.max(...cols);
         let width = 0;
-        for (let column = start; column <= end; column += 1) width += columnWidths[column] ?? 0;
+        for (let column = start; column <= end; column += 1) width += renderColumnWidths[column] ?? 0;
         return (
           <div
             key={`group-${group.label}`}
@@ -2395,7 +2582,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         style={{
           left: columnLeft(column),
           top: `calc(var(--sheet-scroll-top, 0px) + ${datasetHeaderHeight}px)`,
-          width: columnWidths[column],
+          width: renderColumnWidths[column],
           height: headerHeight,
         }}
         onPointerDown={(event) => {
@@ -2460,9 +2647,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       </search>}
       {contextMenu?.axis === "column" && <ColumnContextMenu x={contextMenu.x} y={contextMenu.y} column={contextMenu.index} field={datasetHeader?.fields.find((field) => field.column === contextMenu.index)} query={query} onQueryChange={applyQuery} actions={contextMenuActions} headerActions={columnMenuItems} onAutoFit={() => { autoFitColumn(contextMenu.index); closeContextMenu(); }} onMove={onColumnMove ? (direction) => { const target = contextMenu.index + direction; if (target >= 0 && target < columnCount) onColumnMove(contextMenu.index, target); closeContextMenu(); } : undefined} onHide={fieldIds[contextMenu.index] && onColumnVisibilityChange ? () => { const fieldId = fieldIds[contextMenu.index]; if (!fieldId) return; onColumnVisibilityChange(fieldId, false); closeContextMenu(); } : undefined} onFreeze={() => { const count = contextMenu.index + 1; setFrozenColumnCount(count); onFrozenColumnsChange?.(count); closeContextMenu(); }} onUnfreeze={frozenColumnCount ? () => { setFrozenColumnCount(0); onFrozenColumnsChange?.(0); closeContextMenu(); } : undefined} onFormat={onConditionalFormattingRequest ? () => { onConditionalFormattingRequest(fieldIds[contextMenu.index], contextMenu.index); closeContextMenu(); } : undefined} onClose={closeContextMenu} />}
       {contextMenu?.axis === "row" && <div className="grid-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" aria-label="Row menu" tabIndex={-1} ref={focusOnMount} onKeyDown={menuKeys(closeContextMenu)} onPointerDown={(event) => event.stopPropagation()}>
-        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index, 1) : changeColumns("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
-        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("insert", contextMenu.index + 1, 1) : changeColumns("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
-        {!readOnly && !bound && <button type="button" onClick={() => { contextMenu.axis === "row" ? changeRows("delete", contextMenu.index, 1) : changeColumns("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
+        {!readOnly && canInsertRows && <button type="button" onClick={() => { if (contextMenu.axis === "row") changeRows("insert", contextMenu.index, 1); closeContextMenu(); }}>Insert before</button>}
+        {!readOnly && canInsertRows && <button type="button" onClick={() => { if (contextMenu.axis === "row") changeRows("insert", contextMenu.index + 1, 1); closeContextMenu(); }}>Insert after</button>}
+        {!readOnly && canRemoveRows && <button type="button" onClick={() => { if (contextMenu.axis === "row") changeRows("delete", contextMenu.index, 1); closeContextMenu(); }}>Delete {contextMenu.axis}</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { autoFitRow(contextMenu.index); closeContextMenu(); }}>Auto-fit row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { const source = sourceRowOf(contextMenu.index); if (source < 0) { closeContextMenu(); return; } const next = [...rowHeights]; next[source] = 0; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Hide row</button>}
         {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeightAt(contextMenu.index - 1) === 0 && <button type="button" onClick={() => { const source = sourceRowOf(contextMenu.index - 1); if (source < 0) { closeContextMenu(); return; } const next = [...rowHeights]; next[source] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
@@ -2472,14 +2659,14 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       </div>}
 
 
-      <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: rowHeaderWidth, height: headerHeight + datasetHeaderHeight }}
+      {rowHeaders && <div className="grid-corner" style={{ left: "var(--sheet-scroll-left, 0px)", top: "var(--sheet-scroll-top, 0px)", width: rowHeaderWidthResolved, height: headerHeight + datasetHeaderHeight }}
         title="Select all (Ctrl/Cmd+A)"
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           selectWhole();
           viewportRef.current?.focus({ preventScroll: true });
         }}
-      />
+      />}
       <div className={`selection-outline${fillTarget ? " filling" : ""}${selectionIsCopySource ? " copied" : ""}`} style={{
         left: columnLeft(previewRange.left),
         top: headerHeight + datasetHeaderHeight + rowOffsets[previewRange.top],
@@ -2575,7 +2762,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && draft.startsWith("=") && <FormulaTokens value={draft} className="cell-formula-tokens" style={{
         left: columnLeft(editing.column, 1),
         top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
-        width: columnWidths[editing.column] - 2,
+        width: renderColumnWidths[editing.column] - 2,
         height: rowHeightAt(editing.row) - 2,
       }} />}
       {editing && !activeCustomEditor && <input
@@ -2589,7 +2776,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         style={{
           left: columnLeft(editing.column, 1),
           top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
-          width: columnWidths[editing.column] - 2,
+          width: renderColumnWidths[editing.column] - 2,
           height: rowHeightAt(editing.row) - 2,
         }}
         onChange={(event) => {
@@ -2662,7 +2849,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         style={{
           left: columnLeft(editing.column, 1),
           top: headerHeight + datasetHeaderHeight + rowOffsets[editing.row] + 1,
-          width: columnWidths[editing.column] - 2,
+          width: renderColumnWidths[editing.column] - 2,
           height: rowHeightAt(editing.row) - 2,
         }}
       >
@@ -2687,7 +2874,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className="typed-options boolean"
         role="radiogroup"
         aria-label={`Choose ${editingField.label}`}
-        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(renderColumnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? ["true", "false"]).map((option) => (
             // biome-ignore lint/a11y/useSemanticElements: button-as-radio inside a radiogroup is the intended pattern; a native input would not preserve editor focus or the button styling
@@ -2703,7 +2890,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         className={`typed-options ${editingField?.dataType ?? "text"}`}
         role="listbox"
         aria-label={`Choose ${editingField?.label}`}
-        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(columnWidths[editing.column], 180) }}
+        style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3, width: Math.max(renderColumnWidths[editing.column], 180) }}
       >
         {(editingField?.options ?? []).flatMap((option) => editingField?.dataType !== "relationship" || draft === "" || option.toLocaleLowerCase().includes(draft.toLocaleLowerCase()) ? [<button type="button"
             role="option"
@@ -2722,7 +2909,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
         left: columnLeft(editing.column),
         top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 4,
-        width: Math.max(290, columnWidths[editing.column]),
+        width: Math.max(290, renderColumnWidths[editing.column]),
       }}>
         {suggestions.map((suggestion, index) => <button type="button"
           role="option"

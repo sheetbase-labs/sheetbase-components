@@ -145,6 +145,62 @@ export function resolveBeforeCellsChange(
   return changed ? { ...mutation, cells } : mutation;
 }
 
+/** Which structural row operation a host hook gates. */
+export type SpreadsheetRowsChange = "insert" | "remove";
+
+/**
+ * Preflight for a structural row operation. Return `false` to block the whole
+ * operation. `rowIndex` is the *stored* row (the record) the operation starts
+ * at; `count` is the number of rows acted on. Fires for bound grids too, where
+ * the host owns persistence.
+ */
+export type SpreadsheetBeforeRowsChange = (
+  rowIndex: number,
+  count: number,
+  // biome-ignore lint/suspicious/noConfusingVoidType: hosts accept the operation by returning nothing
+) => boolean | void;
+
+/** Fired once a structural row operation is applied or handed to the host. */
+export type SpreadsheetRowsChanged = (rowIndex: number, count: number) => void;
+
+/**
+ * What the grid should do with a structural row request:
+ * - `none` — nothing (read-only, vetoed, or a hidden start row);
+ * - `local` — apply the mutation locally, then notify (unbound grid);
+ * - `notify` — a bound grid keeps `data` in record order, so the host persists
+ *   the change and pushes the rebuilt rows back; the grid only notifies.
+ */
+export type RowStructurePlan =
+  | Readonly<{ action: "none" }>
+  | Readonly<{ action: "local" | "notify"; rowIndex: number; count: number }>;
+
+/** Inputs to the structural row decision; `sourceRowOf` maps displayed → stored rows. */
+export type RowStructureRequest = Readonly<{
+  kind: SpreadsheetRowsChange;
+  index: number;
+  count: number;
+  readOnly: boolean;
+  /** Bound grids (`datasetHeader.recordIdForRow`) never move local values. */
+  bound: boolean;
+  sourceRowOf(row: number): number;
+  before?: SpreadsheetBeforeRowsChange;
+}>;
+
+/**
+ * Decide a structural row operation. Resolves the displayed start row to its
+ * stored row so hook indices line up with the host's records, runs the
+ * preflight, and routes bound grids to notify-only. Read-only grids and a
+ * displayed row a local view hides are no-ops.
+ */
+export function planRowStructure(request: RowStructureRequest): RowStructurePlan {
+  if (request.readOnly) return { action: "none" };
+  const rowIndex = request.sourceRowOf(Math.max(0, Math.trunc(request.index)));
+  if (rowIndex < 0) return { action: "none" };
+  const count = Math.max(1, Math.trunc(request.count));
+  if (request.before?.(rowIndex, count) === false) return { action: "none" };
+  return { action: request.bound ? "notify" : "local", rowIndex, count };
+}
+
 /** The display range copied/cut/pasted, with the stable column ids it covers. */
 export type SpreadsheetClipboardRange = Readonly<{
   top: number;

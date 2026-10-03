@@ -10,6 +10,20 @@ versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Table**: host-driven layout and control on `Spreadsheet` — `height`
+  (`number | "fill"`), `stretch` (`"none" | "last" | "all"`, measured against
+  the scroll container), `rowHeaders: false` to drop the row-number column and
+  corner, and `formulaEngine` seams (cross-sheet `referenceResolver`, host
+  `formulaNormalizer`). `orderColumnsById(columns, order)` applies a saved
+  initial column order at the composition boundary. Structural row hooks
+  `onBeforeRowsInsert`/`onRowsInserted`/`onBeforeRowsRemove`/`onRowsRemoved`
+  now fire from the row menu and the handle — including for bound grids, where
+  the row menu's insert/delete are no longer hidden and the hooks report stored
+  rows for the host to persist. `SpreadsheetHandle` gains
+  `selectCell`/`selectCellAddress`/`scrollCellIntoView`, and `onReady(handle)`
+  hands the handle to hosts that hold no ref. The clipboard hooks' existing
+  replacement payload (copy/cut/paste) is documented with a formula-rewrite
+  example.
 - **Explorer**: standalone v3 chart figures — `Chart` (one figure) and
   `ChartGroup` (charts sharing an x axis), spec in and SVG out with no explorer
   `App`. Series colours come from `series-a/b/c` with circle/square/triangle

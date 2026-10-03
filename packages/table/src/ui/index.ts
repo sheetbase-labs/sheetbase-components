@@ -16,5 +16,8 @@ export * from "./source-badge";
 export * from "./row-height";
 export * from "./append-row";
 export * from "./keyboard";
+export * from "./grid-focus";
+export * from "./column-layout";
+export * from "./formula-engine";
 export * from "../grid/conditional-formatting";
 export * from "../grid/view";

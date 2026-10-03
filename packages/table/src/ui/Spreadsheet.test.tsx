@@ -26,3 +26,39 @@ describe("Spreadsheet gridline background", () => {
     expect(html).toContain("grid-canvas");
   });
 });
+
+describe("Spreadsheet layout props", () => {
+  const render = (props: Partial<Parameters<typeof Spreadsheet>[0]>) =>
+    renderToStaticMarkup(<Spreadsheet initialData={new Map()} rowCount={8} columnCount={3} {...props} />);
+
+  it("renders the corner and no explicit height by default", () => {
+    const html = render({});
+    expect(html).toContain("grid-corner");
+    expect(html).not.toContain("height:320px");
+  });
+
+  it("honours a fixed height and the fill sentinel", () => {
+    expect(render({ height: 320 })).toContain("height:320px");
+    expect(render({ height: "fill" })).toContain("height:100%");
+  });
+
+  it("drops the corner with the row header column when rowHeaders is false", () => {
+    expect(render({ rowHeaders: false })).not.toContain("grid-corner");
+  });
+
+  it("accepts the stretch mode and formula-engine seams without disturbing the render", () => {
+    const html = render({
+      stretch: "all",
+      formulaEngine: {
+        referenceResolver: () => 0,
+        formulaNormalizer: (expression) => expression,
+      },
+      onReady: () => {},
+      onBeforeRowsInsert: () => false,
+      onRowsInserted: () => {},
+      onBeforeRowsRemove: () => false,
+      onRowsRemoved: () => {},
+    });
+    expect(html).toContain("grid-canvas");
+  });
+});

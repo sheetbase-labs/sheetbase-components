@@ -4,6 +4,7 @@ import {
   buildCellChanges,
   cellDisplayText,
   enabledMenuActions,
+  planRowStructure,
   resolveBeforeCellsChange,
   resolveClipboardPayload,
   sameClauses,
@@ -157,6 +158,16 @@ describe("clipboard hooks", () => {
     const resolved = resolveClipboardPayload({ ...input, range }, input);
     expect(resolved?.range).toEqual(range);
   });
+
+  it("lets a paste hook rewrite formula relative references and returns the replacement", () => {
+    const input = payload("=A1+B1\n=2*A2");
+    const resolved = resolveClipboardPayload(
+      { ...input, text: input.text.replace(/([A-Z]+)(\d+)/g, (_match, column: string, row: string) => `${column}${Number(row) + 2}`) },
+      input,
+    );
+    expect(resolved?.text).toBe("=A3+B3\n=2*A4");
+    expect(resolved?.values).toEqual([["=A3+B3"], ["=2*A4"]]);
+  });
 });
 
 describe("column header menu hook", () => {
@@ -199,5 +210,46 @@ describe("sort/filter notification surface", () => {
     expect(sameClauses(undefined, [])).toBe(true);
     expect(sameClauses(undefined, [{ fieldId: "a", direction: "asc" }])).toBe(false);
     expect(sameClauses([{ fieldId: "a" }, { fieldId: "b" }], [{ fieldId: "a" }])).toBe(false);
+  });
+});
+
+describe("structural row hooks", () => {
+  const request = (overrides: Partial<Parameters<typeof planRowStructure>[0]> = {}) => ({
+    kind: "remove" as const,
+    index: 2,
+    count: 1,
+    readOnly: false,
+    bound: false,
+    sourceRowOf: (row: number) => row,
+    ...overrides,
+  });
+
+  it("applies locally on an unbound grid", () => {
+    expect(planRowStructure(request())).toEqual({ action: "local", rowIndex: 2, count: 1 });
+  });
+
+  it("routes a bound grid to notify-only so the host persists the records", () => {
+    expect(planRowStructure(request({ bound: true }))).toEqual({ action: "notify", rowIndex: 2, count: 1 });
+  });
+
+  it("reports the stored row through a local view", () => {
+    expect(planRowStructure(request({ bound: true, sourceRowOf: (row) => row * 10 }))).toEqual({ action: "notify", rowIndex: 20, count: 1 });
+  });
+
+  it("blocks the operation when the host preflight refuses", () => {
+    const before = vi.fn(() => false);
+    expect(planRowStructure(request({ bound: true, before }))).toEqual({ action: "none" });
+    expect(before).toHaveBeenCalledWith(2, 1);
+  });
+
+  it("is a no-op when read-only or when a local view hides the row", () => {
+    expect(planRowStructure(request({ readOnly: true }))).toEqual({ action: "none" });
+    expect(planRowStructure(request({ sourceRowOf: () => -1 }))).toEqual({ action: "none" });
+  });
+
+  it("normalises the count to at least one and the index to a non-negative row", () => {
+    const before = vi.fn();
+    expect(planRowStructure(request({ index: -3, count: 0, before }))).toEqual({ action: "local", rowIndex: 0, count: 1 });
+    expect(before).toHaveBeenCalledWith(0, 1);
   });
 });
