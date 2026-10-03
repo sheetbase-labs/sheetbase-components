@@ -2120,7 +2120,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
           top: headerHeight + datasetHeaderHeight + rowOffsets[referenceRange.top],
           width: columnOffsets[right + 1] - columnOffsets[referenceRange.left],
           height: rowOffsets[bottom + 1] - rowOffsets[referenceRange.top],
-          borderColor: ["#00a77b", "#f26a21", "#2f78ed", "#b44fd8"][index % 4],
+          borderColor: ["var(--ref-1)", "var(--ref-2)", "var(--ref-3)", "var(--ref-4)"][index % 4],
         }}
       />;
       })}

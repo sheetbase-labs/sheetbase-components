@@ -46,6 +46,56 @@
   --purple-soft: #f3e9fb;
   --danger-text: var(--danger);
   --danger-soft: #fdecec;
+  /* COMP-01: swatch, reference-outline, chart-anchor and series-palette
+     variables. Themes/v3.css rethemes them with the v3 tokens; these defaults
+     keep the current rendering until that preset is loaded. */
+  --on-accent: #ffffff;
+  --chart-label: #52525b;
+  --chart-anchor: #171717;
+  --ref-1: #00a77b;
+  --ref-2: #f26a21;
+  --ref-3: #2f78ed;
+  --ref-4: #b44fd8;
+  --format-colour-1: #242424;
+  --format-colour-2: #7652ef;
+  --format-colour-3: #167a59;
+  --format-colour-4: #3e67af;
+  --format-colour-5: #a23131;
+  --format-colour-6: #8a5a00;
+  --format-colour-7: #ffffff;
+  --format-colour-8: #f2efff;
+  --format-colour-9: #e8f6ef;
+  --format-colour-10: #fff1f1;
+  --palette-sheetbase-1: #7652ef;
+  --palette-sheetbase-2: #07956a;
+  --palette-sheetbase-3: #c95814;
+  --palette-sheetbase-4: #286dcc;
+  --palette-sheetbase-5: #9541b7;
+  --palette-sheetbase-6: #6d7d4b;
+  --palette-muted-1: #6f67a8;
+  --palette-muted-2: #5d8f85;
+  --palette-muted-3: #b07b58;
+  --palette-muted-4: #7187a8;
+  --palette-muted-5: #9a7088;
+  --palette-muted-6: #85866d;
+  --palette-warm-1: #a44734;
+  --palette-warm-2: #d16b45;
+  --palette-warm-3: #e19852;
+  --palette-warm-4: #c56d78;
+  --palette-warm-5: #8c5c76;
+  --palette-warm-6: #6f5b50;
+  --palette-cool-1: #4f5cc4;
+  --palette-cool-2: #327c9b;
+  --palette-cool-3: #2e947d;
+  --palette-cool-4: #6f67b1;
+  --palette-cool-5: #5479a8;
+  --palette-cool-6: #5d8f85;
+  --palette-mono-1: #28282a;
+  --palette-mono-2: #53535a;
+  --palette-mono-3: #777780;
+  --palette-mono-4: #9a9aa2;
+  --palette-mono-5: #bdbdc3;
+  --palette-mono-6: #dedee2;
   --series-a: var(--blue);
   --series-b: var(--accent);
   --series-c: var(--muted);
@@ -86,6 +136,17 @@
   --orange-soft: #3a2e12;
   --purple-soft: #2c2233;
   --danger-soft: #3a1f1f;
+  --on-accent: #171717;
+  --format-colour-1: #e7e5ec;
+  --format-colour-2: #a997ff;
+  --format-colour-3: #68d5ae;
+  --format-colour-4: #82aaff;
+  --format-colour-5: #ff8f8f;
+  --format-colour-6: #f0bd63;
+  --format-colour-7: #17161a;
+  --format-colour-8: #302a43;
+  --format-colour-9: #18382e;
+  --format-colour-10: #442526;
 }
 :where(.sheetbase-scope), :where(.sheetbase-scope) *, :where(.sheetbase-explorer), :where(.sheetbase-explorer) * { box-sizing: border-box; }
 :where(.sheetbase-scope) button, :where(.sheetbase-scope) select, :where(.sheetbase-scope) input, :where(.sheetbase-scope) textarea { font: inherit; color: inherit; }

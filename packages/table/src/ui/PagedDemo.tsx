@@ -23,9 +23,9 @@ const fields = [
 ];
 
 const initialConditionalFormats: readonly ConditionalFormatRule[] = [
-  { id: "status-complete", fieldId: "status", operator: "equals", value: "Complete", format: { foreground: "#167a59" } },
-  { id: "status-review", fieldId: "status", operator: "equals", value: "Review", format: { foreground: "#3e67af" } },
-  { id: "status-flagged", fieldId: "status", operator: "equals", value: "Flagged", format: { foreground: "#a23131", background: "#fff1f1" } },
+  { id: "status-complete", fieldId: "status", operator: "equals", value: "Complete", format: { foreground: "var(--format-colour-3)" } },
+  { id: "status-review", fieldId: "status", operator: "equals", value: "Review", format: { foreground: "var(--format-colour-4)" } },
+  { id: "status-flagged", fieldId: "status", operator: "equals", value: "Flagged", format: { foreground: "var(--format-colour-5)", background: "var(--format-colour-10)" } },
 ];
 
 const presentationKey = "sheetbase-table:presentation:experiments";

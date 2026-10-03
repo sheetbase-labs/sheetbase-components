@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { resolveThemeColour, resolveThemeColours } from "sheetbase-shared";
 import type { CellFormat, CellRange } from "../engine";
 import { usePortalPopover } from "./use-portal-popover";
 import type { ConditionalFormatOperator, ConditionalFormatRule } from "../grid/conditional-formatting";
@@ -87,8 +88,23 @@ export type TableFormattingToolbarProps = Readonly<{
 }>;
 
 /** Direct formatting for the current cell, range, row or column selection. */
-const builtInLightColours = ["#242424", "#7652ef", "#167a59", "#3e67af", "#a23131", "#8a5a00", "#ffffff", "#f2efff", "#e8f6ef", "#fff1f1"];
-const builtInDarkColours = ["#e7e5ec", "#a997ff", "#68d5ae", "#82aaff", "#ff8f8f", "#f0bd63", "#17161a", "#302a43", "#18382e", "#442526"];
+/**
+ * Direct-formatting swatches, as theme tokens. Resolved to concrete colours
+ * against the toolbar element so the same list themes light/dark and the v3
+ * preset (see `themes/v3.css`); SVG and colour inputs need real colour values.
+ */
+const FORMAT_COLOUR_TOKENS = [
+  "var(--format-colour-1)",
+  "var(--format-colour-2)",
+  "var(--format-colour-3)",
+  "var(--format-colour-4)",
+  "var(--format-colour-5)",
+  "var(--format-colour-6)",
+  "var(--format-colour-7)",
+  "var(--format-colour-8)",
+  "var(--format-colour-9)",
+  "var(--format-colour-10)",
+] as const;
 
 function onSwatchKeys(event: React.KeyboardEvent<HTMLButtonElement>) {
   const swatches = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("button") ?? []);
@@ -132,21 +148,23 @@ function ColourPalette({ label, value, colours, theme, onChange }: Readonly<{ la
   return <div className="format-palette"><button type="button" ref={buttonRef} className={open ? "active" : ""} aria-label={label} title={label} aria-expanded={open} aria-haspopup="dialog" onClick={toggle}><span>{label === "Text colour" ? "A" : "▧"}</span><i style={value ? { background: value } : undefined} /></button>{open && typeof document !== "undefined" && createPortal(palette, document.body)}</div>;
 }
 
-export function TableFormattingToolbar({ selection, onFormat, format = {}, mixedFormats = [], theme = "light", themeMode = theme, onThemeChange, viewControls, colours, darkColours, defaultTextColour = "#242424", defaultFillColour = "#ffffff" }: TableFormattingToolbarProps) {
+export function TableFormattingToolbar({ selection, onFormat, format = {}, mixedFormats = [], theme = "light", themeMode = theme, onThemeChange, viewControls, colours, darkColours, defaultTextColour, defaultFillColour }: TableFormattingToolbarProps) {
   const [recentColours, setRecentColours] = useState<readonly string[]>([]);
-  const configuredColours = theme === "dark" ? darkColours ?? colours ?? builtInDarkColours : colours ?? builtInLightColours;
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const builtInColours = useMemo(() => resolveThemeColours(FORMAT_COLOUR_TOKENS, host), [host]);
+  const configuredColours = theme === "dark" ? darkColours ?? colours ?? builtInColours : colours ?? builtInColours;
   const paletteColours = [...recentColours, ...configuredColours].filter((colour, index, all) => all.indexOf(colour) === index);
   const applyColour = (property: "foreground" | "background", colour: string) => {
     setRecentColours((current) => [colour, ...current.filter((item) => item !== colour)].slice(0, 5));
     onFormat({ [property]: colour });
   };
   const mixed = (property: keyof CellFormat) => mixedFormats.includes(property);
-  return <div className="table-formatting-toolbar" role="toolbar" aria-label="Format selection">
+  return <div ref={setHost} className="table-formatting-toolbar" role="toolbar" aria-label="Format selection">
     <span className="format-selection" title={selection}>{selection}</span>
     <span className="format-divider" />
     <button type="button" className={`${format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? "active" : ""}${mixed("fontWeight") ? " mixed" : ""}`} aria-label="Bold" title="Bold" onClick={() => onFormat({ fontWeight: format.fontWeight && format.fontWeight >= 600 && !mixed("fontWeight") ? 400 : 600 })}>B</button>
-    <ColourPalette label="Text colour" value={mixed("foreground") ? undefined : format.foreground ?? defaultTextColour} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("foreground", colour)} />
-    <ColourPalette label="Fill colour" value={mixed("background") ? undefined : format.background ?? defaultFillColour} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("background", colour)} />
+    <ColourPalette label="Text colour" value={mixed("foreground") ? undefined : format.foreground ?? defaultTextColour ?? builtInColours[0]} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("foreground", colour)} />
+    <ColourPalette label="Fill colour" value={mixed("background") ? undefined : format.background ?? defaultFillColour ?? builtInColours[6]} colours={paletteColours} theme={theme} onChange={(colour) => applyColour("background", colour)} />
     <span className="format-divider" />
     <button type="button" className={format.horizontalAlign === "left" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align left" title="Align left" onClick={() => onFormat({ horizontalAlign: "left" })}>≡</button>
     <button type="button" className={format.horizontalAlign === "center" && !mixed("horizontalAlign") ? "active" : ""} aria-label="Align centre" title="Align centre" onClick={() => onFormat({ horizontalAlign: "center" })}>≣</button>
@@ -186,6 +204,9 @@ export type ConditionalFormattingInspectorProps = Readonly<{
 }>;
 
 export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldChange, selectionRange, selectionLabel, rules, onRulesChange, onClose }: ConditionalFormattingInspectorProps) {
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const colours = useMemo(() => resolveThemeColours(FORMAT_COLOUR_TOKENS, host), [host]);
+  const accentInk = useMemo(() => resolveThemeColour("var(--accent-ink)", host), [host]);
   const pastRules = useRef<readonly (readonly ConditionalFormatRule[])[]>([]);
   const futureRules = useRef<readonly (readonly ConditionalFormatRule[])[]>([]);
   const [, renderHistory] = useState(0);
@@ -224,7 +245,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
   }, [activeIndex, fieldRules]);
   const active = fieldRules.find(({ index }) => index === activeIndex) ?? fieldRules[fieldRules.length - 1] ?? {
     index: rules.length,
-    rule: { fieldId, operator: "equals" as const, value: "", format: { foreground: "#a23131", background: "#fff1f1" } },
+    rule: { fieldId, operator: "equals" as const, value: "", format: { foreground: colours[4], background: colours[9] } },
   };
   const updateActive = (next: ConditionalFormatRule) => {
     const updated = [...rules];
@@ -239,7 +260,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
     commitRules(updated);
     setActiveIndex(updated.flatMap((rule, index) => rule.fieldId === fieldId ? [index] : []).at(-1));
   };
-  const scale = active.rule.colorScale ?? { min: 0, midpoint: 50, max: 100, minColor: "#f2efff", midpointColor: "#ffffff", maxColor: "#7652ef" };
+  const scale = active.rule.colorScale ?? { min: 0, midpoint: 50, max: 100, minColor: colours[7], midpointColor: colours[6], maxColor: colours[1] };
   const setMode = (mode: "highlight" | "scale") => updateActive(mode === "scale"
     ? { ...active.rule, colorScale: scale }
     : { ...active.rule, colorScale: undefined });
@@ -268,7 +289,7 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
         ? "Choose or enter a comparison value."
         : undefined;
 
-  return <section className="conditional-inspector" aria-label="Conditional formatting">
+  return <section ref={setHost} className="conditional-inspector" aria-label="Conditional formatting">
     <header><strong>Conditional formatting</strong><span className="rule-history"><button type="button" aria-label="Undo rule change" disabled={pastRules.current.length === 0} onClick={undoRules}>↶</button><button type="button" aria-label="Redo rule change" disabled={futureRules.current.length === 0} onClick={redoRules}>↷</button></span><button type="button" aria-label="Close conditional formatting" onClick={onClose}>×</button></header>
     <div className="conditional-inspector-body">
       {fields.length > 0
@@ -296,14 +317,14 @@ export function ConditionalFormattingInspector({ fieldId, fields = [], onFieldCh
         <h3>Formatting style</h3>
         <div className="format-controls">
           <button type="button" className={active.rule.format.fontWeight ? "active" : ""} aria-label="Bold" onClick={() => updateFormat({ fontWeight: active.rule.format.fontWeight ? undefined : 600 })}>B</button>
-          <label aria-label="Text colour"><span>A</span><input type="color" value={active.rule.format.foreground ?? "#a23131"} onChange={(event) => updateFormat({ foreground: event.target.value })} /></label>
-          <label aria-label="Fill colour"><span>▧</span><input type="color" value={active.rule.format.background ?? "#fff1f1"} onChange={(event) => updateFormat({ background: event.target.value })} /></label>
+          <label aria-label="Text colour"><span>A</span><input type="color" value={active.rule.format.foreground ?? colours[4]} onChange={(event) => updateFormat({ foreground: event.target.value })} /></label>
+          <label aria-label="Fill colour"><span>▧</span><input type="color" value={active.rule.format.background ?? colours[9]} onChange={(event) => updateFormat({ background: event.target.value })} /></label>
         </div>
         <div className="conditional-preview" style={{ color: active.rule.format.foreground, background: active.rule.format.background, fontWeight: active.rule.format.fontWeight }}>{String(active.rule.value || "Preview")}</div>
       </section>}
       {validation && <p className="rule-validation" role="alert">{validation}</p>}
       <section className="conditional-rules"><h3>Rules</h3>{fieldRules.map(({ rule, index }) => <div className={`conditional-rule${index === active.index ? " active" : ""}${rule.enabled === false ? " disabled" : ""}`} key={rule.id ?? `${rule.operator}-${index}`}><input aria-label={`Enable ${String(rule.value ?? operatorLabels[rule.operator])} rule`} type="checkbox" checked={rule.enabled !== false} onChange={(event) => { const updated = [...rules]; updated[index] = { ...rule, enabled: event.target.checked }; commitRules(updated); }} /><button type="button" onClick={() => setActiveIndex(index)}><span style={{ background: rule.format.background ?? rule.format.foreground }} />{String(rule.value ?? operatorLabels[rule.operator])}<small>{rule.applyTo === "row" ? "row" : rule.applyTo === "column" ? "column" : rule.applyTo === "range" ? "selection" : "cell"}</small></button></div>)}</section>
     </div>
-    <footer><button type="button" className="conditional-delete" disabled={active.index >= rules.length} onClick={deleteActive}>Delete</button><button type="button" aria-label="Move rule up" disabled={fieldRules[0]?.index === active.index} onClick={() => moveActive(-1)}>↑</button><button type="button" aria-label="Move rule down" disabled={fieldRules.at(-1)?.index === active.index} onClick={() => moveActive(1)}>↓</button><button type="button" aria-label="Duplicate rule" onClick={duplicateActive}>Duplicate</button><button type="button" className="conditional-add" onClick={() => { const next = [...rules, { id: `rule-${Date.now()}`, fieldId, operator: "equals" as const, value: "", format: { foreground: "#35277f", background: "#f2efff" } }]; commitRules(next); setActiveIndex(next.length - 1); }}>+ Add</button><button type="button" className="conditional-save" disabled={Boolean(validation)} onClick={onClose}>Done</button></footer>
+    <footer><button type="button" className="conditional-delete" disabled={active.index >= rules.length} onClick={deleteActive}>Delete</button><button type="button" aria-label="Move rule up" disabled={fieldRules[0]?.index === active.index} onClick={() => moveActive(-1)}>↑</button><button type="button" aria-label="Move rule down" disabled={fieldRules.at(-1)?.index === active.index} onClick={() => moveActive(1)}>↓</button><button type="button" aria-label="Duplicate rule" onClick={duplicateActive}>Duplicate</button><button type="button" className="conditional-add" onClick={() => { const next = [...rules, { id: `rule-${Date.now()}`, fieldId, operator: "equals" as const, value: "", format: { foreground: accentInk, background: colours[7] } }]; commitRules(next); setActiveIndex(next.length - 1); }}>+ Add</button><button type="button" className="conditional-save" disabled={Boolean(validation)} onClick={onClose}>Done</button></footer>
   </section>;
 }

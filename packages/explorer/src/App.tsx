@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
-import { andCondition, applyView, emptyCondition, emptyRoot, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from 'sheetbase-shared'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
+import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from 'sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'
@@ -244,7 +244,13 @@ export function App(props: AppProps = {}) {
     }))
   }, [datasetColumnsKey])
 
-  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark])
+  const [themeEpoch, setThemeEpoch] = useState(0)
+  // The root's data-theme must be set before the chart reads the themed colour
+  // variables, so apply it in a layout effect and bump an epoch to re-resolve.
+  useLayoutEffect(() => {
+    if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light'
+    setThemeEpoch((epoch) => epoch + 1)
+  }, [isDark])
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataset/panelCollapsed/panelHeight are deliberate re-measure triggers, not captures
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
@@ -410,11 +416,15 @@ export function App(props: AppProps = {}) {
     ? { ...chartSpec, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
     : chartSpec), [remote, chartSpec])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch re-reads the palette after the root's data-theme is applied
+  const chartPalette = useMemo(() => resolveThemeColours(chartSpec.palette, rootRef.current ?? undefined), [chartSpec.palette, themeEpoch])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch rebuilds the chart after the root's data-theme is applied
   const definition = useMemo(() => {
     if (!chartDataset) return null
     if (remote && (remoteQuery === null || remoteRows === null)) return null
     return buildChart(chartDataset, chartSpecForBuild, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window })))
-  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec])
+  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec, themeEpoch])
   const visibleRows = useMemo(() => {
     if (!chartDataset) return []
     if (remote) return remoteRows ?? []
@@ -591,7 +601,7 @@ export function App(props: AppProps = {}) {
               ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
               : <><span className="sb-spinner" aria-hidden="true" /><span>Aggregating on the server…</span></>}
         </div></div>
-      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
+      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>
