@@ -5,6 +5,8 @@
  */
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "@sheetbase-labs/sheetbase-shared/theme.css";
 import "@sheetbase-labs/sheetbase-shared/themes/v3.css";
 import "@sheetbase-labs/sheetbase-shared/shell.css";
@@ -40,12 +42,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           background: "var(--surface)",
           padding: 0,
           WebkitFontSmoothing: "antialiased",
-          // The design reference (sheetbase-eln/scripts/design-reference.mts)
-          // rasterises the popover text in the platform UI font, not the
-          // canvas's `Inter` — its fontsource `Inter` never reaches the string.
-          // The fixture pins `system-ui` so it matches the baseline render
-          // rather than a different Inter build.
-          "--font-sans": "system-ui, sans-serif",
+          // The States canvas asks for `Inter` / `JetBrains Mono` and the
+          // design-reference renderer answers those from the same @fontsource
+          // packages imported above, so the baseline rasterises the real faces.
+          // Pin the fontsource family names (`Inter` / `JetBrains Mono` name
+          // the same files on the canvas).
+          "--font-sans": '"Inter Variable", system-ui, sans-serif',
+          "--font-mono": '"JetBrains Mono Variable", ui-monospace, monospace',
         } as React.CSSProperties
       }
     >

@@ -1,8 +1,8 @@
 /**
  * COMP-02.6 visual fixture: the Datasets tab grid (ExpDatasets "DS-0311 rows").
  *
- * Crop box (ExpDatasets renders, 1440×1000, scale 1): x=256 y=318 w=855 h=337
- * — the grid wrapper's box; the `.g` table is 257,318.5 859×336, so the crop
+ * Crop box (ExpDatasets renders, 1440×1000, scale 1): x=256 y=319 w=855 h=337
+ * — the grid wrapper's box; the `.g` table is 257,319.5 859×336, so the crop
  * clips the last few pixels of the Captured column.
  *
  * The grid is a window into a 98-row dataset: the first visible row is 81, the
@@ -32,8 +32,8 @@ const headers: readonly Header[] = [
 
 // Fractional widths measured from the design render: the `.g` table is
 // `width:100%` with auto layout, so integer column lines shift every glyph.
-const rowHeaderWidth = 41.375;
-const widths = [76.969, 90.359, 72.547, 81.797, 63.313, 78.547, 77.547, 56.203, 117.031, 103.313];
+const rowHeaderWidth = 41.609;
+const widths = [75.594, 92.516, 72.203, 80.328, 63.469, 78.047, 78.563, 56.547, 116.734, 103.391];
 
 const firstRow = 81;
 // Rows 81–89, then 97–98; 90–96 are gap rows (height 0).

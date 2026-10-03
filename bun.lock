@@ -16,12 +16,14 @@
     },
     "packages/advanced-search": {
       "name": "@sheetbase-labs/sheetbase-advanced-search",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "@sheetbase-labs/sheetbase-table": "workspace:*",
       },
       "devDependencies": {
+        "@fontsource-variable/inter": "^5.3.0",
+        "@fontsource-variable/jetbrains-mono": "^5.3.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react": "^4.3.4",
@@ -38,7 +40,7 @@
     },
     "packages/demo": {
       "name": "sheetbase-demo",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
         "@sheetbase-labs/sheetbase-explorer": "workspace:*",
@@ -60,7 +62,7 @@
     },
     "packages/explorer": {
       "name": "@sheetbase-labs/sheetbase-explorer",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "@sheetbase-labs/sheetbase-table": "workspace:*",
@@ -71,6 +73,7 @@
         "papaparse": "^5.5.3",
       },
       "devDependencies": {
+        "@fontsource-variable/inter": "^5.3.0",
         "@types/d3-scale": "^4.0.0",
         "@types/d3-shape": "^3.1.0",
         "@types/papaparse": "^5.3.16",
@@ -88,7 +91,7 @@
     },
     "packages/rules-engine": {
       "name": "@sheetbase-labs/sheetbase-rulesengine",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
       },
@@ -109,7 +112,7 @@
     },
     "packages/schema-editor": {
       "name": "@sheetbase-labs/sheetbase-schemaeditor",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
       },
@@ -130,7 +133,7 @@
     },
     "packages/shared": {
       "name": "@sheetbase-labs/sheetbase-shared",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
@@ -147,12 +150,14 @@
     },
     "packages/table": {
       "name": "@sheetbase-labs/sheetbase-table",
-      "version": "0.1.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "rbush": "^4.0.1",
       },
       "devDependencies": {
+        "@fontsource-variable/inter": "^5.3.0",
+        "@fontsource-variable/jetbrains-mono": "^5.3.0",
         "@playwright/test": "^1.63.0",
         "@types/rbush": "^4.0.0",
         "@types/react": "^19.0.0",
@@ -281,6 +286,10 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.12", "", { "os": "win32", "cpu": "ia32" }, "sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
+
+    "@fontsource-variable/inter": ["@fontsource-variable/inter@5.3.0", "", {}, "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="],
+
+    "@fontsource-variable/jetbrains-mono": ["@fontsource-variable/jetbrains-mono@5.3.0", "", {}, "sha512-F32xpS2NsGYoQi2ADSkKTgpJj7ozajsGgDJ8woTnqjmIB+dxDIqImjl4pXZVEExu8UFZ2ndhmX18EBS/hdz3Lw=="],
 
     "@isaacs/ttlcache": ["@isaacs/ttlcache@1.4.1", "", {}, "sha512-RQgQ4uQ+pLbqXfOmieB91ejmLwvSgv9nLx6sT6sD83s7umBypgg+OIBOBbEUiJXrfpnp9j0mRhYYdzp9uqq3lA=="],
 

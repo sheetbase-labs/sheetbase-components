@@ -3,16 +3,14 @@
  * the States screen's two conditions under `themes/v3.css`, compared with a crop
  * of `States-{light,dark}.png`.
  *
- * Crop box (States renders, 1440×1390, scale 1): x=557 y=1087 w=360 h=126 — the
+ * Crop box (States renders, 1440×1390, scale 1): x=557 y=1089 w=360 h=126 — the
  * `.popover` border box. The canvas declares `padding: 12px`; the render's first
  * control sits at border+12px on both axes, so the popover is 12px-padded and
  * 126px tall.
  *
- * The popover text is the platform UI font (`system-ui`): the design reference
- * renderer loads `@fontsource-variable/inter` as `Inter`, but that never reaches
- * the canvas string, so the baseline rasterises the labels in the OS UI font.
- * The fixture pins the same family (see `src/v3-fixture.tsx`); an Inter build
- * shifts every glyph and re-breaks the comparison.
+ * The popover text is the design's `Inter` (values in `JetBrains Mono`): the
+ * design-reference renderer answers the canvas's Google Fonts requests from the
+ * @fontsource packages the fixture imports, so both rasterise the same files.
  */
 import { expect, test } from "@playwright/test";
 import { compareToCrop } from "../../../e2e/visual-compare";

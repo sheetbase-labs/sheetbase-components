@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sheetbase v3 chart fixture</title>
-    <!-- The design renders resolve the canvas's `Inter, sans-serif` to the
-         generic `sans-serif` (Helvetica), so the fixture pins `sans-serif`
-         (src/v3-fixture.tsx) and loads no webfont. -->
+    <!-- The ELN design-reference renderer answers the canvases' `Inter` Google
+         Fonts request from `@fontsource-variable/inter`, which the fixture
+         imports and pins (src/v3-fixture.tsx). -->
     <style>
       html,
       body {

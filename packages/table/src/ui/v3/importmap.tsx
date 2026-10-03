@@ -1,9 +1,9 @@
 /**
  * COMP-02.6 visual fixture: the Import step 2 preview grid ("Rows to import").
  *
- * Crop box (ImportMap renders, 1440×1000, scale 1): x=264 y=513 w=839 h=169 —
+ * Crop box (ImportMap renders, 1440×1000, scale 1): x=264 y=515 w=839 h=169 —
  * the grid's outer border on the crop's top-left edge (the `.g` table is
- * 265,513.5 843×168). The grid is a window into the full 34-row preview: the
+ * 265,515.5 843×168). The grid is a window into the full 34-row preview: the
  * first visible row is 97, then the five flagged rows 97/98/112/113/114 with
  * 99–111 collapsed to zero height.
  *
@@ -26,8 +26,8 @@ const headers: readonly Header[] = [
   ["outcome", "Outcome"],
 ];
 
-const rowHeaderWidth = 41.375;
-const widths = [102.234, 57.438, 84.094, 98.703, 139.203, 319.953];
+const rowHeaderWidth = 41.609;
+const widths = [101.328, 58.188, 85.078, 97.703, 137.797, 321.297];
 
 type Outcome = Readonly<{ dot: "ok" | "bad" | "warn" | "draft"; color?: string }>;
 

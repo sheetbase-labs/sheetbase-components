@@ -2,9 +2,9 @@
  * COMP-02.6 visual fixture: the Notebook sheet block grid (nine clarification
  * runs of DS-0311, with a "New run" append row).
  *
- * Crop box (Notebook renders, 1440×1840, scale 1): x=264 y=660 w=839 h=333 —
+ * Crop box (Notebook renders, 1440×1840, scale 1): x=264 y=667 w=839 h=333 —
  * the grid wrapper's border box. The `.g num` table is 843×332
- * (265,660.5) but the crop keeps the wrapper's 839px width, so the rightmost
+ * (265,667.5) but the crop keeps the wrapper's 839px width, so the rightmost
  * four pixels of the last column are clipped identically in both images.
  *
  * The design's header is two-tier: a 24px group row
@@ -62,7 +62,7 @@ const headers: readonly Header[] = [
 // Widths are the design's measured fractional (content-driven) values,
 // including the 36px row-number gutter.
 const rowHeaderWidth = 36;
-const widths = [77.672, 100.766, 89.172, 137.859, 141.469, 131.219, 128.844];
+const widths = [76.859, 105.469, 90.641, 136.391, 139.953, 130.078, 127.609];
 
 const rows: readonly (readonly string[])[] = [
   ["A-50", "MAT-0418 A", "50", "6.2", "7.4 × 10¹¹", "86.0", "Yes"],

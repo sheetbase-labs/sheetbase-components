@@ -2,8 +2,8 @@
  * COMP-02.6 visual fixture: the NbEditing notebook block grid ("Clarification
  * runs", clarification: depth filter screening).
  *
- * Crop box (NbEditing renders, 1440×1100, scale 1): x=264 y=247 w=844 h=141 —
- * the grid wrapper's border box (the `.g` table is 265,248 843×140). The grid
+ * Crop box (NbEditing renders, 1440×1100, scale 1): x=264 y=248 w=839 h=141 —
+ * the grid wrapper's border box (the `.g` table is 265,249 843×140). The grid
  * is a window into the run list: the first visible run is 7, so the data sits
  * at grid rows 7–9 and the viewport is scrolled past the six rows above it.
  *
@@ -27,8 +27,8 @@ const headers: readonly Header[] = [
   ["meets_criteria", "Meets criteria", true],
 ];
 
-const rowHeaderWidth = 38.42;
-const widths = [72.78, 94.42, 132.05, 129.17, 132.55, 122.95, 120.66];
+const rowHeaderWidth = 38.719;
+const widths = [72.297, 99.203, 130.531, 128.281, 131.641, 122.344, 119.984];
 
 // The design's first visible run is 7; the grid is a page into the full run
 // list, so the data lives at absolute rows 7–9 (1-indexed).

@@ -3,9 +3,9 @@
  * own nine conditions under `themes/v3.css` at the design's grid box
  * (855×293), for comparison with a crop of the ELN design render.
  *
- * Crop box (SheetWorking renders, 1440×1000, scale 1): x=256 y=232 w=855 h=293
+ * Crop box (SheetWorking renders, 1440×1000, scale 1): x=256 y=233 w=855 h=293
  * — the `.g` grid's border box: 25px row-number gutter + eight columns
- * (107/103/108/107/133/99/91/82) and a 40px two-tier header over nine 28px rows.
+ * (110/102/110/110/132/98/91/94) and a 40px two-tier header over nine 28px rows.
  *
  * Columns, header labels, sources, widths and states come from
  * `canvas/SheetWorking.dc.html` / `SheetWorking-light.png`.
@@ -33,8 +33,8 @@ const headers: readonly Header[] = [
 // that render, including the row-number gutter; hard-coding the integers the
 // crop's grid lines suggest shifts every glyph by up to 0.5px and breaks the
 // pixel comparison.
-const rowHeaderWidth = 24.5625;
-const widths = [107.4844, 103.125, 107.4844, 107.4844, 132.5469, 98.9375, 91.2969, 94.5781];
+const rowHeaderWidth = 24.781;
+const widths = [110.188, 101.531, 110.188, 110.188, 131.641, 98.344, 91.031, 94.234];
 
 const rows: readonly (readonly string[])[] = [
   ["A-50", "MAT-0418 A", "50", "6.2", "7.4 × 10¹¹", "86.0", "Clear", "85"],

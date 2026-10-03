@@ -2,9 +2,9 @@
  * COMP-02.6 visual fixture: the Model Cell bank records list ("Cell bank",
  * model MDL-0019) — the design's `.t num` record table.
  *
- * Crop box (ModelRecords renders, 1440×1000, scale 1): x=256 y=257 w=860 h=264
+ * Crop box (ModelRecords renders, 1440×1000, scale 1): x=256 y=260 w=860 h=265
  * — the card's border box: a 1px frame around an 858px table of eight columns
- * (97.02/163.61/89.91/78.5/82.56/125.52/114.56/106.33) with a 31px header over
+ * (95.59/164/90.47/77.78/83.03/127.88/113.78/105.47) with a 31px header over
  * seven 33px rows. Columns, labels, widths, states and rows come from
  * `canvas/ModelRecords.dc.html` / `ModelRecords-light.png`.
  *
@@ -23,7 +23,7 @@ const headers = ["ID", "Name", "Cell line", "Passage", "Vials left", "Location",
 
 // Measured fractional widths from the design's auto-laid-out table; they sum to
 // the 858px content box.
-const widths = [97.016, 163.609, 89.906, 78.5, 82.563, 125.516, 114.563, 106.328];
+const widths = [95.594, 164, 90.469, 77.781, 83.031, 127.875, 113.781, 105.469];
 
 type StatusTone = "ok" | "warn" | "review" | "stored" | "bad";
 

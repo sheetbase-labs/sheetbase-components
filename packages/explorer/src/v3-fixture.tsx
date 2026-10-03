@@ -15,6 +15,7 @@
  */
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/inter";
 import "@sheetbase-labs/sheetbase-shared/theme.css";
 import "@sheetbase-labs/sheetbase-shared/themes/v3.css";
 import "@sheetbase-labs/sheetbase-shared/shell.css";
@@ -136,12 +137,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           background: "var(--surface)",
           padding: 0,
           WebkitFontSmoothing: "antialiased",
-          // The canvas asks for `Inter, sans-serif`; the design render resolves
-          // that to the generic `sans-serif` (Helvetica in the render's
-          // Chromium), not `system-ui`. Pin `sans-serif` so the fixture matches
-          // the baseline: measured on the step-yield crop this is 0.44% vs
-          // 1.21% for `system-ui`.
-          "--font-sans": "sans-serif",
+          // The canvases ask for `Inter, sans-serif` and the design-reference
+          // renderer answers that from `@fontsource-variable/inter` (imported
+          // above), so the baseline rasterises real Inter. Pin the fontsource
+          // family name — the design canvas's `Inter` names the same file.
+          "--font-sans": '"Inter Variable", system-ui, sans-serif',
         } as React.CSSProperties
       }
     >

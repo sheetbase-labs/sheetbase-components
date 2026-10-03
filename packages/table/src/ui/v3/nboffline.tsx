@@ -2,8 +2,8 @@
  * COMP-02.6 visual fixture: the NbOffline notebook block grid ("Clarification
  * runs", clarification: depth filter screening, seen while offline).
  *
- * Crop box (NbOffline renders, 1440×900, scale 1): x=264 y=259 w=839 h=197 —
- * the grid wrapper's border box (the `.g` table is 265,260 843×196, clipped 4px
+ * Crop box (NbOffline renders, 1440×1000, scale 1): x=264 y=260 w=839 h=197 —
+ * the grid wrapper's border box (the `.g` table is 265,261 843×196, clipped 4px
  * on the right). The grid is a window into the run list: the first visible run
  * is 4, so the data sits at grid rows 4–9 and the viewport is scrolled past the
  * three rows above it.
@@ -52,7 +52,7 @@ const headers: readonly Header[] = [
 ];
 
 const rowHeaderWidth = 36;
-const widths = [77.672, 100.766, 89.172, 137.859, 141.469, 131.219, 128.844];
+const widths = [76.859, 105.453, 90.641, 136.391, 139.953, 130.078, 127.625];
 
 // The design's first visible run is 4; the grid is a page into the full run
 // list, so the data lives at absolute rows 4–9 (1-indexed).

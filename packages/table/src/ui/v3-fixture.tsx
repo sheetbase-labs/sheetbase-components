@@ -10,6 +10,8 @@
  */
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
 import "@sheetbase-labs/sheetbase-shared/theme.css";
 import "@sheetbase-labs/sheetbase-shared/themes/v3.css";
 import "./styles.css";

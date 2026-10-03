@@ -4,10 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sheetbase v3 grid fixtures</title>
-    <!-- Faces: the design renders rasterise text in the platform UI font, not
-         the Inter the canvas nominally requests (its @fontsource build never
-         reaches the canvas string). The fixture pins the same stack so each
-         crop is comparable. -->
+    <!-- Faces: the design canvases request Inter / JetBrains Mono from Google
+         Fonts and the ELN design-reference renderer answers those requests from
+         the same @fontsource packages these fixtures now import, so the design
+         renders and the fixtures rasterise the same faces. -->
     <style>
       html,
       body {
@@ -23,8 +23,11 @@
       #grid-fixture .spreadsheet {
         width: 100%;
         height: 100%;
-        /* Match the design render's actual face: the platform UI font. */
-        --font-sans: system-ui, sans-serif;
+        /* The @fontsource families (see src/ui/v3-fixture.tsx) carry a
+           `Variable` suffix; the design canvas's `Inter` / `JetBrains Mono`
+           names resolve to the same files. */
+        --font-sans: "Inter Variable", system-ui, sans-serif;
+        --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
         -webkit-font-smoothing: antialiased;
       }
     </style>

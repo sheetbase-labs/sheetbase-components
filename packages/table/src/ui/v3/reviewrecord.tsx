@@ -2,7 +2,7 @@
  * COMP-02.6 visual fixture: the ReviewRecord reviewer grid ("Transfection
  * results", in review, round 2).
  *
- * Crop box (ReviewRecord renders, 1440×1000, scale 1): x=294 y=537 w=794 h=141
+ * Crop box (ReviewRecord renders, 1440×1000, scale 1): x=294 y=543 w=794 h=141
  * — the design's grid frame (1px top/left border + 6px left radius) around the
  * `.g num` table: a 36px row-number gutter and six data columns over a 28px
  * single-tier header and four 28px rows. Row 3's Genome titre cell carries the
@@ -33,7 +33,7 @@ const headers: readonly Header[] = [
 ];
 
 const rowHeaderWidth = 36;
-const widths = [77.109, 106.813, 148.594, 157.797, 138.781, 127.906, 0];
+const widths = [76.859, 108.016, 148.453, 157.375, 138.719, 127.578, 0];
 
 const rows: readonly (readonly string[])[] = [
   ["R1.0", "1:1", "3.1 × 10¹⁰", "88.1", "43.1", "Viability yes"],

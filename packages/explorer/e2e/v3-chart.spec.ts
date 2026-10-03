@@ -4,18 +4,18 @@
  * of the ELN design renders.
  *
  * Crop boxes (design renders, scale 1), both the SVG's own display box:
- * - step-yield (Notebook renders, 1440×1840): x=264 y=1134 w=844 h=262. The
+ * - step-yield (Notebook renders, 1440×1840): x=264 y=1141 w=844 h=262. The
  *   Notebook canvas draws Figure 1 at its natural 844×262 size.
- * - turbidity (Analysis renders, 1440×1000): x=482 y=383 w=640 h=149. The
+ * - turbidity (Analysis renders, 1440×1000): x=482 y=384 w=640 h=149. The
  *   Analysis canvas authors chart 2 in an 844×196 viewBox (`plot 56,20 → 824,160`)
  *   but displays it in a 640×149 box, so the browser scales the viewBox by
  *   640/844 = 0.758 — as does the fixture (src/v3-fixture.tsx, CSS-sized to the
  *   same box; verified: axis/plot land on the same rows and columns).
  *
- * Font: the canvases ask for `Inter, sans-serif`; the design render resolves
- * that to the generic `sans-serif` (Helvetica in the render's Chromium), so both
- * fixtures pin `sans-serif` (src/v3-fixture.tsx, v3.html) and load no webfont.
- * On the step-yield crop this is 0.44% vs 1.21% for `system-ui`.
+ * Font: the canvases ask for `Inter, sans-serif` and the design-reference
+ * renderer answers that request from `@fontsource-variable/inter`, so both the
+ * baseline and these fixtures rasterise the same Inter files (the fixture pins
+ * the fontsource family name `Inter Variable`).
  *
  * Turbidity metrics: the Analysis canvas sizes text/markers/strokes for the
  * 0.758 display scale (text 15/14 viewBox units, markers r5, series stroke 1.8)

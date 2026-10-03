@@ -2,9 +2,9 @@
  * COMP-02.6 visual fixture: the Promote-columns dialog's local-column list
  * (SheetPromote.dc.html, table 1, `.t num`).
  *
- * Crop box (SheetPromote renders, 1440×1000, scale 1): x=401 y=361 w=632 h=100
+ * Crop box (SheetPromote renders, 1440×1000, scale 1): x=401 y=363 w=632 h=100
  * — the bordered wrapper (1px `--border`, radius 6px) around the `.t` table.
- * The design's table is 402,362 636×97.5 inside that wrapper; the crop stops
+ * The design's table is 402,364 636×97.5 inside that wrapper; the crop stops
  * ~5px short of the wrapper's right border, exactly where the grid's last
  * column rule is clipped, so neither shows a right edge strip.
  *
@@ -30,7 +30,7 @@ const headers: readonly Header[] = [
 ];
 
 // Fractional widths measured from the design's `width:100%` auto layout.
-const widths = [102.609, 158.172, 212.672, 43.813, 118.734];
+const widths = [104.625, 153.313, 215.672, 43.203, 119.188];
 
 const rows: readonly (readonly string[])[] = [
   ["Visual clarity", "visual_clarity", "Choice: Clear, Slight haze, Hazy", "—", "9 of 9"],

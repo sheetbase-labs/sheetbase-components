@@ -3,8 +3,8 @@
  * notebook block after reconnecting, where run 6's Capsid titre carries a
  * save conflict ("2 values").
  *
- * Crop box (NbConflict renders, 1440×1000, scale 1): x=264 y=259 w=819 h=169 —
- * the grid wrapper's border box (the `.g` table is 265,260 823×168, clipped 4px
+ * Crop box (NbConflict renders, 1440×1000, scale 1): x=264 y=260 w=819 h=169 —
+ * the grid wrapper's border box (the `.g` table is 265,261 823×168, clipped 4px
  * on the right). The grid is a window into the run list: the first visible run
  * is 4, so the data sits at grid rows 4–8 and the viewport is scrolled past the
  * three rows above it.
@@ -60,7 +60,7 @@ const headers: readonly Header[] = [
 ];
 
 const rowHeaderWidth = 36;
-const widths = [75.75, 98.281, 86.953, 134.453, 137.953, 127.969, 125.641];
+const widths = [74.953, 102.844, 88.391, 133.016, 136.484, 126.859, 124.453];
 
 // The design's first visible run is 4; the grid is a page into the full run
 // list, so the data lives at absolute rows 4–8 (1-indexed).

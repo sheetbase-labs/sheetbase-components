@@ -2,7 +2,7 @@
  * COMP-02.6 visual fixture: the Template TPL-006 column editor ("Clarification
  * runs", a record-list section of the depth-filter clarification template).
  *
- * Crop box (TemplateEditor renders, 1440×1000, scale 1): x=506 y=193 w=604
+ * Crop box (TemplateEditor renders, 1440×1000, scale 1): x=506 y=195 w=604
  * h=410 — the design's bordered wrapper (`border: 1px solid var(--border);
  * border-radius: 6px; overflow: hidden`, 608px content wide) from its top-left
  * border to the bottom border. The wrapper's right border and the last few px
@@ -25,7 +25,7 @@ import type { V3FixtureModule } from "./types";
 
 const headers: readonly string[] = ["Column", "Source", "Type", "Unit", "Required", "Rule"];
 
-const widths = [90.109, 157.891, 121.438, 57.484, 71.672, 109.406];
+const widths = [90.797, 155.063, 122.266, 58.813, 71.203, 109.859];
 const rowHeights = [49, 49, 33, 49, 49, 49, 49, 49];
 
 type SourceKind = "dataset" | "record" | "calc";

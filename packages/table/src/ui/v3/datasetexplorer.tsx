@@ -4,7 +4,7 @@
  * design's grid box (839×252), for comparison with a crop of the ELN design
  * render.
  *
- * Crop box (DatasetExplorer renders, 1440×1000, scale 1): x=256 y=231 w=835
+ * Crop box (DatasetExplorer renders, 1440×1000, scale 1): x=256 y=232 w=835
  * h=253 — the grid wrapper's border box over a 28px single-tier header and
  * eight 28px rows. The first visible reading is 61, and the design window skips
  * readings 65–72 (rows hidden), so the data lives at absolute rows 61–64 and
@@ -66,9 +66,9 @@ const headers: readonly Header[] = [
 
 // The design's table is `width:100%` with auto layout, so its columns land on
 // fractional (content-driven) widths. These are the measured fractions from
-// that render, including the 41.375px row-number gutter.
-const rowHeaderWidth = 41.375;
-const widths = [55.156, 39.469, 53.781, 135.703, 88.703, 106.125, 92.25, 120.672, 45.594, 60.172];
+// that render, including the 41.609px row-number gutter.
+const rowHeaderWidth = 41.609;
+const widths = [55.484, 39.609, 54.797, 136, 88.516, 105.484, 91.719, 119.422, 46.266, 60.094];
 
 // Non-contiguous readings: 61–64 then 73–76 (the design hides rows 65–72).
 const rowNumbers = [61, 62, 63, 64, 73, 74, 75, 76];

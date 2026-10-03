@@ -2,10 +2,10 @@
  * COMP-02.6 visual fixture: the NbViewer grid — the read-only notebook viewer's
  * "Clarification runs" table.
  *
- * Crop box (NbViewer renders, 1440×1000, scale 1): x=264 y=367 w=839 h=281 —
- * the grid wrapper's border box (the `.g` table is 265,368 843×280). The grid is
+ * Crop box (NbViewer renders, 1440×1000, scale 1): x=264 y=370 w=839 h=281 —
+ * the grid wrapper's border box (the `.g` table is 265,371 843×280). The grid is
  * a single-tier header (28px, no source badges) over a 36px row-number gutter
- * and seven columns (77.672/100.766/89.172/137.859/141.469/131.219/128.844) and
+ * and seven columns (76.859/105.453/90.641/136.391/139.953/130.078/127.625) and
  * nine 28px rows.
  *
  * Columns, widths, alignment, states and rows come from `canvas/NbViewer.dc.html`
@@ -56,7 +56,7 @@ const headers: readonly Header[] = [
 ];
 
 const rowHeaderWidth = 36;
-const widths = [77.672, 100.766, 89.172, 137.859, 141.469, 131.219, 128.844];
+const widths = [76.859, 105.453, 90.641, 136.391, 139.953, 130.078, 127.625];
 
 const rows: readonly (readonly string[])[] = [
   ["A-50", "MAT-0418 A", "50", "6.2", "7.4 × 10¹¹", "86.0", "Yes"],
