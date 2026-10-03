@@ -8,7 +8,7 @@ The current table includes:
 
 - a 10,000-row viewport with TanStack Virtual driving both visible rows and visible columns;
 - single-cell, drag-range, whole-row and whole-column selection;
-- arrow, Shift+arrow, Tab, Enter and direct-typing navigation;
+- arrow, Shift+arrow and Tab navigation with Enter, F2, double-click or direct typing to edit;
 - in-cell and formula-bar editing;
 - rectangular TSV copy, cut and paste;
 - Delete/Backspace clearing and 100-step undo/redo;
@@ -101,6 +101,8 @@ Vite listens on all WSL interfaces. If Windows does not forward `localhost`, run
 | Sort dataset column | Click the sort control in its column header; cycles ascending, descending and clear |
 | Autofill | Drag the violet handle at the selection's lower-right corner |
 | Format range | Select cells and use the toolbar controls |
+
+Enter opens the editor on the active cell. While editing, Enter commits the draft and moves the selection down, Tab commits and moves right, and Escape discards. When the active cell cannot be edited — the grid is read-only, the row is read-only, or the field is not writable — Enter falls back to moving the selection down (Shift + Enter moves up). With an internal copy marquee showing, Enter pastes the copy once and dismisses it.
 
 Supported calculation functions currently include `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `IF`, `XLOOKUP`, `MATCH`, `ROUND`, `ABS`, `SQRT`, `AND`, `OR`, `NOT`, `DATE`, `YEAR`, `MONTH`, `DAY`, `TODAY` and spill-producing `SEQUENCE`. The engine supports arithmetic precedence, comparisons, concatenation, cross-sheet A1 ranges and mixed absolute references such as `$A1`, `A$1` and `$A$1`.
 

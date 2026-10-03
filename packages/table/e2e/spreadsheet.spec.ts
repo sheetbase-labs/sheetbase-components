@@ -159,16 +159,24 @@ test("Shift+Space and Ctrl+Space select the row and column", async ({ page }) =>
   await expect(announcer).toContainText("10,000 cells selected");
 });
 
-test("Enter moves the selection and pastes once when a marquee is live", async ({ page, browserName }) => {
+test("Enter edits the active cell, moves down past read-only cells and pastes once when a marquee is live", async ({ page, browserName }) => {
   // Playwright cannot synthesise clipboard shortcuts in Firefox.
   test.skip(browserName === "firefox", "Firefox does not dispatch copy for synthesised shortcuts");
   await page.goto("/default", { waitUntil: "domcontentloaded" });
   const announcer = page.locator(".grid-announcer");
+  const editor = page.locator(".cell-editor");
+  // Column A is a read-only dataset field, so Enter falls back to moving down.
   await cellAt(page, 0, 0).click();
   await page.keyboard.press("Enter");
   await expect(announcer).toContainText("A2");
   await page.keyboard.press("Shift+Enter");
   await expect(announcer).toContainText("A1");
+  // On an editable cell Enter opens the editor and Escape discards.
+  await cellAt(page, 0, 1).click(); // B1
+  await page.keyboard.press("Enter");
+  await expect(editor).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
   // Copy B1, move to B9, Enter pastes once and dismisses the marquee.
   await cellAt(page, 0, 1).click();
   await page.keyboard.press("ControlOrMeta+c");

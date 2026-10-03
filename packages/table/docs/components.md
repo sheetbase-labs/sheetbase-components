@@ -35,7 +35,7 @@ The menu, toolbar, data sidebar and query status are disabled in `minimalTableSe
 
 Pass `appendRow` (`true`, or `{ label }`) to render the "New run — type a condition or paste rows" row after the last populated row. Clicking it targets the first writable cell; committing that draft runs the blank-row path and calls `onRecordCreate`. `rowCount` must be large enough to hold the row.
 
-The grid is one tab stop: arrows move between cells, Enter commits an edit and moves down, Escape discards, and Tab walks right, leaving the grid at the last column (Shift+Tab mirrors it at column 0).
+The grid is one tab stop: arrows move between cells, Enter edits the active cell (and, while editing, commits the draft and moves down), Escape discards, and Tab walks right, leaving the grid at the last column (Shift+Tab mirrors it at column 0).
 
 ## Integration modes
 

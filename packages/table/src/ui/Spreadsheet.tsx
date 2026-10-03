@@ -98,7 +98,7 @@ import { conflictWriteKeys, fieldWritesForMutation, type MutationFieldWrite } fr
 import { buildFilterValue, ensureOperator, operatorLabel, operatorsForField } from "./filter-conditions";
 import { conflictValueLabel, cellStateClassName, resolveCellState, type CellState } from "./cell-state";
 import { appendRowEnabled, appendRowIndex, appendRowLabel, firstWritableColumn, type AppendRowConfig } from "./append-row";
-import { focusOutsideGrid, tabIntent } from "./keyboard";
+import { enterIntent, focusOutsideGrid, tabIntent } from "./keyboard";
 import { CALC_SOURCE_LABEL, SourceBadge, showsComputedMark, type ColumnSource } from "./source-badge";
 import { rebaseAutoRowHeights, useIsomorphicLayoutEffect, useThemeRowHeight } from "./row-height";
 import { clampGridPoint, selectionForPoint } from "./grid-focus";
@@ -2044,11 +2044,19 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      // With a live copy marquee, Enter pastes the internal copy once and
-      // dismisses it (Excel); otherwise Enter moves the selection down.
-      if (!readOnly && copyRange && copyBuffer.current) {
-        const pasted = pasteTsv(data, selection.focus, copyBuffer.current.tsv, viewRowCount, columnCount, canEdit, keyFor);
-        const intended = beforeCellsChange ? pasteTargetChanges(data, selection.focus, parseTsv(copyBuffer.current.tsv), viewRowCount, columnCount, keyFor) : undefined;
+      const marquee = !readOnly && copyRange !== undefined ? copyBuffer.current : null;
+      const intent = enterIntent({
+        shiftKey: event.shiftKey,
+        hasCopyMarquee: marquee !== null,
+        canEdit: canEdit(selection.focus),
+      });
+      // The design's keyboard model (SheetGrid README, FocusOrder) is "Enter
+      // edits and saves a row, Esc discards": Enter opens the editor, and a
+      // live copy marquee pastes once (Excel). Non-editable cells keep the
+      // older vertical movement.
+      if (intent === "paste" && marquee) {
+        const pasted = pasteTsv(data, selection.focus, marquee.tsv, viewRowCount, columnCount, canEdit, keyFor);
+        const intended = beforeCellsChange ? pasteTargetChanges(data, selection.focus, parseTsv(marquee.tsv), viewRowCount, columnCount, keyFor) : undefined;
         const outcome = commit(pasted.data, "Paste range", selectionAddresses(pasted.selection, keyFor), { source: "paste", intended });
         if (outcome.status !== "rejected") setSelection(pasted.selection);
         setCopyRange(undefined);
@@ -2056,6 +2064,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         updateCutStatus(null);
         return;
       }
+      if (intent === "edit") { beginEdit(selection.focus); return; }
       move({ row: event.shiftKey ? -1 : 1, column: 0 }, false);
       return;
     }
@@ -2904,7 +2913,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       {editing && validationError && <div className="cell-validation" role="alert" style={{ left: columnLeft(editing.column), top: headerHeight + datasetHeaderHeight + rowOffsets[Math.min(editing.row + 1, viewRowCount)] + 3 }}>{validationError}</div>}
       {showShortcutHelp && <div className="shortcut-backdrop"><section ref={shortcutHelpRef} className="shortcut-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}>
         <header><strong>Keyboard shortcuts</strong><button type="button" aria-label="Close shortcuts" onClick={() => { setShowShortcutHelp(false); viewportRef.current?.focus(); }}>×</button></header>
-        <dl><dt>Edit cell</dt><dd>F2 or type</dd><dt>Move through sheet</dt><dd>Arrows · Enter · Tab · Page Up/Down</dd><dt>Jump to data edge</dt><dd>Ctrl/Cmd + arrows</dd><dt>Select all</dt><dd>Ctrl/Cmd A or corner</dd><dt>Select row / column</dt><dd>Shift Space · Ctrl Space</dd><dt>Paste copied range</dt><dd>Enter</dd><dt>Move cells</dt><dd>Drag selection border</dd><dt>Fill down / right</dt><dd>Ctrl/Cmd D · R</dd><dt>Insert date / time</dt><dd>Ctrl/Cmd ; · Shift :</dd><dt>Insert / delete axis</dt><dd>Ctrl/Cmd Shift + · Ctrl/Cmd −</dd><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
+        <dl><dt>Edit cell</dt><dd>Enter, F2 or type</dd><dt>Move through sheet</dt><dd>Arrows · Tab · Page Up/Down</dd><dt>Jump to data edge</dt><dd>Ctrl/Cmd + arrows</dd><dt>Select all</dt><dd>Ctrl/Cmd A or corner</dd><dt>Select row / column</dt><dd>Shift Space · Ctrl Space</dd><dt>Paste copied range</dt><dd>Enter</dd><dt>Move cells</dt><dd>Drag selection border</dd><dt>Fill down / right</dt><dd>Ctrl/Cmd D · R</dd><dt>Insert date / time</dt><dd>Ctrl/Cmd ; · Shift :</dd><dt>Insert / delete axis</dt><dd>Ctrl/Cmd Shift + · Ctrl/Cmd −</dd><dt>Find</dt><dd>Ctrl/Cmd F</dd><dt>Find and replace</dt><dd>Ctrl/Cmd Shift F</dd><dt>Undo / redo</dt><dd>Ctrl/Cmd Z · Shift Z</dd><dt>Paste values</dt><dd>Ctrl/Cmd Shift V</dd><dt>Absolute reference</dt><dd>F4</dd><dt>Extend selection</dt><dd>Shift + arrows</dd><dt>Column menu</dt><dd>Menu or Shift F10</dd></dl>
       </section></div>}
       {editing && suggestions.length > 0 && <div className="formula-suggestions" role="listbox" aria-label="Formula suggestions" style={{
         left: columnLeft(editing.column),

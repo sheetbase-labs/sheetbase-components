@@ -13,6 +13,24 @@ export function tabIntent({ shiftKey, column, columnCount }: Readonly<{ shiftKey
   return column < columnCount - 1 ? "move" : "leave";
 }
 
+/**
+ * Enter's mapping, per the design's grid keyboard model (`SheetGrid/README.md`:
+ * "Enter edits and saves a row, Esc discards"; `FocusOrder.dc.html`: "Enter
+ * edits, Esc cancels"). With a live internal copy marquee, Enter pastes it once
+ * and dismisses it. Otherwise Enter opens the editor on the focused cell; a
+ * cell that cannot be edited (read-only grid, a read-only row, or a
+ * non-writable field column) keeps the older vertical movement, which Shift
+ * reverses. While the editor is open Enter commits and moves down and Escape
+ * discards — those live in the editor's own key handler, not here.
+ */
+export type EnterIntent = "paste" | "edit" | "move";
+
+export function enterIntent({ shiftKey, hasCopyMarquee, canEdit }: Readonly<{ shiftKey: boolean; hasCopyMarquee: boolean; canEdit: boolean }>): EnterIntent {
+  if (hasCopyMarquee) return "paste";
+  if (!shiftKey && canEdit) return "edit";
+  return "move";
+}
+
 const TABBABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
