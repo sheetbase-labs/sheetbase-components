@@ -286,9 +286,20 @@ class FormulaCompiler {
   #concatenation(): FormulaNode { return this.#leftAssociative(() => this.#additive(), concatenationOperators); }
   #additive(): FormulaNode { return this.#leftAssociative(() => this.#multiplicative(), additiveOperators); }
   #multiplicative(): FormulaNode { return this.#leftAssociative(() => this.#power(), multiplicativeOperators); }
-  #power(): FormulaNode { const left = this.#unary(); if (this.#peek().value !== "^") return left; this.#next(); return { kind: "binary", operator: "^", left, right: this.#power() }; }
+  #power(): FormulaNode {
+    const left = this.#unary();
+    if (!this.#isOperator("^")) return left;
+    this.#next();
+    return { kind: "binary", operator: "^", left, right: this.#power() };
+  }
   #unary(): FormulaNode {
-    if (["+", "-"].includes(this.#peek().value)) return { kind: "unary", operator: this.#next().value as "+" | "-", operand: this.#unary() };
+    // A string literal whose content is "-" or "+" carries the same token
+    // value as the operator; only an operator-kind token can negate.
+    const token = this.#peek();
+    if (token.kind === "operator" && (token.value === "+" || token.value === "-")) {
+      this.#next();
+      return { kind: "unary", operator: token.value, operand: this.#unary() };
+    }
     return this.#primary();
   }
   #primary(): FormulaNode {
@@ -297,7 +308,7 @@ class FormulaCompiler {
     if (token.kind === "string") return { kind: "literal", value: token.value };
     if (token.kind === "reference") {
       const start = parseReference(token.value);
-      if (this.#peek().value !== ":") return { kind: "reference", reference: start };
+      if (!this.#isOperator(":")) return { kind: "reference", reference: start };
       this.#next(); const end = this.#next();
       if (end.kind !== "reference") throw new Error("#REF!");
       const parsedEnd = parseReference(end.value);
@@ -305,23 +316,38 @@ class FormulaCompiler {
       return { kind: "range", start, end: endReference };
     }
     if (token.kind === "identifier") {
-      if (token.value === "TRUE" || token.value === "FALSE") return { kind: "literal", value: token.value === "TRUE" };
-      if (this.#peek().value !== "(") {
+      if (token.value === "TRUE" || token.value === "FALSE") {
+        // Literal (`TRUE`) and the reference engine's call form (`TRUE()`)
+        // both resolve to the same boolean.
+        if (this.#isOperator("(")) {
+          this.#next();
+          this.#expect("operator", ")");
+        }
+        return { kind: "literal", value: token.value === "TRUE" };
+      }
+      if (!this.#isOperator("(")) {
         const target = lookupName(this.names, token.value);
         if (target === undefined) throw new Error("#NAME?");
         return parseNameTarget(target);
       }
       this.#expect("operator", "("); const args: FormulaNode[] = [];
       // biome-ignore lint/correctness/noConstantCondition: comma-separated arg loop; the break on non-"," is the exit.
-      if (this.#peek().value !== ")") { do { args.push(this.#comparison()); if (this.#peek().value !== ",") break; this.#next(); } while (true); }
+      if (!this.#isOperator(")")) { do { args.push(this.#comparison()); if (!this.#isOperator(",")) break; this.#next(); } while (true); }
       this.#expect("operator", ")"); return { kind: "call", name: token.value, arguments: args };
     }
-    if (token.value === "(") { const value = this.#comparison(); this.#expect("operator", ")"); return value; }
+    if (token.kind === "operator" && token.value === "(") { const value = this.#comparison(); this.#expect("operator", ")"); return value; }
     throw new Error("#VALUE!");
+  }
+  /** True when the next token is an operator with this exact value. String
+   * literals share token values with operators ("-", "+", "*", "("), so every
+   * operator lookahead must be kind-aware. */
+  #isOperator(value: string): boolean {
+    const token = this.#peek();
+    return token.kind === "operator" && token.value === value;
   }
   #leftAssociative(next: () => FormulaNode, operators: ReadonlySet<string>): FormulaNode {
     let value = next();
-    while (operators.has(this.#peek().value)) { const operator = this.#next().value; value = { kind: "binary", operator, left: value, right: next() }; }
+    while (this.#isOperator(this.#peek().value) && operators.has(this.#peek().value)) { const operator = this.#next().value; value = { kind: "binary", operator, left: value, right: next() }; }
     return value;
   }
   #peek(): Token { return this.tokens[this.#index]; }

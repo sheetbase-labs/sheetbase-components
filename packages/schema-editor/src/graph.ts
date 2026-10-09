@@ -1,4 +1,4 @@
-import { fieldFromSchema, toFieldDataType, type SheetbaseField } from "sheetbase-shared";
+import { fieldFromSchema, toFieldDataType, type SheetbaseField } from "@sheetbase-labs/sheetbase-shared";
 import type { SchemaField, SchemaGraph, SchemaModel, SchemaRelation, SchemaRelationKind } from "./types";
 
 export const NODE_WIDTH = 232;

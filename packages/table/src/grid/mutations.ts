@@ -17,6 +17,15 @@ export type ColumnWidthChange = Readonly<{
 export type GridMutation = Readonly<{
   label: string;
   cells: readonly CellChange[];
+  /**
+   * The full intended target set of a bulk operation: every cell it would
+   * change, including cells the grid will not write because they are not
+   * editable. `cells` is always a subset; the pre-commit gate sees this set so
+   * a host can reject the whole operation rather than let the editable subset
+   * land (Handsontable's whole-operation semantics). Absent for mutations that
+   * only ever target editable cells (a single-cell edit, a structural change).
+   */
+  intended?: readonly CellChange[];
   formats?: Readonly<{
     before: RangeStore<CellFormat>;
     after: RangeStore<CellFormat>;

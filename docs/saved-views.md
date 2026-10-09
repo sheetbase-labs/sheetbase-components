@@ -61,7 +61,7 @@ The migration must carry `saved[]` forward when the field moves out of
 `PersistenceAdapter<SavedView[]>` under a workbench-level key (the demo
 would use `sheetbase-demo:views`; the adapter interface — local storage,
 HTTP `GET ?key=`/`PUT`, or anything else — already exists and is
-unchanged). CRUD as pure helpers in `sheetbase-shared`:
+unchanged). CRUD as pure helpers in `@sheetbase-labs/sheetbase-shared`:
 
 ```ts
 upsertSavedView(list: readonly SavedView[], view: SavedView): SavedView[]

@@ -1,4 +1,4 @@
-import type { FilterOperator, GroupNode } from "sheetbase-shared";
+import type { FilterOperator, GroupNode } from "@sheetbase-labs/sheetbase-shared";
 
 /** Canonical operators plus parse-time aliases; evaluateRule normalises. */
 export type RuleOperator = FilterOperator | "isEmpty" | "isNotEmpty";
@@ -73,7 +73,7 @@ export interface RulesRemoteSource {
 /**
  * A field write proposed by a transform action. Structurally identical to the
  * table's `RecordFieldWrite` minus `datasetId`, which the host supplies when it
- * commits (rules-engine must not depend on sheetbase-table).
+ * commits (rules-engine must not depend on @sheetbase-labs/sheetbase-table).
  */
 export type RuleWrite = Readonly<{
   recordId: string;

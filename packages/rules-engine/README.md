@@ -1,6 +1,6 @@
-# sheetbase-rulesengine
+# @sheetbase-labs/sheetbase-rulesengine
 
-Natural-language pipeline rules with a dry-run tester. Conditions evaluate through `sheetbase-shared` (`toFilterClause` / `testCondition` / `filterRows`).
+Natural-language pipeline rules with a dry-run tester. Conditions evaluate through `@sheetbase-labs/sheetbase-shared` (`toFilterClause` / `testCondition` / `filterRows`).
 
 ```bash
 bun install
@@ -8,8 +8,8 @@ bun run dev:rules   # http://localhost:5202/
 ```
 
 ```tsx
-import { RulesEngine, parseNaturalLanguageRule, matchRules } from "sheetbase-rulesengine"
-import "sheetbase-rulesengine/styles.css"
+import { RulesEngine, parseNaturalLanguageRule, matchRules } from "@sheetbase-labs/sheetbase-rulesengine"
+import "@sheetbase-labs/sheetbase-rulesengine/styles.css"
 ```
 
 ## Action kinds — component semantics vs host semantics

@@ -21,12 +21,12 @@ import {
   type PaneSpec,
   type SheetbaseField,
   type WorkspaceDataSource,
-} from "sheetbase-shared";
-import { RulesEngine, type PipelineRule, type RulesRemoteSource, type RuleWrite } from "sheetbase-rulesengine";
-import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
-import { AdvancedSearch } from "sheetbase-advanced-search";
-import type { Dataset } from "sheetbase-explorer";
-import { createMemoryPagedAdapter, DataPageCache, HttpPagedDataAdapter, type Scalar } from "sheetbase-table";
+} from "@sheetbase-labs/sheetbase-shared";
+import { RulesEngine, type PipelineRule, type RulesRemoteSource, type RuleWrite } from "@sheetbase-labs/sheetbase-rulesengine";
+import { SchemaEditor, type SchemaGraph } from "@sheetbase-labs/sheetbase-schemaeditor";
+import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";
+import type { Dataset } from "@sheetbase-labs/sheetbase-explorer";
+import { createMemoryPagedAdapter, DataPageCache, HttpPagedDataAdapter, type Scalar } from "@sheetbase-labs/sheetbase-table";
 import {
   Explorer,
   createExplorerDataset,

@@ -1,7 +1,16 @@
 {
-  "name": "sheetbase-advanced-search",
-  "version": "0.1.0",
+  "name": "@sheetbase-labs/sheetbase-advanced-search",
+  "version": "0.6.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/advanced-search"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist-lib/sheetbase-advanced-search.js",
   "module": "./dist-lib/sheetbase-advanced-search.js",
@@ -22,14 +31,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "sheetbase-shared": "workspace:*",
-    "sheetbase-table": "workspace:*"
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-table": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",

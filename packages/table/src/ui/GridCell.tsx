@@ -1,6 +1,7 @@
 import { memo, type ReactNode, type RefObject } from "react";
 import type { CellFormat } from "../engine/types";
 import type { GridPoint } from "../grid/model";
+import { cellStateLabel, diffText, sameCellState, type ResolvedCellState } from "./cell-state";
 import type { FieldWrite, SpreadsheetCellRenderContext, WriteStatus } from "./Spreadsheet";
 
 export type GridCellWriteState = Readonly<{
@@ -27,6 +28,11 @@ export interface GridCellProps {
   column: number;
   /** Formatted display text (the `value` the cell paints). */
   display: string;
+  /**
+   * Boolean state for a `boolean`-typed column: paints a checkbox mark instead
+   * of the literal text. Undefined keeps the plain text rendering.
+   */
+  booleanValue?: boolean;
   /** Whether the raw input is a formula (drives the `formula-value` class). */
   isFormula: boolean;
   selected: boolean;
@@ -46,6 +52,8 @@ export interface GridCellProps {
   overflow?: Readonly<{ left: number; right: number }>;
   field?: SpreadsheetCellRenderContext["field"];
   writeState?: GridCellWriteState;
+  /** COMP-02.3: resolved cell state; the class is already folded into `className`. */
+  cellState?: ResolvedCellState;
   renderCell?(context: SpreadsheetCellRenderContext): ReactNode | undefined;
   handlers: RefObject<GridCellHandlers>;
   left: number | string;
@@ -70,9 +78,10 @@ function sameFormat(a?: Partial<CellFormat>, b?: Partial<CellFormat>): boolean {
  * memo is not defeated by fresh closures each parent render.
  */
 export const GridCell = memo(function GridCell(props: GridCellProps) {
-  const { address, row, column, display, isFormula, selected, active, loading, className, title, format, field, overflow, writeState, renderCell, handlers, left, top, width, height } = props;
+  const { address, row, column, display, booleanValue, isFormula, selected, active, loading, className, title, format, field, overflow, writeState, cellState, renderCell, handlers, left, top, width, height } = props;
   const point: GridPoint = { row, column };
   const context: SpreadsheetCellRenderContext = { address, point, display, field, selected, active, loading };
+  const stateTitle = cellState?.state === "diff" ? diffText(cellState) : cellStateLabel(cellState);
   return (
     // biome-ignore lint/a11y/useSemanticElements: virtualised grid — cells are absolutely positioned divs; the ARIA gridcell role is the sanctioned pattern
     <div
@@ -82,7 +91,9 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       aria-rowindex={row + 1}
       aria-colindex={column + 1}
       className={className}
-      title={title}
+      data-cell-state={cellState?.state}
+      aria-invalid={cellState?.state === "invalid" || undefined}
+      title={title ?? stateTitle}
       style={{
         left,
         top,
@@ -98,10 +109,18 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
       onPointerEnter={() => handlers.current?.pointerEnter(point)}
       onDoubleClick={() => handlers.current?.doubleClick(point)}
     >
-      {loading ? <span className="loading-placeholder" /> : renderCell?.(context) ?? <span
+      {loading ? <span className="loading-placeholder" /> : cellState?.state === "diff" ? <span className="cell-diff">
+        {cellState.before !== undefined && <del>{cellState.before}</del>}
+        <ins>{cellState.after}</ins>
+      </span> : renderCell?.(context) ?? (booleanValue === undefined ? <span
         className={`${isFormula ? "formula-value" : ""}${display.includes("\n") ? " multiline" : ""}`}
         style={overflow ? { marginLeft: -overflow.left, maxWidth: `calc(100% + ${overflow.left + overflow.right}px)`, textOverflow: "clip" } : undefined}
-      >{display}</span>}
+      >{display}</span> : <span
+        className="cell-boolean"
+        data-boolean={booleanValue ? "true" : "false"}
+        role="img"
+        aria-label={booleanValue ? "True" : "False"}
+      >{booleanValue ? "✓" : ""}</span>)}
       {writeState && <button type="button" className="write-state" aria-label={`${writeState.status} write`} title={writeState.status === "failed" || writeState.status === "conflict" ? "Click to retry; Shift-click to revert" : writeState.status} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handlers.current?.badgeClick(address, writeState, event)} />}
     </div>
   );
@@ -110,6 +129,7 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
   && prev.row === next.row
   && prev.column === next.column
   && prev.display === next.display
+  && prev.booleanValue === next.booleanValue
   && prev.isFormula === next.isFormula
   && prev.selected === next.selected
   && prev.active === next.active
@@ -121,6 +141,7 @@ export const GridCell = memo(function GridCell(props: GridCellProps) {
   && prev.overflow?.right === next.overflow?.right
   && prev.field === next.field
   && prev.writeState === next.writeState
+  && sameCellState(prev.cellState, next.cellState)
   && prev.renderCell === next.renderCell
   && prev.handlers === next.handlers
   && prev.left === next.left

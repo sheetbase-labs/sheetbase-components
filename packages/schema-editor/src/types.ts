@@ -1,4 +1,4 @@
-import type { FieldDataType, FieldReference } from "sheetbase-shared";
+import type { FieldDataType, FieldReference } from "@sheetbase-labs/sheetbase-shared";
 
 export type FieldType = FieldDataType;
 

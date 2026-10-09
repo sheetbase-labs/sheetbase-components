@@ -1,4 +1,4 @@
-# sheetbase-shared
+# @sheetbase-labs/sheetbase-shared
 
 Canonical Sheetbase field, query and chrome primitives.
 
@@ -10,11 +10,67 @@ import {
   toFieldDataType,
   PaneLayout,
   SheetbaseShell,
-} from "sheetbase-shared";
-import "sheetbase-shared/theme.css";
-import "sheetbase-shared/shell.css";
+} from "@sheetbase-labs/sheetbase-shared";
+import "@sheetbase-labs/sheetbase-shared/theme.css";
+import "@sheetbase-labs/sheetbase-shared/shell.css";
 // PaneLayout owns its styles: panes.css ships with the import above.
 ```
+
+## Theming
+
+Every package reads its colours, fonts and sizes from CSS custom properties
+declared on the `.sheetbase-scope` / `.sheetbase-explorer` wrapper, so a host
+can retheme without forking. `@sheetbase-labs/sheetbase-shared/theme.css` is the default preset
+(the packages' own look); `@sheetbase-labs/sheetbase-shared/themes/v3.css` is the UI system v3
+preset whose values are the design tokens verbatim.
+
+```ts
+import "@sheetbase-labs/sheetbase-shared/theme.css";       // default preset
+import "@sheetbase-labs/sheetbase-shared/themes/v3.css";   // v3 preset — load after the default
+```
+
+Add `data-theme="dark"` (or the `.dark` class) on the scope for the dark set.
+The scope element carries both the light default and the dark override, so a
+nested component replies to the nearest scope's theme.
+
+### Mapping a host's tokens
+
+A host that already has its own tokens does not need to copy values: point the
+package variables at the host variables on the same scope. The ELN, for
+example, maps its `--its-*` tokens onto the `--sb-*`/package names:
+
+```css
+/* host.css — loaded after the preset, on the host's scope element */
+:where(.sheetbase-scope),
+:where(.sheetbase-explorer) {
+  --panel: var(--its-surface);
+  --panel-2: var(--its-surface-muted);
+  --text: var(--its-text);
+  --muted: var(--its-text-muted);
+  --border: var(--its-border);
+  --accent: var(--its-accent);
+  --selection: var(--its-selection);
+  --font-sans: var(--its-font-sans);
+  --text-size: var(--its-text-size);
+  /* … */
+}
+```
+
+Any variable may be overridden this way; the full set begins in
+`src/theme.css`. Besides the surface/border/text/accent variables, the set
+includes status marks (`--green`, `--orange`, `--blue`, `--purple`,
+`--danger`), chart tokens (`--series-a/b/c`, `--chart-grid`, `--chart-axis`,
+`--chart-label`, `--chart-anchor`), direct-formatting swatches
+(`--format-colour-1..10`), formula-reference outlines (`--ref-1..4`), the
+explorer series palettes (`--palette-<kind>-1..6`), `--on-accent` for text on
+an accent fill, and the shape/height tokens (`--radius-*`, `--row-height`,
+`--control-height`).
+
+Most components consume a variable through CSS or inline styles, which resolve
+`var()` directly. Two targets cannot — SVG presentation attributes (the chart
+renderer) and `<input type="color">` — so those call the exported
+`resolveThemeColour` / `resolveThemeColours` helpers, which read the computed
+colour from the live scope element.
 
 ## Panes
 
@@ -170,7 +226,7 @@ remote dataflow.
 `bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and
 `dist-types`. The `types` export resolves to `src` so type-checking the
 monorepo needs no prebuild; `import` resolves to the compiled lib. Consumers of
-the compiled lib must load the styles (`sheetbase-shared/theme.css`,
+the compiled lib must load the styles (`@sheetbase-labs/sheetbase-shared/theme.css`,
 `shell.css`, `panes.css`).
 
 See the repository README for the vocabulary (`text` not `string`, `isNull` not

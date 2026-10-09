@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { PlayIcon, ReloadIcon } from '@hugeicons/core-free-icons'
-import { andCondition, applyView, emptyCondition, emptyRoot, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from 'sheetbase-shared'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
+import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from '@sheetbase-labs/sheetbase-shared'
 import { DataTable } from './components/DataTable'
 import { datasetFromFile } from './lib/adapters/file'
 import { bucketsToRows } from './lib/adapters/http'
@@ -12,6 +10,7 @@ import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 import { runSqlAsync } from './lib/sql'
+import { PlayIcon, ReloadIcon } from './components/icons'
 import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, FilterRule, SavedExploration } from './lib/types'
 import {
   ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
@@ -206,7 +205,7 @@ export function App(props: AppProps = {}) {
     const filtersStale = (current: ChartSpec) => current.filters?.some((rule) => !valid(rule.field)) ?? false
     if (valid(spec.x) && valid(spec.y)) {
       // x/y are fine; still drop any stale channel references from another dataset.
-      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh) || filtersStale(spec)
+      const stale = !valid(spec.group) || !valid(spec.color) || !valid(spec.facet) || !valid(spec.errorLow) || !valid(spec.errorHigh) || !valid(spec.excludeField) || filtersStale(spec)
       if (!stale) return
       setSpec((current) => ({
         ...current,
@@ -215,6 +214,7 @@ export function App(props: AppProps = {}) {
         ...(valid(current.facet) ? {} : { facet: undefined }),
         ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
         ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+        ...(valid(current.excludeField) ? {} : { excludeField: undefined }),
         ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
         ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
       }))
@@ -240,12 +240,19 @@ export function App(props: AppProps = {}) {
       ...(valid(current.facet) ? {} : { facet: undefined }),
       ...(valid(current.errorLow) ? {} : { errorLow: undefined }),
       ...(valid(current.errorHigh) ? {} : { errorHigh: undefined }),
+      ...(valid(current.excludeField) ? {} : { excludeField: undefined }),
       ...(valid(current.errorLow) && valid(current.errorHigh) ? {} : { errorMode: current.errorMode === 'explicit' ? 'none' as const : current.errorMode }),
       ...(filtersStale(current) ? { filters: pruneFilters(current.filters) } : {}),
     }))
   }, [datasetColumnsKey])
 
-  useEffect(() => { if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light' }, [isDark])
+  const [themeEpoch, setThemeEpoch] = useState(0)
+  // The root's data-theme must be set before the chart reads the themed colour
+  // variables, so apply it in a layout effect and bump an epoch to re-resolve.
+  useLayoutEffect(() => {
+    if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light'
+    setThemeEpoch((epoch) => epoch + 1)
+  }, [isDark])
   // biome-ignore lint/correctness/useExhaustiveDependencies: dataset/panelCollapsed/panelHeight are deliberate re-measure triggers, not captures
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
@@ -411,11 +418,15 @@ export function App(props: AppProps = {}) {
     ? { ...chartSpec, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
     : chartSpec), [remote, chartSpec])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch re-reads the palette after the root's data-theme is applied
+  const chartPalette = useMemo(() => resolveThemeColours(chartSpec.palette, rootRef.current ?? undefined), [chartSpec.palette, themeEpoch])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch rebuilds the chart after the root's data-theme is applied
   const definition = useMemo(() => {
     if (!chartDataset) return null
     if (remote && (remoteQuery === null || remoteRows === null)) return null
     return buildChart(chartDataset, chartSpecForBuild, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window })))
-  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec])
+  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec, themeEpoch])
   const visibleRows = useMemo(() => {
     if (!chartDataset) return []
     if (remote) return remoteRows ?? []
@@ -592,7 +603,7 @@ export function App(props: AppProps = {}) {
               ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
               : <><span className="sb-spinner" aria-hidden="true" /><span>Aggregating on the server…</span></>}
         </div></div>
-      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartSpec.palette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
+      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>
@@ -602,7 +613,7 @@ export function App(props: AppProps = {}) {
       </details>
     )}
   </section></main>
-  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button type="button" className="sb-btn subtle" onClick={resetSql}><HugeiconsIcon icon={ReloadIcon} size={13}/>Reset</button><button type="button" className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><HugeiconsIcon icon={PlayIcon} size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
+  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button type="button" className="sb-btn subtle" onClick={resetSql}><ReloadIcon size={13}/>Reset</button><button type="button" className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><PlayIcon size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)
   return <ExplorerFrame framed={props.frame} rootRef={rootRef} panel={showPanel} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }

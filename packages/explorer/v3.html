@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sheetbase v3 chart fixture</title>
+    <!-- The ELN design-reference renderer answers the canvases' `Inter` Google
+         Fonts request from `@fontsource-variable/inter`, which the fixture
+         imports and pins (src/v3-fixture.tsx). -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      /* Analysis chart 2 is authored in an 844×196 viewBox but displayed in a
+         640×149 box, so the browser scales the same viewBox by 640/844 — the
+         design render scales it identically. Override the SVG's natural
+         width/height attributes to that display box. */
+      .fixture-turbidity {
+        width: 640px;
+      }
+      .fixture-turbidity .sb-figure {
+        width: 640px;
+        height: 149px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/v3-fixture.tsx"></script>
+  </body>
+</html>

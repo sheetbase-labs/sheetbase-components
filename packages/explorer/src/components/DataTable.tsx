@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { DataGrid } from "sheetbase-table";
+import { DataGrid } from "@sheetbase-labs/sheetbase-table";
 import { ROW_ID } from "../lib/explore";
 import type { DataRow, Dataset } from "../lib/types";
 

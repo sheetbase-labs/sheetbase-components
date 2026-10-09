@@ -1,4 +1,4 @@
-import { testCondition, toFilterClause } from 'sheetbase-shared'
+import { testCondition, toFilterClause } from '@sheetbase-labs/sheetbase-shared'
 import type { ChartSpec, DataRow, Dataset, FilterRule } from './types'
 
 export const ROW_ID = '__sheetbaseRowId'
@@ -58,6 +58,18 @@ export function filteredRows(dataset: Dataset, spec: ChartSpec): DataRow[] {
     bySpec.delete(oldest)
   }
   return filtered
+}
+
+/**
+ * Rows for the series the spec has not hidden. Shared by the interactive chart
+ * definition (`chart.ts`) and the static v3 figure (`figure.ts`) so both honour
+ * the legend toggles identically.
+ */
+export function visibleRows(rows: DataRow[], spec: ChartSpec): DataRow[] {
+  const seriesField = spec.color ?? spec.group
+  const hidden = new Set(spec.hiddenSeries ?? [])
+  if (!seriesField || hidden.size === 0) return rows
+  return rows.filter((row) => !hidden.has(String(row[seriesField] ?? '')))
 }
 
 function median(values: number[]) {

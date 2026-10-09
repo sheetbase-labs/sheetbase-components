@@ -1,16 +1,16 @@
+import { resolveThemeColour } from '@sheetbase-labs/sheetbase-shared'
+import { FileUploadIcon } from './components/icons'
 import { useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction } from 'react'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { FileUploadIcon } from '@hugeicons/core-free-icons'
 import { FieldSelect } from './components/FieldSelect'
 import { filterOperators } from './lib/filter-operators'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, FilterOperator, FilterRule, PaletteKind, ReferenceLine, SavedExploration } from './lib/types'
 
 export const PALETTES: Record<Exclude<PaletteKind, 'custom'>, string[]> = {
-  sheetbase: ['#7652ef', '#07956a', '#c95814', '#286dcc', '#9541b7', '#6d7d4b'],
-  muted: ['#6f67a8', '#5d8f85', '#b07b58', '#7187a8', '#9a7088', '#85866d'],
-  warm: ['#a44734', '#d16b45', '#e19852', '#c56d78', '#8c5c76', '#6f5b50'],
-  cool: ['#4f5cc4', '#327c9b', '#2e947d', '#6f67b1', '#5479a8', '#5d8f85'],
-  mono: ['#28282a', '#53535a', '#777780', '#9a9aa2', '#bdbdc3', '#dedee2'],
+  sheetbase: ['var(--palette-sheetbase-1)', 'var(--palette-sheetbase-2)', 'var(--palette-sheetbase-3)', 'var(--palette-sheetbase-4)', 'var(--palette-sheetbase-5)', 'var(--palette-sheetbase-6)'],
+  muted: ['var(--palette-muted-1)', 'var(--palette-muted-2)', 'var(--palette-muted-3)', 'var(--palette-muted-4)', 'var(--palette-muted-5)', 'var(--palette-muted-6)'],
+  warm: ['var(--palette-warm-1)', 'var(--palette-warm-2)', 'var(--palette-warm-3)', 'var(--palette-warm-4)', 'var(--palette-warm-5)', 'var(--palette-warm-6)'],
+  cool: ['var(--palette-cool-1)', 'var(--palette-cool-2)', 'var(--palette-cool-3)', 'var(--palette-cool-4)', 'var(--palette-cool-5)', 'var(--palette-cool-6)'],
+  mono: ['var(--palette-mono-1)', 'var(--palette-mono-2)', 'var(--palette-mono-3)', 'var(--palette-mono-4)', 'var(--palette-mono-5)', 'var(--palette-mono-6)'],
 }
 
 export const initialSpec: ChartSpec = {
@@ -19,7 +19,7 @@ export const initialSpec: ChartSpec = {
   showPoints: true, showRawPoints: false, showRibbon: false, showRegression: false, showGrid: true,
   pointSize: 5, pointOpacity: 0.9, lineWidth: 2, lineOpacity: 0.9,
   fillOpacity: 0.82, barGap: 2, barRadius: 3, barLayout: 'grouped', histogramBins: 12,
-  primaryColor: '#7652ef', markColor: '#7652ef', paletteKind: 'sheetbase', palette: PALETTES.sheetbase,
+  primaryColor: 'var(--accent)', markColor: 'var(--accent)', paletteKind: 'sheetbase', palette: PALETTES.sheetbase,
   hiddenSeries: [],
 }
 
@@ -140,7 +140,7 @@ function StylePopover({ spec, columns, setSpec }: { spec: ChartSpec; columns: Da
     <><h4>Style</h4><label className="toggle-row"><span>Data labels</span><input type="checkbox" checked={spec.labels ?? false} onChange={(event) => setSpec((current) => ({ ...current, labels: event.target.checked }))}/></label>{spec.labels && <FieldSelect label="Label" value={spec.labelField} columns={columns} onChange={(value) => setSpec((current) => ({ ...current, labelField: value }))}/>}<label className="compact-control"><span>Palette</span><select value={spec.paletteKind ?? 'sheetbase'} onChange={(event) => setPalette(event.target.value as PaletteKind)}><option value="sheetbase">Sheetbase</option><option value="muted">Muted</option><option value="warm">Warm</option><option value="cool">Cool</option><option value="mono">Monochrome</option><option value="custom">Custom</option></select></label><label className="colour-control"><span>Mark colour</span><input type="color" value={spec.markColor ?? spec.primaryColor ?? spec.palette[0]} onChange={(event) => setSpec((current) => ({ ...current, markColor: event.target.value, primaryColor: event.target.value, paletteKind: 'custom' }))}/></label><div className="palette-editor"><span>Series colours</span><div className="palette-swatches">{spec.palette.slice(0, 6).map((color, index) => (
       // biome-ignore lint/suspicious/noArrayIndexKey: fixed six-slot editor; slots never reorder or filter, so the index is a stable key ingredient
       <label key={`${index}-${color}`}>
-        <input type="color" aria-label={`Series colour ${index + 1}`} value={color} onChange={(event) => setPaletteColor(index, event.target.value)} />
+        <input type="color" aria-label={`Series colour ${index + 1}`} value={resolveThemeColour(color)} onChange={(event) => setPaletteColor(index, event.target.value)} />
         <i style={{ background: color }} />
       </label>
     ))}</div></div>{spec.kind === 'scatter' && <><RangeControl label="Point size" min={2} max={12} step={1} value={spec.pointSize} onChange={(value) => setSpec((current) => ({ ...current, pointSize: value }))}/><RangeControl label="Opacity" min={0.1} max={1} step={0.1} value={spec.pointOpacity} onChange={(value) => setSpec((current) => ({ ...current, pointOpacity: value }))}/><label className="toggle-row"><span>Regression + 95% CI</span><input type="checkbox" checked={spec.showRegression ?? false} onChange={(event) => setSpec((current) => ({ ...current, showRegression: event.target.checked }))}/></label></>}{(spec.kind === 'line' || spec.kind === 'area') && <label className="compact-control"><span>Curve</span><select value={spec.lineCurve ?? 'auto'} onChange={(event) => setSpec((current) => ({ ...current, lineCurve: event.target.value as ChartSpec['lineCurve'] }))}><option value="auto">Straight</option><option value="smooth">Smooth</option><option value="monotone">Monotone</option><option value="step">Step</option></select></label>}{spec.kind === 'line' && <><RangeControl label="Line width" min={1} max={6} step={0.5} value={spec.lineWidth} onChange={(value) => setSpec((current) => ({ ...current, lineWidth: value }))}/><label className="toggle-row"><span>Show points</span><input type="checkbox" checked={spec.showPoints} onChange={(event) => setSpec((current) => ({ ...current, showPoints: event.target.checked }))}/></label></>}{['bar', 'horizontal-bar'].includes(spec.kind) && <><label className="compact-control"><span>Layout</span><select value={spec.barLayout} onChange={(event) => setSpec((current) => ({ ...current, barLayout: event.target.value as ChartSpec['barLayout'] }))}><option value="grouped">Side by side</option><option value="stacked">Stacked</option><option value="normalized">100% stacked</option></select></label><RangeControl label="Bar gap" min={0} max={8} step={1} value={spec.barGap} onChange={(value) => setSpec((current) => ({ ...current, barGap: value }))}/><RangeControl label="Corners" min={0} max={10} step={1} value={spec.barRadius} onChange={(value) => setSpec((current) => ({ ...current, barRadius: value }))}/></>}{spec.kind === 'histogram' && <RangeControl label="Bins" min={4} max={40} step={1} value={spec.histogramBins} onChange={(value) => setSpec((current) => ({ ...current, histogramBins: value }))}/>}</>
@@ -162,7 +162,7 @@ function LibraryPopover({ saved, name, onName, onSave, onLoad, onDelete }: { sav
 function ImportPopover({ sources, status, onLoadSource, onOpenFile }: { sources: DataAdapter[]; status: string | null; onLoadSource(id: string): void; onOpenFile(file?: File): void }) {
   const fileRef = useRef<HTMLInputElement>(null)
   return (
-    <><h4>Dataset</h4><div className="export-actions"><button type="button" onClick={() => fileRef.current?.click()}><HugeiconsIcon icon={FileUploadIcon} size={13}/>From file…</button></div><ul className="library-list">{sources.map((source) => <li key={source.id}><button type="button" className="library-load" onClick={() => onLoadSource(source.id)}><span>{source.label}</span><small>{source.id}</small></button></li>)}</ul><input ref={fileRef} type="file" hidden accept=".csv,.tsv,.json,text/csv,application/json" onChange={(event) => onOpenFile(event.target.files?.[0])}/>{status && <p className="muted">{status}</p>}</>
+    <><h4>Dataset</h4><div className="export-actions"><button type="button" onClick={() => fileRef.current?.click()}><FileUploadIcon size={13}/>From file…</button></div><ul className="library-list">{sources.map((source) => <li key={source.id}><button type="button" className="library-load" onClick={() => onLoadSource(source.id)}><span>{source.label}</span><small>{source.id}</small></button></li>)}</ul><input ref={fileRef} type="file" hidden accept=".csv,.tsv,.json,text/csv,application/json" onChange={(event) => onOpenFile(event.target.files?.[0])}/>{status && <p className="muted">{status}</p>}</>
   )
 }
 

@@ -1,4 +1,4 @@
-import { filterRows, testCondition, toFilterClause, type FilterClause } from "sheetbase-shared";
+import { filterRows, testCondition, toFilterClause, type FilterClause } from "@sheetbase-labs/sheetbase-shared";
 import type { PipelineRule, Row, RuleAction, RuleApplyPlan, RuleWrite } from "./types";
 
 /** Does a row satisfy a rule (disabled rules never match)?

@@ -1,7 +1,16 @@
 {
-  "name": "sheetbase-schemaeditor",
-  "version": "0.1.0",
+  "name": "@sheetbase-labs/sheetbase-schemaeditor",
+  "version": "0.6.0",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/schema-editor"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "main": "./dist-lib/sheetbase-schemaeditor.js",
   "module": "./dist-lib/sheetbase-schemaeditor.js",
@@ -23,7 +32,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "sheetbase-shared": "workspace:*"
+    "@sheetbase-labs/sheetbase-shared": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",

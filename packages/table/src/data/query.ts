@@ -5,5 +5,5 @@ export type {
   GroupNode,
   SortClause,
   SortDirection,
-} from "sheetbase-shared";
-export { canonicalFilterTree, compileToDatasetQuery, queryKey, toDatasetQuery } from "sheetbase-shared";
+} from "@sheetbase-labs/sheetbase-shared";
+export { canonicalFilterTree, compileToDatasetQuery, queryKey, toDatasetQuery } from "@sheetbase-labs/sheetbase-shared";

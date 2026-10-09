@@ -3,8 +3,8 @@
 `PagedSpreadsheet` connects the reusable grid to a server-paged dataset while keeping record identity and optimistic revisions intact.
 
 ```tsx
-import { HttpPagedDataAdapter, PagedSpreadsheet } from "sheetbase-table";
-import "sheetbase-table/styles.css";
+import { HttpPagedDataAdapter, PagedSpreadsheet } from "@sheetbase-labs/sheetbase-table";
+import "@sheetbase-labs/sheetbase-table/styles.css";
 
 const adapter = new HttpPagedDataAdapter("/api/table");
 
@@ -39,7 +39,7 @@ Use `Spreadsheet` directly for local or fully controlled data. Use `PagedSpreads
 `createHttpPresentationAdapter(baseUrl)` implements the boundary over one endpoint:
 
 ```tsx
-import { createHttpPresentationAdapter, useTablePresentationState } from "sheetbase-table";
+import { createHttpPresentationAdapter, useTablePresentationState } from "@sheetbase-labs/sheetbase-table";
 
 const adapter = createHttpPresentationAdapter("/api/presentation");
 const [presentation, setPresentation] = useTablePresentationState(key, fallback, adapter);

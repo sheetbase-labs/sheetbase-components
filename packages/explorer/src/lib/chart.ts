@@ -38,16 +38,10 @@ import { scaleOrdinal } from '@tanstack/charts/scales/ordinal'
 import { scalePoint } from '@tanstack/charts/scales/point'
 import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
 import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
-import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows } from './explore'
+import { resolveThemeColour, resolveThemeColours } from '@sheetbase-labs/sheetbase-shared'
+import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows, visibleRows } from './explore'
 import type { ChartMark } from '@tanstack/charts'
 import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
-
-function visibleRows(rows: DataRow[], spec: ChartSpec) {
-  const seriesField = spec.color ?? spec.group
-  const hidden = new Set(spec.hiddenSeries ?? [])
-  if (!seriesField || hidden.size === 0) return rows
-  return rows.filter((row) => !hidden.has(String(row[seriesField] ?? '')))
-}
 
 const MAX_SCATTER_POINTS = 8000
 
@@ -132,7 +126,7 @@ function chartSpec(
   const marks: ChartMark<DataRow>[] = []
   const semanticColour = spec.color ?? spec.group
   const grouping: { z?: string; color?: string } = spec.group ? { z: spec.group, ...(spec.color ? { color: spec.color } : {}) } : spec.color ? { color: spec.color } : {}
-  const markColour = spec.markColor ?? spec.primaryColor ?? spec.palette[0] ?? '#7652ef'
+  const markColour = spec.markColor ?? spec.primaryColor ?? spec.palette[0] ?? resolveThemeColour('var(--accent)')
 
   const errorMode = spec.errorMode ?? (spec.errorLow && spec.errorHigh ? 'explicit' : 'none')
   const calculatedError = ['sd', 'sem', 'ci95'].includes(errorMode)
@@ -246,7 +240,7 @@ function chartSpec(
         ? (row: DataRow) => String(row[labelField] ?? '')
         : (row: DataRow) => { const value = Number(row[yField]); return Number.isFinite(value) ? String(Math.round(value * 100) / 100) : '' },
       dy: spec.kind === 'bar' || spec.kind === 'lollipop' ? -6 : -8,
-      anchor: 'middle', fill: '#52525b', fontSize: 10, fontWeight: 600,
+      anchor: 'middle', fill: resolveThemeColour('var(--chart-label)'), fontSize: 10, fontWeight: 600,
     } as never) as never))
   }
 
@@ -268,7 +262,7 @@ function chartSpec(
       const bucket = sums.get(JSON.stringify(dims.map((dim) => row[dim])))
       return { ...row, __secondary: bucket?.n ? bucket.sum / bucket.n : undefined }
     })
-    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? '#07956a', strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as never) as never))
+    marks.push(lineY(secondaryRows, ({ id: 'secondary', x: spec.x, y: '__secondary', yScale: 'y2', stroke: spec.palette[1] ?? resolveThemeColour('var(--green)'), strokeWidth: Math.max(1.5, spec.lineWidth), strokeOpacity: spec.lineOpacity, points: spec.showPoints } as never) as never))
   }
 
   if (spec.refLines?.length) {
@@ -293,7 +287,7 @@ function chartSpec(
 
   if (selectedRowId !== undefined && spec.kind === 'scatter') {
     const selected = rawRows.filter((row) => row[ROW_ID] === selectedRowId)
-    if (selected.length) marks.push(dot(selected, ({ id: 'selected-point', x: spec.x, y: yField, r: spec.pointSize + 4, fillOpacity: 0, stroke: '#171717', strokeWidth: 2 }) as never))
+    if (selected.length) marks.push(dot(selected, ({ id: 'selected-point', x: spec.x, y: yField, r: spec.pointSize + 4, fillOpacity: 0, stroke: resolveThemeColour('var(--chart-anchor)'), strokeWidth: 2 }) as never))
   }
 
   const horizontal = spec.kind === 'horizontal-bar'
@@ -444,10 +438,18 @@ function chartSpec(
 
 export function buildChart(
   dataset: Dataset,
-  spec: ChartSpec,
+  specInput: ChartSpec,
   selectedRowId?: number,
   onZoom?: (window: { start: number; end: number }) => void,
 ) {
+  // Chart marks render into SVG attributes and canvas, neither of which resolve
+  // `var()`; resolve the theme tokens to concrete colours once per build.
+  const spec: ChartSpec = {
+    ...specInput,
+    palette: resolveThemeColours(specInput.palette),
+    ...(specInput.primaryColor === undefined ? {} : { primaryColor: resolveThemeColour(specInput.primaryColor) }),
+    ...(specInput.markColor === undefined ? {} : { markColor: resolveThemeColour(specInput.markColor) }),
+  }
   const prepared = visibleRows(preparedRows(dataset, spec), spec)
   const raw = visibleRows(filteredRows(dataset, spec), spec)
 

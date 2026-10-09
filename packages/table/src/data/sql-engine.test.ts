@@ -1,8 +1,8 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { buildPredicate, type FilterNode } from "sheetbase-shared";
+import { buildPredicate, type FilterNode } from "@sheetbase-labs/sheetbase-shared";
 import { DATASET_COLUMNS, createDataset, filterTreeToSql, filtersToSql, insertRecord, sortToSql, type FieldScope, type SeededRow } from "../../examples/sql-engine";
-import type { ConditionNode } from "sheetbase-shared";
+import type { ConditionNode } from "@sheetbase-labs/sheetbase-shared";
 
 // The example engine is bun-run (bun:sqlite); the suite is vitest/node —
 // node:sqlite's DatabaseSync satisfies the same structural SqlDb contract.

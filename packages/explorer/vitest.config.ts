@@ -7,8 +7,8 @@ const sheetbaseTable = fileURLToPath(new URL('../table/src/index.ts', import.met
 export default defineConfig({
   resolve: {
     alias: [
-      { find: /^sheetbase-shared$/, replacement: sheetbaseShared },
-      { find: /^sheetbase-table$/, replacement: sheetbaseTable },
+      { find: /^@sheetbase-labs\/sheetbase-shared$/, replacement: sheetbaseShared },
+      { find: /^@sheetbase-labs\/sheetbase-table$/, replacement: sheetbaseTable },
     ],
   },
   test: {

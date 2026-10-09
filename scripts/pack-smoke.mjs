@@ -66,12 +66,12 @@ writeFileSync(join(scratch, "tsconfig.json"), JSON.stringify({
 }));
 
 writeFileSync(join(scratch, "smoke.tsx"), `
-import { buildPredicate, toFieldDataType } from "sheetbase-shared";
-import { createMemoryPagedAdapter, DataPageCache } from "sheetbase-table";
-import { AdvancedSearch } from "sheetbase-advanced-search";
-import { App as Explorer } from "sheetbase-explorer";
-import { SchemaEditor } from "sheetbase-schemaeditor";
-import { RulesEngine, ruleWritesForRows } from "sheetbase-rulesengine";
+import { buildPredicate, toFieldDataType } from "@sheetbase-labs/sheetbase-shared";
+import { createMemoryPagedAdapter, DataPageCache } from "@sheetbase-labs/sheetbase-table";
+import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";
+import { App as Explorer } from "@sheetbase-labs/sheetbase-explorer";
+import { SchemaEditor } from "@sheetbase-labs/sheetbase-schemaeditor";
+import { RulesEngine, ruleWritesForRows } from "@sheetbase-labs/sheetbase-rulesengine";
 
 export const smoke = {
   buildPredicate, toFieldDataType, createMemoryPagedAdapter, DataPageCache,

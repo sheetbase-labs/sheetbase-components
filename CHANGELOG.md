@@ -10,6 +10,31 @@ versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Table**: host-driven layout and control on `Spreadsheet` — `height`
+  (`number | "fill"`), `stretch` (`"none" | "last" | "all"`, measured against
+  the scroll container), `rowHeaders: false` to drop the row-number column and
+  corner, and `formulaEngine` seams (cross-sheet `referenceResolver`, host
+  `formulaNormalizer`). `orderColumnsById(columns, order)` applies a saved
+  initial column order at the composition boundary. Structural row hooks
+  `onBeforeRowsInsert`/`onRowsInserted`/`onBeforeRowsRemove`/`onRowsRemoved`
+  now fire from the row menu and the handle — including for bound grids, where
+  the row menu's insert/delete are no longer hidden and the hooks report stored
+  rows for the host to persist. `SpreadsheetHandle` gains
+  `selectCell`/`selectCellAddress`/`scrollCellIntoView`, and `onReady(handle)`
+  hands the handle to hosts that hold no ref. The clipboard hooks' existing
+  replacement payload (copy/cut/paste) is documented with a formula-rewrite
+  example.
+- **Explorer**: standalone v3 chart figures — `Chart` (one figure) and
+  `ChartGroup` (charts sharing an x axis), spec in and SVG out with no explorer
+  `App`. Series colours come from `series-a/b/c` with circle/square/triangle
+  markers by series index, `excludeField` points draw hollow (and are pinned at
+  the plot edge with a value label when off-scale), reference lines are dashed
+  and labelled with value and unit, and axis titles carry units
+  (`xUnit`/`yUnit`). `buildFigure`/`buildFigureGroup` expose the geometry model.
+- **Explorer**: `FieldRolePanel` — the Analysis screen's field list and axis
+  wells (drag or pick a field onto x, y, y2 or series, plus calculated `ƒx`
+  fields), with `rolesFromSpec`/`specWithRole`/`chartFieldsFromDataset` mapping
+  the panel onto `ChartSpec`.
 - **Schema editor**: SQL query import — `analyzeSql`/`sqlToGraph` turn pasted
   or dropped SQL into an ERD (source tables, joins, CTEs/subqueries, result
   columns) with dbt support (`{{ ref }}`/`{{ source }}` expansion,
@@ -26,10 +51,16 @@ versions follow [SemVer](https://semver.org/).
 
 ### Changed
 
+- **Packaging**: the six libraries are now scoped `@sheetbase-labs/*` and
+  publish privately to GitHub Packages (each manifest sets `publishConfig` to
+  `https://npm.pkg.github.com` with `access: restricted`). The release workflow
+  authenticates with the built-in Actions token (`permissions: packages: write`,
+  `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`) instead of a public-npm
+  `NPM_TOKEN`, and no publish path passes `--access public`.
 - Schema editor dev demo fills the viewport with a small margin.
 - Schema editor query-import nodes drop the green left stripe; the green
   header and kind chip carry the distinction.
-- Schema editor dev server pre-bundles `sheetbase-shared` (one library module
+- Schema editor dev server pre-bundles `@sheetbase-labs/sheetbase-shared` (one library module
   instead of ~20 source modules) and gains `bun run dev:bundled`, a watch-build
   + preview mode the orb portal uses: the page went from 40 requests / 4.0s to
   3 requests / ~0.6s at 250ms RTT. Production builds are byte-identical.

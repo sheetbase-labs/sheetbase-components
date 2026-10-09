@@ -1,6 +1,6 @@
 {
   "name": "sheetbase-demo",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,12 +12,12 @@
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "sheetbase-advanced-search": "workspace:*",
-    "sheetbase-explorer": "workspace:*",
-    "sheetbase-rulesengine": "workspace:*",
-    "sheetbase-schemaeditor": "workspace:*",
-    "sheetbase-shared": "workspace:*",
-    "sheetbase-table": "workspace:*"
+    "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
+    "@sheetbase-labs/sheetbase-explorer": "workspace:*",
+    "@sheetbase-labs/sheetbase-rulesengine": "workspace:*",
+    "@sheetbase-labs/sheetbase-schemaeditor": "workspace:*",
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-table": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

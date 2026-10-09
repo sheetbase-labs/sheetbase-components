@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { columnDisplayDefaults, formatCellDisplay, type ColumnDisplayDefault } from "./column-display";
+import { booleanCellValue, columnDisplayDefaults, formatCellDisplay, type ColumnDisplayDefault } from "./column-display";
+
+describe("booleanCellValue", () => {
+  it("resolves the stored literal for a boolean column", () => {
+    expect(booleanCellValue("boolean", "true")).toBe(true);
+    expect(booleanCellValue("boolean", "FALSE")).toBe(false);
+    expect(booleanCellValue("boolean", " true ")).toBe(true);
+  });
+
+  it("stays undefined for other column types and non-boolean values", () => {
+    expect(booleanCellValue("text", "true")).toBeUndefined();
+    expect(booleanCellValue(undefined, "true")).toBeUndefined();
+    expect(booleanCellValue("boolean", "")).toBeUndefined();
+    expect(booleanCellValue("boolean", "yes")).toBeUndefined();
+  });
+});
 
 describe("formatCellDisplay", () => {
   const unitColumn: ColumnDisplayDefault = { unit: "IU/mL", precision: 1 };

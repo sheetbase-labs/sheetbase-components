@@ -6,12 +6,12 @@ Private monorepo for Sheetbase UI packages. Shared field types, filter operators
 
 | Package | Role |
 | --- | --- |
-| `sheetbase-shared` | Canonical `SheetbaseField`, `FilterOperator`, `DatasetQuery`, predicate/tree evaluators, theme tokens, framed-shell CSS, pane multiplexer/shell, theme toggle |
-| `sheetbase-table` | Spreadsheet / paged dataset table |
-| `sheetbase-explorer` | Chart-first exploration workspace |
-| `sheetbase-schemaeditor` | Zoomable schema graph |
-| `sheetbase-rulesengine` | Natural-language pipeline rules |
-| `sheetbase-advanced-search` | Nested AND/OR/NOT search |
+| `@sheetbase-labs/sheetbase-shared` | Canonical `SheetbaseField`, `FilterOperator`, `DatasetQuery`, predicate/tree evaluators, theme tokens, framed-shell CSS, pane multiplexer/shell, theme toggle |
+| `@sheetbase-labs/sheetbase-table` | Spreadsheet / paged dataset table |
+| `@sheetbase-labs/sheetbase-explorer` | Chart-first exploration workspace |
+| `@sheetbase-labs/sheetbase-schemaeditor` | Zoomable schema graph |
+| `@sheetbase-labs/sheetbase-rulesengine` | Natural-language pipeline rules |
+| `@sheetbase-labs/sheetbase-advanced-search` | Nested AND/OR/NOT search |
 
 ## Run
 
@@ -36,11 +36,11 @@ GitHub Actions on this repo run unit tests for every package, table/explorer/sch
 
 The six libraries are publish-shaped npm packages — see `docs/publishing.md` for the consumption model and release flow. The shared accessibility contract (grid, panes, schema canvas, charts, forms) is documented in `docs/accessibility.md`.
 
-Table `PORT` / `SHEETBASE_API_PORT` / `E2E_PORT` overrides from `sheetbase-table` #23 are honoured by Vite, the Herdr helper and Playwright.
+Table `PORT` / `SHEETBASE_API_PORT` / `E2E_PORT` overrides from `@sheetbase-labs/sheetbase-table` #23 are honoured by Vite, the Herdr helper and Playwright.
 
 ## Shared contract
 
-Import from `sheetbase-shared`:
+Import from `@sheetbase-labs/sheetbase-shared`:
 
 - `FieldDataType`, `SheetbaseField`, `toFieldDataType`
 - `FilterOperator`, `operatorsForField`, `normaliseOperator` (`isEmpty` → `isNull`)

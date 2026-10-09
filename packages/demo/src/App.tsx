@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { RulesEngine, type PipelineRule } from "sheetbase-rulesengine";
-import { SchemaEditor, type SchemaGraph } from "sheetbase-schemaeditor";
-import { AdvancedSearch } from "sheetbase-advanced-search";
+import { RulesEngine, type PipelineRule } from "@sheetbase-labs/sheetbase-rulesengine";
+import { SchemaEditor, type SchemaGraph } from "@sheetbase-labs/sheetbase-schemaeditor";
+import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";
 import { Explorer, DemoTable, ruleActions, ruleFields, rulesStarter, schemaStarter, searchFields, searchRows } from "./showcase";
 import { Workbench } from "./Workbench";
 import { DocsSite } from "./DocsSite";

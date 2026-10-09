@@ -1,4 +1,4 @@
-import type { FieldDataType } from "sheetbase-shared";
+import type { FieldDataType } from "@sheetbase-labs/sheetbase-shared";
 import { primaryKeyOf, tableModels, validateGraph, withAutoLayout } from "./graph";
 import type { SchemaField, SchemaGraph, SchemaModel } from "./types";
 

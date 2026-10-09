@@ -14,8 +14,8 @@
     "resolveJsonModule": true,
     "types": ["vite/client"],
     "paths": {
-      "sheetbase-shared": ["../shared/src/index.ts"],
-      "sheetbase-table": ["../table/src/index.ts"]
+      "@sheetbase-labs/sheetbase-shared": ["../shared/src/index.ts"],
+      "@sheetbase-labs/sheetbase-table": ["../table/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts", "vite.lib.config.ts"]

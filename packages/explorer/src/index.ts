@@ -1,20 +1,39 @@
-import 'sheetbase-shared/theme.css'
-import 'sheetbase-shared/shell.css'
+import '@sheetbase-labs/sheetbase-shared/theme.css'
+import '@sheetbase-labs/sheetbase-shared/shell.css'
 import './styles.css'
 import './ux-overrides.css'
 import './explorer-v2.css'
 import './explorer-v3.css'
 import './explorer-interactions.css'
+import './figure.css'
 
 export { App, type AppProps } from './App'
+export { Chart, ChartGroup, FigureSvg, type ChartProps, type ChartGroupProps, type ChartGroupEntry } from './Chart'
+export { FieldRolePanel, type FieldRolePanelProps, type FieldRolePanelSource } from './components/FieldRolePanel'
+export {
+  DEFAULT_FIGURE_METRICS, FIGURE_LAYOUT, FIGURE_TOKENS, HEATMAP_SCALE_STEPS, axisTitle, bandScale, binEdges, boxSummary, buildFigure,
+  buildFigureGroup, clipPolyline, describeFigure, figureDomain, formatValue, heatmapColour, heatmapStep, kde,
+  kdeBandwidth, niceStep, niceTicks, referenceText, resolveFigureMetrics, seriesStyle,
+  type FigureAxis, type FigureBand, type FigureBandScale, type FigureBar, type FigureBin, type FigureBox,
+  type FigureBoxOutlier, type FigureBoxPlot, type FigureBoxSummary, type FigureDensitySample, type FigureGroup,
+  type FigureHeatCell, type FigureLegendItem, type FigureMarker, type FigureMarkerStyle, type FigureModel,
+  type FigureOptions, type FigurePadding, type FigurePoint, type FigureReferenceLine, type FigureScaleLegend,
+  type FigureScaleStep, type FigureSeries, type FigureStackEntry, type FigureTick, type FigureViolin,
+  type FigureViolinBox, type ResolvedFigureMetrics,
+} from './lib/figure'
+export {
+  FIELD_ROLES, ROLE_CHIPS, chartFieldsFromDataset, fieldGlyph, fieldHint, roleOf, rolesFromSpec,
+  specWithRole, type ChartField, type ChartFieldOptions, type FieldRole, type FieldRoleAssignment,
+  type RoleWell,
+} from './lib/roles'
 export type {
   AggregateBucket, AggregateKind, AggregateQuery, AggregateResponse,
   BarLayout, ChartKind, ChartSpec, ColumnKind, ColumnMeta,
-  DataAdapter, DataRow, Dataset, ErrorMode, FilterLogic, FilterOperator,
+  DataAdapter, DataRow, Dataset, ErrorMode, FigureMetrics, FilterLogic, FilterOperator,
   FilterRule, PaletteKind, RemoteDatasetSource, RemotePage, RemotePageQuery,
   SavedExploration,
 } from './lib/types'
-export type { AnalysisView, SummaryKind } from 'sheetbase-shared'
+export type { AnalysisView, SummaryKind } from '@sheetbase-labs/sheetbase-shared'
 export { sampleAdapter } from './lib/adapters/sample'
 export { datasetFromFile } from './lib/adapters/file'
 export { inferColumns } from './lib/schema'

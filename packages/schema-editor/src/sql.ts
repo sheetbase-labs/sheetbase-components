@@ -1,4 +1,4 @@
-import type { FieldDataType } from "sheetbase-shared";
+import type { FieldDataType } from "@sheetbase-labs/sheetbase-shared";
 import { parseCreateTables, SchemaParseError } from "./ddl";
 import { nodeHeight, relationEdgeId, withAutoLayout } from "./graph";
 import type { SchemaField, SchemaGraph, SchemaModel, SchemaModelKind, SchemaRelation } from "./types";

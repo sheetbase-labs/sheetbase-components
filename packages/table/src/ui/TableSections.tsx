@@ -20,6 +20,20 @@ export const minimalTableSections: TableSectionConfig = {
   sheetBar: true,
 };
 
+/**
+ * COMP-02.4: a notebook sheet block is the grid alone. No menu bar, toolbar or
+ * formula bar — and no sidebar, status bar or sheet tabs either, because the
+ * notebook supplies its own block controls around the grid.
+ */
+export const notebookTableSections: TableSectionConfig = {
+  menuBar: false,
+  toolbar: false,
+  formulaBar: false,
+  sidebar: false,
+  statusBar: false,
+  sheetBar: false,
+};
+
 export type FormulaBarProps = Readonly<{
   address: string;
   value: string;

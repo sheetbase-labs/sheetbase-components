@@ -1,6 +1,6 @@
 import { useState, type ComponentProps, type ReactNode, type RefObject, type SetStateAction } from 'react'
 import { Chart } from '@tanstack/charts/react/tooltip'
-import { ThemeToggleButton } from 'sheetbase-shared'
+import { ThemeToggleButton } from '@sheetbase-labs/sheetbase-shared'
 import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popovers'
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'

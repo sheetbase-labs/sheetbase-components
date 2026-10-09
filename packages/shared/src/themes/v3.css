@@ -1,0 +1,264 @@
+/*
+ * UI system v3 theme preset (COMP-01). Values are the ELN's design tokens from
+ * design/ui-system-v3/design-system/tokens.json, verbatim. They map the package
+ * variables onto the v3 palette; the app may import this file and then override
+ * on the same scope if it needs to.
+ *
+ * Light is the default; add [data-theme="dark"] (or .dark) on the scope for
+ * the dark set, matching the ELN's `.dark` class.
+ */
+:where(.sheetbase-scope),
+:where(.sheetbase-explorer) {
+  --text-size: 13px;
+  --meta-size: 12px;
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Surfaces */
+  --app: #fdfdff;
+  --canvas: #fdfdff;
+  --panel: #ffffff;
+  --panel-2: #f7f8fa;
+  --surface: #ffffff;
+  --surface-muted: #f7f8fa;
+  --surface-hover: #f0f2f5;
+  --surface-derived: #fafbfd;
+  --surface-disabled: #f2f4f7;
+
+  /* Borders */
+  --border: #dee1e7;
+  --border-subtle: #eef0f3;
+  --border-strong: #c3c8d0;
+  --grid-line: #e4e7ec;
+
+  /* Text */
+  --text: #0f141c;
+  --muted: #5d646f;
+  --faint: #6b727d;
+
+  /* Accent and selection */
+  --accent: #006edc;
+  --accent-dark: #0057b0;
+  --accent-ink: #006edc;
+  --accent-soft: #e7effb;
+  --accent-soft-2: #f3f7fd;
+  --link: #006edc;
+  --link-hover: #0057b0;
+  --focus: #006edc;
+  --selection: #e7effb;
+  --selection-subtle: #f3f7fd;
+  --selection-border: #9dc0ec;
+  --on-accent: #ffffff;
+
+  /* Status */
+  --green: #00a659;
+  --green-text: #11683a;
+  --green-soft: #e3f5ec;
+  --orange: #e8a200;
+  --orange-text: #8a5a00;
+  --orange-soft: #fff7e0;
+  --blue: #00a3bb;
+  --purple: #9b61ea;
+  --purple-soft: #f1e8fd;
+  --danger: #ea3130;
+  --danger-text: #b42318;
+  --danger-soft: #fdeded;
+
+  /* Charts */
+  --series-a: #00a3bb;
+  --series-b: #006edc;
+  --series-c: #5d646f;
+  --chart-grid: #eef0f3;
+  --chart-axis: #9ca3ae;
+  --chart-label: #5d646f;
+  --chart-anchor: #0f141c;
+
+  /* Direct-formatting swatches, formula-reference outlines and the explorer
+     series palettes, drawn from the v3 marks above. */
+  --format-colour-1: #0f141c;
+  --format-colour-2: #006edc;
+  --format-colour-3: #00a659;
+  --format-colour-4: #00a3bb;
+  --format-colour-5: #ea3130;
+  --format-colour-6: #8a5a00;
+  --format-colour-7: #ffffff;
+  --format-colour-8: #e7effb;
+  --format-colour-9: #e3f5ec;
+  --format-colour-10: #fdeded;
+  --ref-1: #00a659;
+  --ref-2: #e8a200;
+  --ref-3: #006edc;
+  --ref-4: #9b61ea;
+  --palette-sheetbase-1: #006edc;
+  --palette-sheetbase-2: #00a3bb;
+  --palette-sheetbase-3: #9b61ea;
+  --palette-sheetbase-4: #00a659;
+  --palette-sheetbase-5: #e8a200;
+  --palette-sheetbase-6: #ea3130;
+  --palette-muted-1: #5d646f;
+  --palette-muted-2: #6b727d;
+  --palette-muted-3: #9ca3ae;
+  --palette-muted-4: #c3c8d0;
+  --palette-muted-5: #006edc;
+  --palette-muted-6: #00a3bb;
+  --palette-warm-1: #b42318;
+  --palette-warm-2: #ea3130;
+  --palette-warm-3: #e8a200;
+  --palette-warm-4: #8a5a00;
+  --palette-warm-5: #9b61ea;
+  --palette-warm-6: #b08cf5;
+  --palette-cool-1: #006edc;
+  --palette-cool-2: #00a3bb;
+  --palette-cool-3: #2bc0d6;
+  --palette-cool-4: #0057b0;
+  --palette-cool-5: #0061c4;
+  --palette-cool-6: #4c9bff;
+  --palette-mono-1: #0f141c;
+  --palette-mono-2: #5d646f;
+  --palette-mono-3: #6b727d;
+  --palette-mono-4: #9ca3ae;
+  --palette-mono-5: #c3c8d0;
+  --palette-mono-6: #eef0f3;
+
+  /* Shape and elevation */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --row-height: 28px;
+  --control-height: 28px;
+
+  /* Table grid (COMP-02): map the grid chrome onto the v3 design. The table
+     package reads each with a default fallback, so the non-v3 preset (which
+     never loads this file) keeps its own values. */
+  --grid-cell-surface: var(--surface);
+  --grid-derived-surface: var(--surface-derived);
+  --grid-cell-padding-x: 8px;
+  --grid-font-variant-numeric: tabular-nums;
+  --grid-line-color: var(--grid-line);
+  --grid-frame-width: 1px;
+  --grid-frame-radius: 6px 0 0 6px;
+  --grid-frame-surface: var(--surface);
+  --grid-frame-color: var(--border);
+  --grid-selection-fill: transparent;
+  --grid-invalid-surface: var(--danger-soft);
+  --grid-invalid-ink: var(--danger-text);
+  --grid-header-surface: var(--surface-muted);
+  --grid-row-header-ink: var(--muted);
+  --grid-column-header-ink: var(--muted);
+  --grid-row-header-padding-x: 8px;
+  --grid-header-padding-x: 8px;
+  --grid-header-size: var(--meta-size);
+  --grid-column-coordinate-display: none;
+  --grid-column-selected-surface: var(--selection-subtle);
+  --grid-column-selected-ink: var(--muted);
+  --grid-row-selected-surface: var(--surface-muted);
+  --grid-row-selected-ink: var(--muted);
+  --grid-invalid-mark-size: 0px;
+  --shadow: 0 8px 24px rgba(15, 20, 28, 0.12);
+}
+
+:where(.sheetbase-scope)[data-theme="dark"],
+:where(.sheetbase-explorer)[data-theme="dark"],
+:where(.sheetbase-scope).dark,
+:where(.sheetbase-explorer).dark {
+  color-scheme: dark;
+  --app: #0e1116;
+  --canvas: #0e1116;
+  --panel: #151a21;
+  --panel-2: #1a2028;
+  --surface: #151a21;
+  --surface-muted: #1a2028;
+  --surface-hover: #1f2630;
+  --surface-derived: #181e26;
+  --surface-disabled: #1a1f26;
+
+  --border: #2a313b;
+  --border-subtle: #222830;
+  --border-strong: #3a424e;
+  --grid-line: #262d36;
+
+  --text: #e6e9ee;
+  --muted: #9aa3af;
+  --faint: #8a93a0;
+
+  --accent: #4c9bff;
+  --accent-dark: #7ab4ff;
+  --accent-ink: #1f6fd6;
+  --accent-soft: #1c2b40;
+  --accent-soft-2: #18222f;
+  --link: #4c9bff;
+  --link-hover: #7ab4ff;
+  --focus: #4c9bff;
+  --selection: #1c2b40;
+  --selection-subtle: #18222f;
+  --selection-border: #2d4f7c;
+  --on-accent: #ffffff;
+
+  --green: #3fbf7f;
+  --green-text: #6bd69e;
+  --green-soft: #13291f;
+  --orange: #e8b23a;
+  --orange-text: #f0c766;
+  --orange-soft: #2b2412;
+  --blue: #2bc0d6;
+  --purple: #b08cf5;
+  --purple-soft: #261d38;
+  --danger: #f0625f;
+  --danger-text: #ff8a85;
+  --danger-soft: #2e1717;
+
+  --series-a: #2bc0d6;
+  --series-b: #4c9bff;
+  --series-c: #9aa3af;
+  --chart-grid: #262d36;
+  --chart-axis: #4a525e;
+  --chart-label: #9aa3af;
+  --chart-anchor: #e6e9ee;
+
+  --format-colour-1: #e6e9ee;
+  --format-colour-2: #4c9bff;
+  --format-colour-3: #3fbf7f;
+  --format-colour-4: #2bc0d6;
+  --format-colour-5: #f0625f;
+  --format-colour-6: #f0c766;
+  --format-colour-7: #151a21;
+  --format-colour-8: #1c2b40;
+  --format-colour-9: #13291f;
+  --format-colour-10: #2e1717;
+  --ref-1: #3fbf7f;
+  --ref-2: #e8b23a;
+  --ref-3: #4c9bff;
+  --ref-4: #b08cf5;
+  --palette-sheetbase-1: #4c9bff;
+  --palette-sheetbase-2: #2bc0d6;
+  --palette-sheetbase-3: #b08cf5;
+  --palette-sheetbase-4: #3fbf7f;
+  --palette-sheetbase-5: #e8b23a;
+  --palette-sheetbase-6: #f0625f;
+  --palette-muted-1: #9aa3af;
+  --palette-muted-2: #8a93a0;
+  --palette-muted-3: #6e7782;
+  --palette-muted-4: #4a525e;
+  --palette-muted-5: #4c9bff;
+  --palette-muted-6: #2bc0d6;
+  --palette-warm-1: #ff8a85;
+  --palette-warm-2: #f0625f;
+  --palette-warm-3: #e8b23a;
+  --palette-warm-4: #f0c766;
+  --palette-warm-5: #b08cf5;
+  --palette-warm-6: #7ab4ff;
+  --palette-cool-1: #4c9bff;
+  --palette-cool-2: #2bc0d6;
+  --palette-cool-3: #7ab4ff;
+  --palette-cool-4: #1f6fd6;
+  --palette-cool-5: #2a7be4;
+  --palette-cool-6: #4c9bff;
+  --palette-mono-1: #e6e9ee;
+  --palette-mono-2: #9aa3af;
+  --palette-mono-3: #8a93a0;
+  --palette-mono-4: #6e7782;
+  --palette-mono-5: #4a525e;
+  --palette-mono-6: #3a424e;
+
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}

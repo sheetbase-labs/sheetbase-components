@@ -1,9 +1,11 @@
 # AGENTS.md
 
 Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in
-`packages/*` and are consumed as workspace dependencies (`sheetbase-shared`,
-`sheetbase-table`, `sheetbase-explorer`, `sheetbase-schemaeditor`,
-`sheetbase-rulesengine`, `sheetbase-advanced-search`, `sheetbase-demo`).
+`packages/*` and are consumed as workspace dependencies
+(`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`,
+`@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`,
+`@sheetbase-labs/sheetbase-rulesengine`,
+`@sheetbase-labs/sheetbase-advanced-search`, `sheetbase-demo`).
 
 ## Validate
 
@@ -82,7 +84,7 @@ packages/demo/            workbench composing the packages
 - The paged demo and explorer "Remote" source need `dev:api` running.
 - `dist-lib/` is consumed by sibling examples at dev time — rebuild
   `build:lib` after changing shared/table contracts.
-- `sheetbase-shared` is externalized from the table library build; consumers
+- `@sheetbase-labs/sheetbase-shared` is externalized from the table library build; consumers
   must install both packages.
 - Packages publish to npm in lockstep (`docs/publishing.md`). `bun pm pack`
   rewrites `workspace:*` to real versions; peers are `react`, `react-dom`,

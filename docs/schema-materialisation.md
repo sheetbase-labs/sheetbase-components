@@ -1,7 +1,7 @@
 # Schema materialisation
 
 `SchemaGraph` is design-time state — `graphToDdl` / `graphToProvision`
-(`sheetbase-schemaeditor`) turn it into something a host can provision. This is
+(`@sheetbase-labs/sheetbase-schemaeditor`) turn it into something a host can provision. This is
 the write-side counterpart to `onHeaderFieldsChange`: the editor proposes, the
 host executes. There is no live apply path — running DDL or POSTing the payload
 is host work.

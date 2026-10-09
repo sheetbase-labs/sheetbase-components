@@ -14,12 +14,12 @@
     "resolveJsonModule": true,
     "types": ["vite/client"],
     "paths": {
-      "sheetbase-shared": ["../shared/src/index.ts"],
-      "sheetbase-table": ["../table/src/index.ts"],
-      "sheetbase-explorer": ["../explorer/src/index.ts"],
-      "sheetbase-schemaeditor": ["../schema-editor/src/index.ts"],
-      "sheetbase-rulesengine": ["../rules-engine/src/index.ts"],
-      "sheetbase-advanced-search": ["../advanced-search/src/index.ts"]
+      "@sheetbase-labs/sheetbase-shared": ["../shared/src/index.ts"],
+      "@sheetbase-labs/sheetbase-table": ["../table/src/index.ts"],
+      "@sheetbase-labs/sheetbase-explorer": ["../explorer/src/index.ts"],
+      "@sheetbase-labs/sheetbase-schemaeditor": ["../schema-editor/src/index.ts"],
+      "@sheetbase-labs/sheetbase-rulesengine": ["../rules-engine/src/index.ts"],
+      "@sheetbase-labs/sheetbase-advanced-search": ["../advanced-search/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

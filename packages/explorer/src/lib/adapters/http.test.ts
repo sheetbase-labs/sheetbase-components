@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GroupNode } from 'sheetbase-shared'
+import type { GroupNode } from '@sheetbase-labs/sheetbase-shared'
 import { bucketsToRows, createHttpExplorerAdapter } from './http'
 import { ROW_ID } from '../explore'
 import type { AggregateResponse } from '../types'

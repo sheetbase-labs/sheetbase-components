@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, edgeOfData, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveRange, moveSelection, normaliseSelection, parseTsv, pasteTsv, populatedColumnSelection, renameSheetReferences, replaceAllText, selectionAggregates, selectionToTsv, shiftFormulaReferences, sortGridRows, usedRangeBounds, validateTypedCell } from "./model";
+import { applyFormulaReference, applyFormulaSuggestion, applyTsvRows, buildWorksheet, changeGridStructure, clearRangeTargets, clearSelection, completeFormula, cycleAbsoluteReference, displayValue, edgeOfData, fillSelection, formulaErrorMessage, formulaReferenceRanges, formulaSuggestions, moveFormulaReference, moveRange, moveSelection, normaliseSelection, parseTsv, pasteTargetChanges, pasteTsv, populatedColumnSelection, renameSheetReferences, replaceAllText, selectionAddresses, selectionAggregates, selectionToTsv, shiftFormulaReferences, sortGridRows, usedRangeBounds, validateTypedCell } from "./model";
 
 describe("grid model", () => {
   it("moves and extends a selection within bounds", () => {
@@ -307,6 +307,58 @@ describe("grid model", () => {
     const partial = selectionAggregates(data, { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } });
     expect(partial.count).toBe(1);
     expect(partial.sum).toBe(10);
+  });
+
+  it("resolves displayed coordinates through a view's key resolver", () => {
+    // Displayed row 0 shows stored row 2; displayed row 1 shows stored row 1.
+    const keyFor = (point: { row: number; column: number }) => `A${point.row === 0 ? 2 : 1}`;
+    const data = new Map([["A1", "one"], ["A2", "two"]]);
+    const pasted = pasteTsv(data, { row: 0, column: 0 }, "changed", 2, 1, () => true, keyFor);
+    expect(pasted.data.get("A2")).toBe("changed");
+    expect(pasted.data.get("A1")).toBe("one");
+    expect(selectionToTsv(data, { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }, keyFor)).toBe("two\none");
+    expect(selectionAddresses({ anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }, keyFor)).toEqual(["A2", "A1"]);
+    const aggregates = selectionAggregates(data, { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }, undefined, keyFor);
+    expect(aggregates.count).toBe(2);
+  });
+
+  it("lists the intended paste targets without the editable filter", () => {
+    const data = new Map([["A1", "field"], ["A2", "value"]]);
+    expect(pasteTargetChanges(data, { row: 0, column: 0 }, [["changed"], ["new"]], 10, 10)).toEqual([
+      { address: "A1", before: "field", after: "changed" },
+      { address: "A2", before: "value", after: "new" },
+    ]);
+    // Unchanged cells and out-of-bounds cells are not targets.
+    expect(pasteTargetChanges(data, { row: 0, column: 0 }, [["field"]], 1, 10)).toEqual([]);
+  });
+
+  it("lists the populated cells a clear would empty", () => {
+    const data = new Map([["A1", "one"], ["B2", "two"]]);
+    expect(clearRangeTargets(data, { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 1 } })).toEqual([
+      { address: "A1", before: "one", after: undefined },
+      { address: "B2", before: "two", after: undefined },
+    ]);
+  });
+
+  it("reports fill targets the grid will not write", () => {
+    const data = new Map([["A1", "x"], ["A2", "y"]]);
+    const canEdit = (point: { row: number }) => point.row !== 3;
+    const filled = fillSelection(data, { anchor: { row: 0, column: 0 }, focus: { row: 1, column: 0 } }, { row: 3, column: 0 }, 10, 1, canEdit);
+    expect(filled.data.get("A3")).toBe("x");
+    expect(filled.data.get("A4")).toBeUndefined();
+    expect(filled.intended).toEqual([
+      { address: "A3", before: undefined, after: "x" },
+      { address: "A4", before: undefined, after: "y" },
+    ]);
+  });
+
+  it("reports move targets for both the source and the destination", () => {
+    const data = new Map([["A1", "one"]]);
+    const moved = moveRange(data, { anchor: { row: 0, column: 0 }, focus: { row: 0, column: 0 } }, { row: 2, column: 0 }, 10, 10);
+    expect(moved?.intended).toEqual([
+      { address: "A1", before: "one", after: undefined },
+      { address: "A3", before: undefined, after: "one" },
+    ]);
   });
 
 });

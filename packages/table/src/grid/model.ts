@@ -2,10 +2,20 @@ import { addressKey, columnLabel, parseAddress } from "../engine/coordinates";
 import { mapFormulaReferences } from "../engine/formulas";
 import { Worksheet } from "../engine/workbook";
 import type { CellAddress } from "../engine/types";
+import type { CellChange } from "./mutations";
 
 export type GridPoint = Readonly<{ row: number; column: number }>;
 export type GridSelection = Readonly<{ anchor: GridPoint; focus: GridPoint }>;
 export type GridSnapshot = ReadonlyMap<string, string>;
+
+/**
+ * Resolves a grid coordinate to its stored address. Defaults to the address of
+ * the coordinate itself; a locally sorted/filtered view passes a resolver that
+ * maps each displayed row to the source row it shows, so bulk operations still
+ * read and write the records behind the rows the user selected.
+ */
+export type CellKeyResolver = (point: GridPoint) => string;
+
 export type FormulaSuggestion = Readonly<{
   label: string;
   detail: string;
@@ -81,6 +91,7 @@ export function edgeOfData(
   delta: GridPoint,
   rowCount: number,
   columnCount: number,
+  keyFor: CellKeyResolver = cellKey,
 ): GridPoint {
   const stepRow = Math.sign(delta.row);
   const stepColumn = Math.sign(delta.column);
@@ -89,9 +100,9 @@ export function edgeOfData(
   let nextRow = row + stepRow;
   let nextColumn = column + stepColumn;
   if (!inside(nextRow, nextColumn)) return from;
-  if (hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+  if (hasValue(keyFor({ row: nextRow, column: nextColumn }))) {
     // Populated neighbour: run to the far edge of the block.
-    while (inside(nextRow, nextColumn) && hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+    while (inside(nextRow, nextColumn) && hasValue(keyFor({ row: nextRow, column: nextColumn }))) {
       row = nextRow;
       column = nextColumn;
       nextRow += stepRow;
@@ -100,7 +111,7 @@ export function edgeOfData(
     return { row, column };
   }
   // Empty neighbour: cross the gap and land on the first populated cell.
-  while (inside(nextRow, nextColumn) && !hasValue(cellKey({ row: nextRow, column: nextColumn }))) {
+  while (inside(nextRow, nextColumn) && !hasValue(keyFor({ row: nextRow, column: nextColumn }))) {
     row = nextRow;
     column = nextColumn;
     nextRow += stepRow;
@@ -129,30 +140,78 @@ export function usedRangeBounds(data: GridSnapshot): { top: number; left: number
   return bottom >= top ? { top, left, bottom, right } : undefined;
 }
 
-export function selectionToTsv(data: GridSnapshot, selection: GridSelection): string {
+export function selectionToTsv(data: GridSnapshot, selection: GridSelection, keyFor: CellKeyResolver = cellKey): string {
   const range = normaliseSelection(selection);
   const lines: string[] = [];
   for (let row = range.top; row <= range.bottom; row++) {
     const values: string[] = [];
     for (let column = range.left; column <= range.right; column++) {
-      values.push(data.get(cellKey({ row, column })) ?? "");
+      values.push(data.get(keyFor({ row, column })) ?? "");
     }
     lines.push(values.join("\t"));
   }
   return lines.join("\n");
 }
 
-export function selectionAddresses(selection: GridSelection): string[] {
+export function selectionAddresses(selection: GridSelection, keyFor: CellKeyResolver = cellKey): string[] {
   const range = normaliseSelection(selection);
   const addresses: string[] = [];
   for (let row = range.top; row <= range.bottom; row++) {
-    for (let column = range.left; column <= range.right; column++) addresses.push(cellKey({ row, column }));
+    for (let column = range.left; column <= range.right; column++) {
+      const address = keyFor({ row, column });
+      if (address !== "") addresses.push(address);
+    }
   }
   return addresses;
 }
 
 export function parseTsv(tsv: string): readonly (readonly string[])[] {
   return tsv.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((row) => row.split("\t"));
+}
+
+/**
+ * Walks each in-bounds TSV cell, resolving its address through `keyFor`. Shared
+ * by the applying paste and the pre-commit target set so both agree on the
+ * exact cells a paste targets.
+ */
+function eachTsvTarget(
+  start: GridPoint,
+  rows: readonly (readonly string[])[],
+  rowCount: number,
+  columnCount: number,
+  keyFor: CellKeyResolver,
+  visit: (point: GridPoint, address: string, after: string | undefined) => void,
+): void {
+  rows.forEach((values, rowOffset) => {
+    values.forEach((value, columnOffset) => {
+      const point = { row: start.row + rowOffset, column: start.column + columnOffset };
+      if (point.row >= rowCount || point.column >= columnCount) return;
+      const address = keyFor(point);
+      if (address === "") return;
+      visit(point, address, value === "" ? undefined : value);
+    });
+  });
+}
+
+/**
+ * Every cell a paste would change — including cells the grid will not write
+ * because they are not editable. Handed to the pre-commit gate so a host can
+ * reject the whole operation instead of letting the editable subset land.
+ */
+export function pasteTargetChanges(
+  data: GridSnapshot,
+  start: GridPoint,
+  rows: readonly (readonly string[])[],
+  rowCount: number,
+  columnCount: number,
+  keyFor: CellKeyResolver = cellKey,
+): CellChange[] {
+  const targets: CellChange[] = [];
+  eachTsvTarget(start, rows, rowCount, columnCount, keyFor, (_point, address, after) => {
+    const before = data.get(address);
+    if (before !== after) targets.push({ address, before, after });
+  });
+  return targets;
 }
 
 export function applyTsvRows(
@@ -162,21 +221,16 @@ export function applyTsvRows(
   rowCount: number,
   columnCount: number,
   canEdit: (point: GridPoint) => boolean = () => true,
+  keyFor: CellKeyResolver = cellKey,
 ): { data: Map<string, string>; selection: GridSelection } {
   const next = new Map(data);
   let bottom = start.row;
   let right = start.column;
-  rows.forEach((values, rowOffset) => {
-    values.forEach((value, columnOffset) => {
-      const row = start.row + rowOffset;
-      const column = start.column + columnOffset;
-      if (row >= rowCount || column >= columnCount) return;
-      if (!canEdit({ row, column })) return;
-      const key = cellKey({ row, column });
-      if (value === "") next.delete(key); else next.set(key, value);
-      bottom = Math.max(bottom, row);
-      right = Math.max(right, column);
-    });
+  eachTsvTarget(start, rows, rowCount, columnCount, keyFor, (point, address, after) => {
+    bottom = Math.max(bottom, point.row);
+    right = Math.max(right, point.column);
+    if (!canEdit(point)) return;
+    if (after === undefined) next.delete(address); else next.set(address, after);
   });
   return { data: next, selection: { anchor: start, focus: { row: bottom, column: right } } };
 }
@@ -188,23 +242,46 @@ export function pasteTsv(
   rowCount: number,
   columnCount: number,
   canEdit: (point: GridPoint) => boolean = () => true,
+  keyFor: CellKeyResolver = cellKey,
 ): { data: Map<string, string>; selection: GridSelection } {
-  return applyTsvRows(data, start, parseTsv(tsv), rowCount, columnCount, canEdit);
+  return applyTsvRows(data, start, parseTsv(tsv), rowCount, columnCount, canEdit, keyFor);
 }
 
 export function clearSelection(
   data: GridSnapshot,
   selection: GridSelection,
   canEdit: (point: GridPoint) => boolean = () => true,
+  keyFor: CellKeyResolver = cellKey,
 ): Map<string, string> {
   const next = new Map(data);
   const range = normaliseSelection(selection);
   for (let row = range.top; row <= range.bottom; row++) {
     for (let column = range.left; column <= range.right; column++) {
-      if (canEdit({ row, column })) next.delete(cellKey({ row, column }));
+      const point = { row, column };
+      if (!canEdit(point)) continue;
+      const address = keyFor(point);
+      if (address !== "") next.delete(address);
     }
   }
   return next;
+}
+
+/**
+ * The intended target set of a clear: every populated cell in the selection.
+ * Clearing an already-empty cell changes nothing, so it is not a target.
+ */
+export function clearRangeTargets(data: GridSnapshot, selection: GridSelection, keyFor: CellKeyResolver = cellKey): CellChange[] {
+  const targets: CellChange[] = [];
+  const range = normaliseSelection(selection);
+  for (let row = range.top; row <= range.bottom; row++) {
+    for (let column = range.left; column <= range.right; column++) {
+      const address = keyFor({ row, column });
+      if (address === "") continue;
+      const before = data.get(address);
+      if (before !== undefined && before !== "") targets.push({ address, before, after: undefined });
+    }
+  }
+  return targets;
 }
 
 /**
@@ -212,6 +289,11 @@ export function clearSelection(
  * drag-the-border move). Values are snapshot first so overlapping source and
  * destination stay consistent; uneditable source cells stay behind and
  * uneditable targets are skipped. Returns undefined for a no-op drop.
+ *
+ * `intended` mirrors the whole operation as if every cell were editable —
+ * source cells that would be emptied and destinations that would receive a
+ * value, whether or not the grid will actually write them — so the pre-commit
+ * gate can reject a move that only partially applies.
  */
 export function moveRange(
   data: GridSnapshot,
@@ -220,27 +302,39 @@ export function moveRange(
   rowCount: number,
   columnCount: number,
   canEdit: (point: GridPoint) => boolean = () => true,
-): { data: Map<string, string>; selection: GridSelection } | undefined {
+  keyFor: CellKeyResolver = cellKey,
+): { data: Map<string, string>; selection: GridSelection; intended: CellChange[] } | undefined {
   const range = normaliseSelection(source);
   const height = range.bottom - range.top + 1;
   const width = range.right - range.left + 1;
   const top = Math.max(0, Math.min(rowCount - height, target.row));
   const left = Math.max(0, Math.min(columnCount - width, target.column));
   if (top === range.top && left === range.left) return undefined;
-  const moved: { point: GridPoint; value: string }[] = [];
+  const moved: { point: GridPoint; destination: GridPoint; value: string; address: string; destinationAddress: string }[] = [];
+  const intended: CellChange[] = [];
   for (let row = range.top; row <= range.bottom; row++) {
     for (let column = range.left; column <= range.right; column++) {
       const point = { row, column };
-      const value = data.get(cellKey(point));
-      if (value === undefined || !canEdit(point)) continue;
-      moved.push({ point, value });
+      const address = keyFor(point);
+      if (address === "") continue;
+      const value = data.get(address);
+      if (value === undefined) continue;
+      const destination = { row: point.row + top - range.top, column: point.column + left - range.left };
+      const destinationAddress = keyFor(destination);
+      if (destinationAddress === "") continue;
+      moved.push({ point, destination, value, address, destinationAddress });
+      intended.push({ address, before: value, after: undefined });
+      intended.push({ address: destinationAddress, before: data.get(destinationAddress), after: value });
     }
   }
   const next = new Map(data);
-  for (const { point } of moved) next.delete(cellKey(point));
-  for (const { point, value } of moved) {
-    const destination = { row: point.row + top - range.top, column: point.column + left - range.left };
-    if (canEdit(destination)) next.set(cellKey(destination), value);
+  for (const entry of moved) {
+    if (!canEdit(entry.point)) continue;
+    next.delete(entry.address);
+  }
+  for (const entry of moved) {
+    if (!canEdit(entry.point) || !canEdit(entry.destination)) continue;
+    next.set(entry.destinationAddress, entry.value);
   }
   return {
     data: next,
@@ -248,6 +342,7 @@ export function moveRange(
       anchor: { row: top, column: left },
       focus: { row: top + height - 1, column: left + width - 1 },
     },
+    intended,
   };
 }
 
@@ -266,6 +361,7 @@ export function selectionAggregates(
   data: GridSnapshot,
   selection: GridSelection,
   evaluate?: (point: GridPoint) => string,
+  keyFor: CellKeyResolver = cellKey,
 ): SelectionAggregates {
   const range = normaliseSelection(selection);
   const area = (range.bottom - range.top + 1) * (range.right - range.left + 1);
@@ -286,7 +382,7 @@ export function selectionAggregates(
     if (value < min) min = value;
     if (value > max) max = value;
   };
-  if (data.size <= area) {
+  if (keyFor === cellKey && data.size <= area) {
     // Fewer populated cells than selected cells: scan the data and filter.
     for (const [address, raw] of data) {
       let point: CellAddress;
@@ -295,11 +391,13 @@ export function selectionAggregates(
       add(point, raw);
     }
   } else {
-    // Small selection over a large sheet: probe each cell address directly.
+    // Small selection over a large sheet, or a view: probe each cell through
+    // its resolver (a view's displayed rows are not a contiguous source range).
     for (let row = range.top; row <= range.bottom; row++) {
       for (let column = range.left; column <= range.right; column++) {
-        const point = { row, column };
-        add(point, data.get(cellKey(point)));
+        const address = keyFor({ row, column });
+        if (address === "") continue;
+        add({ row, column }, data.get(address));
       }
     }
   }
@@ -332,7 +430,8 @@ export function fillSelection(
   rowCount: number,
   columnCount: number,
   canEdit: (point: GridPoint) => boolean = () => true,
-): { data: Map<string, string>; selection: GridSelection } {
+  keyFor: CellKeyResolver = cellKey,
+): { data: Map<string, string>; selection: GridSelection; intended: CellChange[] } {
   const source = normaliseSelection(sourceSelection);
   const destination = {
     top: Math.max(0, Math.min(source.top, target.row)),
@@ -343,24 +442,30 @@ export function fillSelection(
   const sourceHeight = source.bottom - source.top + 1;
   const sourceWidth = source.right - source.left + 1;
   const series = sourceWidth === 1 && sourceHeight >= 2
-    ? inferSeries(data.get(cellKey({ row: source.top, column: source.left })) ?? "", data.get(cellKey({ row: source.top + 1, column: source.left })) ?? "")
+    ? inferSeries(data.get(keyFor({ row: source.top, column: source.left })) ?? "", data.get(keyFor({ row: source.top + 1, column: source.left })) ?? "")
     : undefined;
   const next = new Map(data);
+  const intended: CellChange[] = [];
   for (let row = destination.top; row <= destination.bottom; row++) {
     for (let column = destination.left; column <= destination.right; column++) {
       if (row >= source.top && row <= source.bottom && column >= source.left && column <= source.right) continue;
-      if (!canEdit({ row, column })) continue;
       const sourceRow = source.top + ((row - source.top) % sourceHeight + sourceHeight) % sourceHeight;
       const sourceColumn = source.left + ((column - source.left) % sourceWidth + sourceWidth) % sourceWidth;
-      const value = data.get(cellKey({ row: sourceRow, column: sourceColumn })) ?? "";
+      const value = data.get(keyFor({ row: sourceRow, column: sourceColumn })) ?? "";
       const seriesValue = series && column === source.left && row > source.bottom
         ? series(row - source.top)
         : undefined;
       const adjusted = seriesValue ?? (value.startsWith("=")
         ? shiftFormulaReferences(value, row - sourceRow, column - sourceColumn)
         : value);
-      const key = cellKey({ row, column });
-      if (adjusted === "") next.delete(key); else next.set(key, adjusted);
+      const after = adjusted === "" ? undefined : adjusted;
+      const point = { row, column };
+      const address = keyFor(point);
+      if (address === "") continue;
+      const before = data.get(address);
+      if (before !== after) intended.push({ address, before, after });
+      if (!canEdit(point)) continue;
+      if (after === undefined) next.delete(address); else next.set(address, after);
     }
   }
   return {
@@ -369,6 +474,7 @@ export function fillSelection(
       anchor: { row: destination.top, column: destination.left },
       focus: { row: destination.bottom, column: destination.right },
     },
+    intended,
   };
 }
 

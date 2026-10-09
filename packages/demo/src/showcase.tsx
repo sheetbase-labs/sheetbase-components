@@ -10,10 +10,10 @@ import {
   type SpreadsheetSelection,
   type TablePresentationState,
   type ThemeMode,
-} from "sheetbase-table";
-import { App as Explorer, type Dataset } from "sheetbase-explorer";
-import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "sheetbase-rulesengine";
-import type { SchemaGraph } from "sheetbase-schemaeditor";
+} from "@sheetbase-labs/sheetbase-table";
+import { App as Explorer, type Dataset } from "@sheetbase-labs/sheetbase-explorer";
+import { parseNaturalLanguageRule, sampleRuleActions, type PipelineRule } from "@sheetbase-labs/sheetbase-rulesengine";
+import type { SchemaGraph } from "@sheetbase-labs/sheetbase-schemaeditor";
 
 /** Shared demo fixtures + table factory used by both the workbench and the stacked page. */
 

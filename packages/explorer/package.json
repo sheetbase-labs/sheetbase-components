@@ -1,7 +1,16 @@
 {
-  "name": "sheetbase-explorer",
+  "name": "@sheetbase-labs/sheetbase-explorer",
   "private": false,
-  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/explorer"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "version": "0.6.0",
   "type": "module",
   "main": "./dist-lib/sheetbase-explorer.js",
   "module": "./dist-lib/sheetbase-explorer.js",
@@ -13,7 +22,11 @@
     },
     "./styles.css": "./dist-lib/style.css"
   },
-  "files": ["dist-lib", "dist-types", "README.md"],
+  "files": [
+    "dist-lib",
+    "dist-types",
+    "README.md"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -25,21 +38,20 @@
     "bench": "vitest bench --run"
   },
   "dependencies": {
-    "@hugeicons/core-free-icons": "^4.3.0",
-    "@hugeicons/react": "^1.1.10",
     "@tanstack/charts": "0.18.0",
     "alasql": "^4.6.6",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
     "papaparse": "^5.5.3",
-    "sheetbase-shared": "workspace:*",
-    "sheetbase-table": "workspace:*"
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-table": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@types/d3-scale": "^4.0.0",
     "@types/d3-shape": "^3.1.0",
     "@types/papaparse": "^5.3.16",

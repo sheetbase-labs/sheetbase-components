@@ -35,3 +35,98 @@
 .sb-group-preview summary { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: pointer; font-size: 12px; background: var(--panel-2); }
 .sb-group-preview summary strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-group-preview summary .sb-chip { margin-left: auto; }
+
+/* COMP-04.2 — applied filter chips (ChipTag README; one row above the table). */
+.sb-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 4px 0 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 12px; background: var(--surface); color: var(--text);
+}
+.chip button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--faint); cursor: pointer;
+  font-size: 12px; line-height: 1;
+}
+.chip button:hover { background: var(--surface-hover); color: var(--text); }
+.chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sb-chip-add {
+  height: 24px; padding: 0 8px;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+  background: transparent; color: var(--faint); font-size: 12px; cursor: pointer;
+}
+.sb-chip-add:hover { background: var(--surface-hover); color: var(--text); }
+.sb-chip-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* COMP-04.1 — filter builder popover (States.dc.html: 360px card, 28px rows).
+   Padding is 12px, as the canvas declares and the render measures (first control
+   at border+12px on both axes; card 360×126). */
+.sb-filter-builder {
+  width: 360px; max-width: 100%;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: var(--shadow);
+  color: var(--text);
+}
+.sb-filter-builder-rows { display: flex; flex-direction: column; gap: 10px; }
+.sb-filter-builder-empty { margin: 0; padding: 2px 0; }
+.sb-filter-builder-row {
+  display: grid; grid-template-columns: 90px 70px minmax(0, 1fr) 24px;
+  gap: 6px; align-items: center;
+}
+.sb-filter-builder-row.between { grid-template-columns: 90px 70px minmax(0, 1fr) minmax(0, 1fr) 24px; }
+.sb-filter-builder-row input {
+  width: 100%; min-width: 0; height: 28px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-sans); font-size: 13px; outline: none;
+}
+.sb-filter-builder-row input:hover { border-color: var(--border-strong); }
+.sb-filter-builder-row input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* States.dc.html's `.select` is a bordered box whose label and `▾` sit together;
+   a native <select> would inset its label and draw its own platform chevron at
+   the right edge. The box is therefore the styled element and the native control
+   is a transparent overlay, so the trigger reads as designed while staying a
+   real, keyboard-accessible select. */
+.sb-filter-select {
+  position: relative; display: flex; align-items: center; min-width: 0;
+  height: 28px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-sans); font-size: 13px;
+}
+.sb-filter-select:hover { border-color: var(--border-strong); }
+.sb-filter-select:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.sb-filter-select-value { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-filter-select select {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  appearance: none; -webkit-appearance: none;
+  border: 0; background: transparent; color: transparent;
+  padding: 0 8px; font: inherit; cursor: pointer; outline: none;
+}
+.sb-filter-builder-remove { width: 28px; height: 28px; color: var(--text); border-radius: var(--radius-md); overflow: visible; }
+.sb-filter-builder-remove svg { width: 12px; height: 12px; display: block; }
+.sb-filter-builder-remove:hover { background: var(--surface-hover); color: var(--text); }
+.sb-filter-builder-foot { display: flex; align-items: center; gap: 8px; }
+.sb-filter-builder-spacer { flex: 1 1 auto; }
+/* States.dc.html's footer buttons are `.btn` `size="sm"` (24px, 12px, radius 6):
+   "Add condition" is quiet, "Clear" is default, "Apply" is primary. */
+.sb-filter-builder .sb-btn {
+  height: 24px; min-height: 24px; max-height: 24px; padding: 0 8px;
+  border-radius: var(--radius-md); font-size: 12px; font-weight: 500; gap: 6px;
+}
+.sb-filter-builder .sb-btn.subtle { color: var(--text); }
+.sb-filter-builder .sb-btn:not(.primary):not(.subtle) {
+  background: var(--surface); border-color: var(--border); color: var(--text);
+}
+.sb-filter-builder .sb-btn.primary {
+  background: var(--accent-ink); border-color: var(--accent-ink); color: var(--on-accent);
+}

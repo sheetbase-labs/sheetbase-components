@@ -1,4 +1,4 @@
-import type { FilterOperator, GroupNode, SummaryKind } from 'sheetbase-shared'
+import type { FilterOperator, GroupNode, SummaryKind } from '@sheetbase-labs/sheetbase-shared'
 
 export type { FilterOperator }
 
@@ -103,6 +103,8 @@ export interface ReferenceLine {
   axis: 'x' | 'y'
   value: number
   label?: string
+  /** Unit appended to the reference label ("Target ≥ 80 %"). */
+  unit?: string
 }
 
 export interface FilterRule {
@@ -112,6 +114,28 @@ export interface FilterRule {
   value?: string
   value2?: string
   values?: string[]
+}
+
+/**
+ * Per-figure sizing overrides, in figure (viewBox) units, for a host that
+ * authors a design screen at a different scale than the canonical 844×262
+ * figure (the ELN's Analysis canvas sizes its text, markers and strokes for a
+ * 0.758 display scale). Every field defaults to the canonical design value, so
+ * omitting `metrics` leaves the figure unchanged.
+ */
+export interface FigureMetrics {
+  /** Text size for tick labels, axis titles and the legend. Default 11. */
+  fontSize?: number
+  /** Text size for data labels (excluded/off-scale, bar and heat). Defaults to `fontSize`. */
+  labelFontSize?: number
+  /** Marker radius / half-size for points and hollow excluded markers. Default 4. */
+  markerSize?: number
+  /** Stroke width for series lines. Default 1.6. */
+  lineWidth?: number
+  /** Stroke width for marker outlines and box/violin strokes. Default 1.4. */
+  strokeWidth?: number
+  /** Stroke width for dashed reference lines. Default 1. */
+  refStrokeWidth?: number
 }
 
 export interface ChartSpec {
@@ -129,6 +153,9 @@ export interface ChartSpec {
   aggregate: AggregateKind
   xLabel?: string
   yLabel?: string
+  /** Units appended to the axis titles ("Load (L/m²)"); v3 figures draw them. */
+  xUnit?: string
+  yUnit?: string
   xMin?: number
   xMax?: number
   yMin?: number
@@ -149,6 +176,12 @@ export interface ChartSpec {
   barRadius: number
   barLayout: BarLayout
   histogramBins: number
+  /** Histogram: explicit bin width over the observed range; wins over `histogramBins`. */
+  histogramBinWidth?: number
+  /** Histogram: plot a probability density rather than counts. */
+  histogramDensity?: boolean
+  /** Violin: KDE bandwidth in data units; automatic (Silverman) when absent. */
+  violinBandwidth?: number
   palette: string[]
   markColor?: string
   primaryColor?: string
@@ -168,6 +201,13 @@ export interface ChartSpec {
   lineCurve?: LineCurveKind
   /** Horizontal/vertical guides drawn over the marks. */
   refLines?: ReferenceLine[]
+  /**
+   * Flag field marking points excluded from the decision (v3): those markers
+   * are drawn hollow and, when off-scale, pinned at the plot edge with a label.
+   */
+  excludeField?: string
+  /** Text beside an on-scale excluded marker (design: "flagged"). */
+  excludedLabel?: string
   /** Draw a text label at each mark. */
   labels?: boolean
   /** Field shown in data labels (defaults to the y value). */
@@ -176,6 +216,11 @@ export interface ChartSpec {
   categoryOrder?: 'auto' | 'value-asc' | 'value-desc' | 'label-asc'
   /** Second numeric measure, drawn as a line on a right-hand y axis. */
   y2?: string
+  /**
+   * Standalone-figure sizing overrides (`Chart`/`buildFigure`); omitted, the
+   * figure uses the design's canonical metrics.
+   */
+  metrics?: FigureMetrics
 }
 
 export interface SavedExploration {

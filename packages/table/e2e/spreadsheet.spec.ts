@@ -26,25 +26,28 @@ test("switches sheets while keeping a single spreadsheet renderer", async ({ pag
   await expect(page.getByRole("gridcell").first()).toContainText("EXP-1048");
 });
 
-test("sort control cycles the query sort without moving bound rows locally", async ({ page }) => {
+test("sort control orders bound rows locally without moving values between records", async ({ page }) => {
   await page.goto("/default", { waitUntil: "domcontentloaded" });
-  const statusCell = () => page.getByRole("gridcell").nth(6);
-  await expect(statusCell()).toContainText(/Complete|Review|Flagged/);
-  const baseline = await statusCell().textContent();
-  if (baseline === null) throw new Error("expected status cell text");
+  const statusColumn = () => page.locator('[role="gridcell"][aria-colindex="7"]');
   const sort = page.getByRole("button", { name: "Sort status" });
-  // The demo grid is bound (datasetHeader.recordIdForRow): row order is
-  // server-owned, so the control cycles query.sort via onQueryChange and the
-  // local rows stay put.
+  const source = await statusColumn().allTextContents();
+  expect(source.length).toBeGreaterThan(1);
+  // The demo grid is bound (datasetHeader.recordIdForRow) and uses the default
+  // local sort mode: the query's sort drives a display view, so the rows
+  // reorder while no value moves between records.
   await sort.click();
   await expect(sort).toHaveText(/▲/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline);
+  const ascending = await statusColumn().allTextContents();
+  expect(ascending).not.toEqual(source);
+  expect([...ascending].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))).toEqual(ascending);
   await sort.click();
   await expect(sort).toHaveText(/▼/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline);
+  const descending = await statusColumn().allTextContents();
+  expect([...descending].sort((a, b) => b.localeCompare(a, undefined, { sensitivity: "base" }))).toEqual(descending);
   await sort.click();
   await expect(sort).toHaveText(/↕/, { timeout: 15_000 });
-  await expect(statusCell()).toContainText(baseline);
+  // Clearing the sort restores the source order, so every value kept its record.
+  await expect(statusColumn()).toHaveText(source);
 });
 
 test("opens keyboard shortcut help from the grid", async ({ page }) => {
@@ -156,16 +159,24 @@ test("Shift+Space and Ctrl+Space select the row and column", async ({ page }) =>
   await expect(announcer).toContainText("10,000 cells selected");
 });
 
-test("Enter moves the selection and pastes once when a marquee is live", async ({ page, browserName }) => {
+test("Enter edits the active cell, moves down past read-only cells and pastes once when a marquee is live", async ({ page, browserName }) => {
   // Playwright cannot synthesise clipboard shortcuts in Firefox.
   test.skip(browserName === "firefox", "Firefox does not dispatch copy for synthesised shortcuts");
   await page.goto("/default", { waitUntil: "domcontentloaded" });
   const announcer = page.locator(".grid-announcer");
+  const editor = page.locator(".cell-editor");
+  // Column A is a read-only dataset field, so Enter falls back to moving down.
   await cellAt(page, 0, 0).click();
   await page.keyboard.press("Enter");
   await expect(announcer).toContainText("A2");
   await page.keyboard.press("Shift+Enter");
   await expect(announcer).toContainText("A1");
+  // On an editable cell Enter opens the editor and Escape discards.
+  await cellAt(page, 0, 1).click(); // B1
+  await page.keyboard.press("Enter");
+  await expect(editor).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(editor).toHaveCount(0);
   // Copy B1, move to B9, Enter pastes once and dismisses the marquee.
   await cellAt(page, 0, 1).click();
   await page.keyboard.press("ControlOrMeta+c");
