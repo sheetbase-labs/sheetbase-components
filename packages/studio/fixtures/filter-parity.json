@@ -1,0 +1,1769 @@
+{
+  "now": "2026-03-15T12:00:00.000Z",
+  "fields": [
+    {
+      "id": "id",
+      "dataType": "text"
+    },
+    {
+      "id": "status",
+      "dataType": "text"
+    },
+    {
+      "id": "result",
+      "dataType": "number"
+    },
+    {
+      "id": "count",
+      "dataType": "number"
+    },
+    {
+      "id": "passed",
+      "dataType": "boolean"
+    },
+    {
+      "id": "collected",
+      "dataType": "date"
+    },
+    {
+      "id": "measured_at",
+      "dataType": "datetime"
+    },
+    {
+      "id": "code",
+      "dataType": "text"
+    },
+    {
+      "id": "notes",
+      "dataType": "text"
+    }
+  ],
+  "rows": [
+    {
+      "id": "r01",
+      "status": "Complete",
+      "result": 42.5,
+      "count": 3,
+      "passed": true,
+      "collected": "2026-03-15",
+      "measured_at": "2026-03-15T08:30:00.000Z",
+      "code": "007",
+      "notes": "O'Brien sample"
+    },
+    {
+      "id": "r02",
+      "status": "complete",
+      "result": -1.25,
+      "count": 0,
+      "passed": false,
+      "collected": "2026-03-10",
+      "measured_at": "2026-03-10T23:59:59.000Z",
+      "code": "1,200",
+      "notes": "50% recovery"
+    },
+    {
+      "id": "r03",
+      "status": "Pending",
+      "result": null,
+      "count": 12,
+      "passed": null,
+      "collected": null,
+      "measured_at": null,
+      "code": "12.5",
+      "notes": "under_score"
+    },
+    {
+      "id": "r04",
+      "status": "",
+      "result": 0,
+      "count": 7,
+      "passed": true,
+      "collected": "2025-12-31",
+      "measured_at": "2025-12-31T00:00:00.000Z",
+      "code": "abc",
+      "notes": "\"quoted\""
+    },
+    {
+      "id": "r05",
+      "status": null,
+      "result": 100,
+      "count": 1,
+      "passed": false,
+      "collected": "2026-03-14",
+      "measured_at": "2026-03-14T12:00:00.000Z",
+      "code": "2024-03-01",
+      "notes": ""
+    },
+    {
+      "id": "r06",
+      "status": "Failed",
+      "result": 99.999,
+      "count": 120,
+      "passed": true,
+      "collected": "2026-01-01",
+      "measured_at": "2026-01-01T06:00:00.000Z",
+      "code": "",
+      "notes": null
+    },
+    {
+      "id": "r07",
+      "status": "  Complete  ",
+      "result": 7,
+      "count": 7,
+      "passed": null,
+      "collected": "2026-03-08",
+      "measured_at": "2026-03-08T12:00:00.000Z",
+      "code": null,
+      "notes": "Contains Complete"
+    },
+    {
+      "id": "r08",
+      "status": "REVIEW",
+      "result": 1000000,
+      "count": 2,
+      "passed": false,
+      "collected": "2024-02-29",
+      "measured_at": "2024-02-29T18:45:00.000Z",
+      "code": "7",
+      "notes": "leap day"
+    },
+    {
+      "id": "r09",
+      "status": "Pending",
+      "result": 0.1,
+      "count": 5,
+      "passed": true,
+      "collected": "2026-03-15",
+      "measured_at": "2026-03-15T11:59:59.000Z",
+      "code": "-3",
+      "notes": "TRUE"
+    },
+    {
+      "id": "r10",
+      "status": "Complete",
+      "result": 50,
+      "count": 50,
+      "passed": true,
+      "collected": "2026-02-15",
+      "measured_at": "2026-02-15T00:00:00.000Z",
+      "code": "50",
+      "notes": "yes"
+    }
+  ],
+  "cases": [
+    {
+      "name": "empty AND matches all",
+      "filter": {
+        "type": "group",
+        "id": "g1",
+        "combinator": "AND",
+        "children": []
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "empty OR matches none",
+      "filter": {
+        "type": "group",
+        "id": "g2",
+        "combinator": "OR",
+        "children": []
+      },
+      "expected": []
+    },
+    {
+      "name": "empty NOT matches all",
+      "filter": {
+        "type": "group",
+        "id": "g3",
+        "combinator": "NOT",
+        "children": []
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "text eq is case-insensitive",
+      "filter": {
+        "type": "group",
+        "id": "g5",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c4",
+            "field": "status",
+            "operator": "eq",
+            "value": "complete"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r10"
+      ]
+    },
+    {
+      "name": "text eq does not trim",
+      "filter": {
+        "type": "group",
+        "id": "g7",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c6",
+            "field": "status",
+            "operator": "eq",
+            "value": "Complete"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r10"
+      ]
+    },
+    {
+      "name": "text eq empty matches null and blank",
+      "filter": {
+        "type": "group",
+        "id": "g9",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c8",
+            "field": "status",
+            "operator": "eq",
+            "value": ""
+          }
+        ]
+      },
+      "expected": [
+        "r04",
+        "r05"
+      ]
+    },
+    {
+      "name": "text neq keeps nulls",
+      "filter": {
+        "type": "group",
+        "id": "g11",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c10",
+            "field": "status",
+            "operator": "neq",
+            "value": "Pending"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r10"
+      ]
+    },
+    {
+      "name": "text contains",
+      "filter": {
+        "type": "group",
+        "id": "g13",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c12",
+            "field": "notes",
+            "operator": "contains",
+            "value": "complete"
+          }
+        ]
+      },
+      "expected": [
+        "r07"
+      ]
+    },
+    {
+      "name": "text contains percent literally",
+      "filter": {
+        "type": "group",
+        "id": "g15",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c14",
+            "field": "notes",
+            "operator": "contains",
+            "value": "50%"
+          }
+        ]
+      },
+      "expected": [
+        "r02"
+      ]
+    },
+    {
+      "name": "text contains underscore literally",
+      "filter": {
+        "type": "group",
+        "id": "g17",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c16",
+            "field": "notes",
+            "operator": "contains",
+            "value": "r_s"
+          }
+        ]
+      },
+      "expected": [
+        "r03"
+      ]
+    },
+    {
+      "name": "text contains apostrophe",
+      "filter": {
+        "type": "group",
+        "id": "g19",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c18",
+            "field": "notes",
+            "operator": "contains",
+            "value": "o'brien"
+          }
+        ]
+      },
+      "expected": [
+        "r01"
+      ]
+    },
+    {
+      "name": "text startsWith",
+      "filter": {
+        "type": "group",
+        "id": "g21",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c20",
+            "field": "status",
+            "operator": "startsWith",
+            "value": "pe"
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r09"
+      ]
+    },
+    {
+      "name": "text endsWith",
+      "filter": {
+        "type": "group",
+        "id": "g23",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c22",
+            "field": "notes",
+            "operator": "endsWith",
+            "value": "DAY"
+          }
+        ]
+      },
+      "expected": [
+        "r08"
+      ]
+    },
+    {
+      "name": "text in",
+      "filter": {
+        "type": "group",
+        "id": "g25",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c24",
+            "field": "status",
+            "operator": "in",
+            "value": [
+              "failed",
+              "review"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r06",
+        "r08"
+      ]
+    },
+    {
+      "name": "text isNull counts blank",
+      "filter": {
+        "type": "group",
+        "id": "g27",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c26",
+            "field": "status",
+            "operator": "isNull"
+          }
+        ]
+      },
+      "expected": [
+        "r04",
+        "r05"
+      ]
+    },
+    {
+      "name": "text notNull",
+      "filter": {
+        "type": "group",
+        "id": "g29",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c28",
+            "field": "notes",
+            "operator": "notNull"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r07",
+        "r08",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "numeric text eq number",
+      "filter": {
+        "type": "group",
+        "id": "g31",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c30",
+            "field": "code",
+            "operator": "eq",
+            "value": 7
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r08"
+      ]
+    },
+    {
+      "name": "numeric text eq grouped",
+      "filter": {
+        "type": "group",
+        "id": "g33",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c32",
+            "field": "code",
+            "operator": "eq",
+            "value": "1200"
+          }
+        ]
+      },
+      "expected": [
+        "r02"
+      ]
+    },
+    {
+      "name": "numeric text gt",
+      "filter": {
+        "type": "group",
+        "id": "g35",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c34",
+            "field": "code",
+            "operator": "gt",
+            "value": 10
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r03",
+        "r10"
+      ]
+    },
+    {
+      "name": "numeric text lt negative",
+      "filter": {
+        "type": "group",
+        "id": "g37",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c36",
+            "field": "code",
+            "operator": "lt",
+            "value": 0
+          }
+        ]
+      },
+      "expected": [
+        "r09"
+      ]
+    },
+    {
+      "name": "text date-like gt date",
+      "filter": {
+        "type": "group",
+        "id": "g39",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c38",
+            "field": "code",
+            "operator": "gt",
+            "value": "2020-01-01"
+          }
+        ]
+      },
+      "expected": [
+        "r05"
+      ]
+    },
+    {
+      "name": "text eq date",
+      "filter": {
+        "type": "group",
+        "id": "g41",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c40",
+            "field": "code",
+            "operator": "eq",
+            "value": "2024-03-01"
+          }
+        ]
+      },
+      "expected": [
+        "r05"
+      ]
+    },
+    {
+      "name": "number eq",
+      "filter": {
+        "type": "group",
+        "id": "g43",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c42",
+            "field": "result",
+            "operator": "eq",
+            "value": 50
+          }
+        ]
+      },
+      "expected": [
+        "r10"
+      ]
+    },
+    {
+      "name": "number eq string",
+      "filter": {
+        "type": "group",
+        "id": "g45",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c44",
+            "field": "result",
+            "operator": "eq",
+            "value": "42.5"
+          }
+        ]
+      },
+      "expected": [
+        "r01"
+      ]
+    },
+    {
+      "name": "number eq zero",
+      "filter": {
+        "type": "group",
+        "id": "g47",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c46",
+            "field": "result",
+            "operator": "eq",
+            "value": 0
+          }
+        ]
+      },
+      "expected": [
+        "r04"
+      ]
+    },
+    {
+      "name": "number neq keeps nulls",
+      "filter": {
+        "type": "group",
+        "id": "g49",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c48",
+            "field": "result",
+            "operator": "neq",
+            "value": 50
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09"
+      ]
+    },
+    {
+      "name": "number gt",
+      "filter": {
+        "type": "group",
+        "id": "g51",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c50",
+            "field": "result",
+            "operator": "gt",
+            "value": 42.5
+          }
+        ]
+      },
+      "expected": [
+        "r05",
+        "r06",
+        "r08",
+        "r10"
+      ]
+    },
+    {
+      "name": "number gte",
+      "filter": {
+        "type": "group",
+        "id": "g53",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c52",
+            "field": "result",
+            "operator": "gte",
+            "value": 42.5
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r05",
+        "r06",
+        "r08",
+        "r10"
+      ]
+    },
+    {
+      "name": "number lt",
+      "filter": {
+        "type": "group",
+        "id": "g55",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c54",
+            "field": "result",
+            "operator": "lt",
+            "value": 1
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r04",
+        "r09"
+      ]
+    },
+    {
+      "name": "number lte",
+      "filter": {
+        "type": "group",
+        "id": "g57",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c56",
+            "field": "count",
+            "operator": "lte",
+            "value": 3
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r05",
+        "r08"
+      ]
+    },
+    {
+      "name": "number between",
+      "filter": {
+        "type": "group",
+        "id": "g59",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c58",
+            "field": "result",
+            "operator": "between",
+            "value": [
+              0,
+              50
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r04",
+        "r07",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "number between reversed",
+      "filter": {
+        "type": "group",
+        "id": "g61",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c60",
+            "field": "result",
+            "operator": "between",
+            "value": [
+              50,
+              0
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r04",
+        "r07",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "number between object bounds",
+      "filter": {
+        "type": "group",
+        "id": "g63",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c62",
+            "field": "count",
+            "operator": "between",
+            "value": {
+              "low": 2,
+              "high": 7
+            }
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r04",
+        "r07",
+        "r08",
+        "r09"
+      ]
+    },
+    {
+      "name": "number between mixed kinds matches none",
+      "filter": {
+        "type": "group",
+        "id": "g65",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c64",
+            "field": "result",
+            "operator": "between",
+            "value": [
+              0,
+              "2026-01-01"
+            ]
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "number gt date matches none",
+      "filter": {
+        "type": "group",
+        "id": "g67",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c66",
+            "field": "result",
+            "operator": "gt",
+            "value": "2026-01-01"
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "number in",
+      "filter": {
+        "type": "group",
+        "id": "g69",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c68",
+            "field": "count",
+            "operator": "in",
+            "value": [
+              7,
+              "12",
+              "x"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r04",
+        "r07"
+      ]
+    },
+    {
+      "name": "number isNull",
+      "filter": {
+        "type": "group",
+        "id": "g71",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c70",
+            "field": "result",
+            "operator": "isNull"
+          }
+        ]
+      },
+      "expected": [
+        "r03"
+      ]
+    },
+    {
+      "name": "number eq text",
+      "filter": {
+        "type": "group",
+        "id": "g73",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c72",
+            "field": "result",
+            "operator": "eq",
+            "value": "abc"
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "number contains digit",
+      "filter": {
+        "type": "group",
+        "id": "g75",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c74",
+            "field": "count",
+            "operator": "contains",
+            "value": "2"
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r06",
+        "r08"
+      ]
+    },
+    {
+      "name": "number startsWith",
+      "filter": {
+        "type": "group",
+        "id": "g77",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c76",
+            "field": "result",
+            "operator": "startsWith",
+            "value": "9"
+          }
+        ]
+      },
+      "expected": [
+        "r06"
+      ]
+    },
+    {
+      "name": "boolean eq true",
+      "filter": {
+        "type": "group",
+        "id": "g79",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c78",
+            "field": "passed",
+            "operator": "eq",
+            "value": true
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r04",
+        "r06",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "boolean eq false",
+      "filter": {
+        "type": "group",
+        "id": "g81",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c80",
+            "field": "passed",
+            "operator": "eq",
+            "value": false
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r05",
+        "r08"
+      ]
+    },
+    {
+      "name": "boolean eq \"true\" text",
+      "filter": {
+        "type": "group",
+        "id": "g83",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c82",
+            "field": "passed",
+            "operator": "eq",
+            "value": "true"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r04",
+        "r06",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "boolean neq true keeps nulls",
+      "filter": {
+        "type": "group",
+        "id": "g85",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c84",
+            "field": "passed",
+            "operator": "neq",
+            "value": true
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r03",
+        "r05",
+        "r07",
+        "r08"
+      ]
+    },
+    {
+      "name": "boolean isNull",
+      "filter": {
+        "type": "group",
+        "id": "g87",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c86",
+            "field": "passed",
+            "operator": "isNull"
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r07"
+      ]
+    },
+    {
+      "name": "text eq true via boolean set",
+      "filter": {
+        "type": "group",
+        "id": "g89",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c88",
+            "field": "notes",
+            "operator": "eq",
+            "value": true
+          }
+        ]
+      },
+      "expected": [
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "date eq",
+      "filter": {
+        "type": "group",
+        "id": "g91",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c90",
+            "field": "collected",
+            "operator": "eq",
+            "value": "2026-03-15"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r09"
+      ]
+    },
+    {
+      "name": "date gt",
+      "filter": {
+        "type": "group",
+        "id": "g93",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c92",
+            "field": "collected",
+            "operator": "gt",
+            "value": "2026-03-01"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r05",
+        "r07",
+        "r09"
+      ]
+    },
+    {
+      "name": "date lt",
+      "filter": {
+        "type": "group",
+        "id": "g95",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c94",
+            "field": "collected",
+            "operator": "lt",
+            "value": "2026-01-01"
+          }
+        ]
+      },
+      "expected": [
+        "r04",
+        "r08"
+      ]
+    },
+    {
+      "name": "date between",
+      "filter": {
+        "type": "group",
+        "id": "g97",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c96",
+            "field": "collected",
+            "operator": "between",
+            "value": [
+              "2026-01-01",
+              "2026-03-10"
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r06",
+        "r07",
+        "r10"
+      ]
+    },
+    {
+      "name": "date gt number matches none",
+      "filter": {
+        "type": "group",
+        "id": "g99",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c98",
+            "field": "collected",
+            "operator": "gt",
+            "value": 5
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "date within last 1 day",
+      "filter": {
+        "type": "group",
+        "id": "g101",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c100",
+            "field": "collected",
+            "operator": "withinLastDays",
+            "value": 1
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r09"
+      ]
+    },
+    {
+      "name": "date within last 7 days",
+      "filter": {
+        "type": "group",
+        "id": "g103",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c102",
+            "field": "collected",
+            "operator": "withinLastDays",
+            "value": 7
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r05",
+        "r09"
+      ]
+    },
+    {
+      "name": "date within bad days matches none",
+      "filter": {
+        "type": "group",
+        "id": "g105",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c104",
+            "field": "collected",
+            "operator": "withinLastDays",
+            "value": 0
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "date isNull",
+      "filter": {
+        "type": "group",
+        "id": "g107",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c106",
+            "field": "collected",
+            "operator": "isNull"
+          }
+        ]
+      },
+      "expected": [
+        "r03"
+      ]
+    },
+    {
+      "name": "datetime gt instant",
+      "filter": {
+        "type": "group",
+        "id": "g109",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c108",
+            "field": "measured_at",
+            "operator": "gt",
+            "value": "2026-03-14T12:00:00.000Z"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r09"
+      ]
+    },
+    {
+      "name": "datetime gte date",
+      "filter": {
+        "type": "group",
+        "id": "g111",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c110",
+            "field": "measured_at",
+            "operator": "gte",
+            "value": "2026-03-10"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r05",
+        "r09"
+      ]
+    },
+    {
+      "name": "datetime eq instant",
+      "filter": {
+        "type": "group",
+        "id": "g113",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c112",
+            "field": "measured_at",
+            "operator": "eq",
+            "value": "2026-03-08T12:00:00.000Z"
+          }
+        ]
+      },
+      "expected": [
+        "r07"
+      ]
+    },
+    {
+      "name": "datetime within last 6 days",
+      "filter": {
+        "type": "group",
+        "id": "g115",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c114",
+            "field": "measured_at",
+            "operator": "withinLastDays",
+            "value": 6
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r05",
+        "r09"
+      ]
+    },
+    {
+      "name": "text date within last days",
+      "filter": {
+        "type": "group",
+        "id": "g117",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c116",
+            "field": "code",
+            "operator": "withinLastDays",
+            "value": 1000
+          }
+        ]
+      },
+      "expected": [
+        "r05"
+      ]
+    },
+    {
+      "name": "AND of two",
+      "filter": {
+        "type": "group",
+        "id": "g120",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c118",
+            "field": "status",
+            "operator": "eq",
+            "value": "complete"
+          },
+          {
+            "type": "condition",
+            "id": "c119",
+            "field": "result",
+            "operator": "gt",
+            "value": 0
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r10"
+      ]
+    },
+    {
+      "name": "OR of two",
+      "filter": {
+        "type": "group",
+        "id": "g123",
+        "combinator": "OR",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c121",
+            "field": "status",
+            "operator": "eq",
+            "value": "failed"
+          },
+          {
+            "type": "condition",
+            "id": "c122",
+            "field": "count",
+            "operator": "gte",
+            "value": 50
+          }
+        ]
+      },
+      "expected": [
+        "r06",
+        "r10"
+      ]
+    },
+    {
+      "name": "NOT is NOR",
+      "filter": {
+        "type": "group",
+        "id": "g126",
+        "combinator": "NOT",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c124",
+            "field": "status",
+            "operator": "eq",
+            "value": "complete"
+          },
+          {
+            "type": "condition",
+            "id": "c125",
+            "field": "passed",
+            "operator": "eq",
+            "value": false
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r04",
+        "r06",
+        "r07",
+        "r09"
+      ]
+    },
+    {
+      "name": "NOT with nulls",
+      "filter": {
+        "type": "group",
+        "id": "g128",
+        "combinator": "NOT",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c127",
+            "field": "result",
+            "operator": "gt",
+            "value": 10
+          }
+        ]
+      },
+      "expected": [
+        "r02",
+        "r03",
+        "r04",
+        "r07",
+        "r09"
+      ]
+    },
+    {
+      "name": "nested AND(OR, NOT)",
+      "filter": {
+        "type": "group",
+        "id": "g134",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "group",
+            "id": "g131",
+            "combinator": "OR",
+            "children": [
+              {
+                "type": "condition",
+                "id": "c129",
+                "field": "status",
+                "operator": "eq",
+                "value": "pending"
+              },
+              {
+                "type": "condition",
+                "id": "c130",
+                "field": "status",
+                "operator": "eq",
+                "value": "complete"
+              }
+            ]
+          },
+          {
+            "type": "group",
+            "id": "g133",
+            "combinator": "NOT",
+            "children": [
+              {
+                "type": "condition",
+                "id": "c132",
+                "field": "collected",
+                "operator": "lt",
+                "value": "2026-03-01"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r09"
+      ]
+    },
+    {
+      "name": "nested empty groups",
+      "filter": {
+        "type": "group",
+        "id": "g138",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "group",
+            "id": "g135",
+            "combinator": "AND",
+            "children": []
+          },
+          {
+            "type": "group",
+            "id": "g136",
+            "combinator": "NOT",
+            "children": []
+          },
+          {
+            "type": "condition",
+            "id": "c137",
+            "field": "count",
+            "operator": "gt",
+            "value": 5
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r04",
+        "r06",
+        "r07",
+        "r10"
+      ]
+    },
+    {
+      "name": "nested empty OR blocks",
+      "filter": {
+        "type": "group",
+        "id": "g141",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "group",
+            "id": "g139",
+            "combinator": "OR",
+            "children": []
+          },
+          {
+            "type": "condition",
+            "id": "c140",
+            "field": "count",
+            "operator": "gt",
+            "value": 5
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "field name is case-insensitive",
+      "filter": {
+        "type": "group",
+        "id": "g143",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c142",
+            "field": "STATUS",
+            "operator": "eq",
+            "value": "pending"
+          }
+        ]
+      },
+      "expected": [
+        "r03",
+        "r09"
+      ]
+    },
+    {
+      "name": "unknown field eq empty matches all",
+      "filter": {
+        "type": "group",
+        "id": "g145",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c144",
+            "field": "missing",
+            "operator": "eq",
+            "value": ""
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "unknown field isNull matches all",
+      "filter": {
+        "type": "group",
+        "id": "g147",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c146",
+            "field": "missing",
+            "operator": "isNull"
+          }
+        ]
+      },
+      "expected": [
+        "r01",
+        "r02",
+        "r03",
+        "r04",
+        "r05",
+        "r06",
+        "r07",
+        "r08",
+        "r09",
+        "r10"
+      ]
+    },
+    {
+      "name": "unknown field gt matches none",
+      "filter": {
+        "type": "group",
+        "id": "g149",
+        "combinator": "AND",
+        "children": [
+          {
+            "type": "condition",
+            "id": "c148",
+            "field": "missing",
+            "operator": "gt",
+            "value": 1
+          }
+        ]
+      },
+      "expected": []
+    }
+  ]
+}
