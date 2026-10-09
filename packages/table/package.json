@@ -36,6 +36,7 @@
     "test:e2e": "playwright test",
     "budget": "node scripts/bundle-budget.mjs",
     "test:e2e:chromium": "playwright test --project=chromium",
+    "test:visual": "E2E_VISUAL=1 playwright test --project=chromium specs/v3-grids.spec.ts",
     "bench": "vitest bench --run"
   },
   "dependencies": {
