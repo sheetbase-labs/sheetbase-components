@@ -1,5 +1,14 @@
-import type { DuckDBBundles } from '@duckdb/duckdb-wasm'
 import type { SqlEngine } from './sql-source'
+
+/**
+ * Where DuckDB-WASM's worker and module load from — the shape of
+ * `@duckdb/duckdb-wasm`'s `DuckDBBundles`, declared here so consumers'
+ * type-checking never needs DuckDB's (emscripten) type definitions.
+ */
+export interface DuckDbBundles {
+  mvp: { mainModule: string; mainWorker: string }
+  eh?: { mainModule: string; mainWorker: string }
+}
 
 /** A DuckDB engine that can also receive files (uploads, JSON rows). */
 export interface FileSqlEngine extends SqlEngine {
@@ -15,7 +24,7 @@ export interface DuckDbWasmOptions {
    * self-hosted bundles for offline or locked-down (GxP) deployments — see
    * the studio README for the Vite `?url` recipe.
    */
-  bundles?: DuckDBBundles
+  bundles?: DuckDbBundles
 }
 
 /** Narrow Arrow/BigInt values to plain JSON-shaped JS. */

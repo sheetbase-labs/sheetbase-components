@@ -125,10 +125,10 @@ export function FieldBrowser(props: FieldBrowserProps) {
       <div className="sbs-fields-tools">
         <input className="sb-input sbs-search" type="search" placeholder={`Search ${props.fields.length} fields`} value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search fields" />
         {props.canProfile && (
-          <div className="sb-segmented sbs-scope" role="radiogroup" aria-label="Profile rows">
-            <button type="button" role="radio" aria-checked={props.scope === 'filtered'} className={props.scope === 'filtered' ? 'active' : ''} onClick={() => props.onScope('filtered')} title="Profile only the rows that match the current filters">Filtered</button>
-            <button type="button" role="radio" aria-checked={props.scope === 'all'} className={props.scope === 'all' ? 'active' : ''} onClick={() => props.onScope('all')} title="Profile every row in the table">All rows</button>
-          </div>
+          <fieldset className="sb-segmented sbs-scope" aria-label="Profile rows">
+            <button type="button" aria-pressed={props.scope === 'filtered'} className={props.scope === 'filtered' ? 'active' : ''} onClick={() => props.onScope('filtered')} title="Profile only the rows that match the current filters">Filtered</button>
+            <button type="button" aria-pressed={props.scope === 'all'} className={props.scope === 'all' ? 'active' : ''} onClick={() => props.onScope('all')} title="Profile every row in the table">All rows</button>
+          </fieldset>
         )}
       </div>
       {props.error && (
@@ -154,7 +154,7 @@ export function FieldBrowser(props: FieldBrowserProps) {
                 {hint && <span className={`sbs-hint sbs-hint--${hint.kind}`}>{hint.label}</span>}
                 <Sparkline bars={bars} label={profile ? `${field.label} distribution` : 'Not profiled yet'} />
                 <span className="sbs-completeness" title={profile ? `${percent(profile.count - profile.nulls, profile.count)} filled` : undefined} aria-hidden="true">
-                  <span style={{ ['--w' as string]: profile && profile.count ? `${((profile.count - profile.nulls) / profile.count) * 100}%` : '0%' }} />
+                  <span style={{ ['--w' as string]: profile?.count ? `${((profile.count - profile.nulls) / profile.count) * 100}%` : '0%' }} />
                 </span>
               </button>
               {expanded && <FieldCard field={field} profile={profile} bars={bars} categorical={categorical} active={active} {...props} />}

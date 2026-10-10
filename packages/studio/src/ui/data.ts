@@ -137,5 +137,7 @@ export function percent(part: number, whole: number): string {
   const value = (part / whole) * 100
   if (value > 0 && value < 0.1) return '<0.1%'
   if (value < 100 && value > 99.9) return '>99.9%'
+  // Never round a gap away: 99.5% filled must not read as complete.
+  if (value < 100 && value >= 99.5) return `${value.toFixed(1)}%`
   return `${value.toFixed(value < 10 ? 1 : 0)}%`
 }

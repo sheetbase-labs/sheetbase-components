@@ -46,23 +46,26 @@ export function Sparkline({ bars, width = 64, height = 18, label }: { bars: read
 export function BinChart({ bars, total, onPick }: { bars: readonly ProfileBar[]; total: number; onPick?: (bar: ProfileBar) => void }) {
   const max = Math.max(1, ...bars.map((bar) => bar.count))
   return (
-    <div className="sbs-bins" role="group" aria-label="Distribution — choose a range to filter on it">
-      {bars.map((bar) => (
-        <button
-          key={bar.key}
-          type="button"
-          className={`sbs-bin${bar.active ? ' is-active' : ''}`}
-          style={{ ['--h' as string]: `${bar.count === 0 ? 0 : Math.max(3, (bar.count / max) * 100)}%` }}
-          title={`${bar.label}: ${formatCount(bar.count)} rows (${percent(bar.count, total)})${onPick ? bar.active ? ' — click to remove the filter' : ' — click to filter' : ''}`}
-          aria-pressed={bar.active ?? false}
-          aria-label={`${bar.label}: ${formatCount(bar.count)} rows`}
-          onClick={onPick ? () => onPick(bar) : undefined}
-          disabled={!onPick || bar.count === 0}
-        >
-          <span />
-        </button>
-      ))}
-    </div>
+    <fieldset className="sbs-bins-group" aria-label="Distribution — choose a range to filter on it">
+      {/* Layout lives on an inner box: a fieldset's anonymous content box won't resolve the bars' % heights. */}
+      <div className="sbs-bins">
+        {bars.map((bar) => (
+          <button
+            key={bar.key}
+            type="button"
+            className={`sbs-bin${bar.active ? ' is-active' : ''}`}
+            style={{ ['--h' as string]: `${bar.count === 0 ? 0 : Math.max(3, (bar.count / max) * 100)}%` }}
+            title={`${bar.label}: ${formatCount(bar.count)} rows (${percent(bar.count, total)})${onPick ? bar.active ? ' — click to remove the filter' : ' — click to filter' : ''}`}
+            aria-pressed={bar.active ?? false}
+            aria-label={`${bar.label}: ${formatCount(bar.count)} rows`}
+            onClick={onPick ? () => onPick(bar) : undefined}
+            disabled={!onPick || bar.count === 0}
+          >
+            <span />
+          </button>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
@@ -71,7 +74,7 @@ export function ValueBars({ bars, total, distinct, onPick }: { bars: readonly Pr
   const max = Math.max(1, ...bars.map((bar) => bar.count))
   const shown = bars.reduce((sum, bar) => sum + bar.count, 0)
   return (
-    <div className="sbs-values" role="group" aria-label="Most frequent values — choose one to filter on it">
+    <fieldset className="sbs-values" aria-label="Most frequent values — choose one to filter on it">
       {bars.map((bar) => (
         <button
           key={bar.key}
@@ -90,6 +93,6 @@ export function ValueBars({ bars, total, distinct, onPick }: { bars: readonly Pr
       {distinct !== null && distinct > bars.length && (
         <div className="sbs-values-more">+{formatCount(distinct - bars.length)} more values · {percent(total - shown, total)} of rows</div>
       )}
-    </div>
+    </fieldset>
   )
 }

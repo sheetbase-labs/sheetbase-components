@@ -5,7 +5,9 @@ Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in
 (`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`,
 `@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`,
 `@sheetbase-labs/sheetbase-rulesengine`,
-`@sheetbase-labs/sheetbase-advanced-search`, `sheetbase-demo`).
+`@sheetbase-labs/sheetbase-advanced-search`,
+`@sheetbase-labs/sheetbase-studio`, `sheetbase-demo`). `python/` holds the
+`sheetbase-studio` Python package (Ibis-backed server and notebook widget).
 
 ## Validate
 
@@ -18,7 +20,7 @@ bun run typecheck   # tsc -b per package (single TS version, noEmit)
 bun run lint        # biome ci; errors block, warnings are the tracked baseline
 bun run test        # vitest, all packages
 bun run build       # app/demo builds (all packages)
-bun run build:lib   # library builds in dependency order: shared → table → search → explorer → schema → rules
+bun run build:lib   # library builds in dependency order: shared → table → explorer → schema → rules → search → studio
 ```
 
 Package-level extras (run inside `packages/table`):
@@ -33,7 +35,16 @@ bun run dev:api     # example HTTP adapter on :8787 (paged demo + explorer remot
 `packages/explorer` also has `bun run budget` and `bun run bench`.
 
 ```bash
-bun run pack:smoke  # pack all six libs, install + typecheck as an external consumer
+bun run pack:smoke  # pack all seven libs, install + typecheck as an external consumer
+```
+
+Studio and Python (from the repo root):
+
+```bash
+bun run --filter @sheetbase-labs/sheetbase-studio parity        # regenerate fixtures/filter-parity.json
+bun run --filter @sheetbase-labs/sheetbase-studio build:python  # UI → python/src/sheetbase/static (not committed)
+uv venv && uv pip install -e "python[dev]" && .venv/bin/pytest python
+SHEETBASE_PYTHON=.venv/bin/python bun run --filter @sheetbase-labs/sheetbase-studio test   # + live TS↔Python contract test
 ```
 
 ## Conventions
@@ -63,6 +74,12 @@ bun run pack:smoke  # pack all six libs, install + typecheck as an external cons
   constants with targeted `biome-ignore` comments — do not silence files.
 - **Deliberate divergences** in lint/tooling config are documented in the
   config files themselves.
+- **One filter semantics, three executors**: `buildPredicate` (JS), the DuckDB
+  compiler (`packages/studio/src/lib/sql-compile.ts`) and the Ibis compiler
+  (`python/src/sheetbase/filters.py`). A change to predicate semantics changes
+  all three and the parity fixture (`packages/studio/fixtures/filter-parity.json`).
+- **Studio is read-only.** Sources never write back; SQL is one SELECT/WITH
+  query. Keep it that way unless a design decision says otherwise.
 
 ## Layout
 
@@ -75,7 +92,10 @@ packages/explorer/        charts, aggregation, SQL, remote adapter
 packages/advanced-search/ nested search UI; compiles FilterNode → DatasetQuery
 packages/schema-editor/   schema canvas (reactflow)
 packages/rules-engine/    NL rule language → table mutations (dry-run today)
+packages/studio/          data exploration: profiles, explorer, search, grid, SQL
+  fixtures/               filter-parity.json (shared with python/ tests)
 packages/demo/            workbench composing the packages
+python/                   sheetbase-studio: Ibis backend, `sheetbase serve`, notebook widget
 .github/workflows/ci.yml  typecheck + lint + tests + builds + e2e
 ```
 
@@ -86,6 +106,11 @@ packages/demo/            workbench composing the packages
   `build:lib` after changing shared/table contracts.
 - `@sheetbase-labs/sheetbase-shared` is externalized from the table library build; consumers
   must install both packages.
+- Studio tests need no browser: the DuckDB compiler runs against native
+  DuckDB (`@duckdb/node-api`). In the browser DuckDB-WASM can't download
+  extensions offline, so ingestion uses CSV (built in) and JS parsers — don't
+  switch row loading back to `read_json`.
+- Ibis 12 breaks with sqlglot ≥ 28; `python/pyproject.toml` pins it.
 - Packages publish to npm in lockstep (`docs/publishing.md`). `bun pm pack`
   rewrites `workspace:*` to real versions; peers are `react`, `react-dom`,
   and `@tanstack/react-virtual` (table only — it is externalized, never put

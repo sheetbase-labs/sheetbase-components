@@ -19,6 +19,8 @@ export default defineConfig({
         // Loaded lazily on first SQL/upload; the host's bundler resolves them.
         "@duckdb/duckdb-wasm",
         "read-excel-file/browser",
+        "hyparquet",
+        "hyparquet-compressors",
       ],
     },
   },

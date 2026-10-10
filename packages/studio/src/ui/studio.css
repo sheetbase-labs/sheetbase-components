@@ -2,7 +2,8 @@
 
 .sbs-studio { width: 100%; height: 100%; min-height: 0; display: block; }
 .sbs-studio > .sb-frame { width: 100%; height: 100%; min-height: 0; }
-.sbs-studio .sb-topbar { gap: 6px; }
+.sbs-studio .sb-topbar { gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.sbs-studio .sb-topbar .sb-btn { white-space: nowrap; flex: none; }
 .sbs-studio .sb-topbar-actions { gap: 8px; min-width: 0; }
 .sbs-body { min-height: 0; height: 100%; display: flex; }
 .sbs-body > * { flex: 1 1 0; min-width: 0; min-height: 0; }
@@ -35,6 +36,8 @@
 .sbs-empty h2 { margin: 0; color: var(--text); font-size: 15px; font-weight: 650; }
 .sbs-empty p { margin: 0; display: inline-flex; align-items: center; gap: 8px; }
 
+.sbs-layout-host { width: 100%; height: 100%; min-width: 0; min-height: 0; display: flex; }
+.sbs-layout-host > * { flex: 1 1 0; min-width: 0; min-height: 0; }
 .sbs-panes { width: 100%; height: 100%; }
 .sbs-pane { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--panel); color: var(--text); font-family: var(--font-sans); font-size: var(--text-size); }
 .sbs-chart-host { width: 100%; height: 100%; min-height: 0; display: flex; }
@@ -94,6 +97,8 @@
 .sbs-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; margin: 0; }
 .sbs-stats dt { font-size: 9.5px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .sbs-stats dd { margin: 1px 0 0; font-variant-numeric: tabular-nums; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbs-bins-group, .sbs-values, .sbs-scope { margin: 0; padding: 0; border: 0; min-width: 0; min-inline-size: 0; }
+.sbs-scope { padding: 2px; border: 1px solid var(--border); }
 .sbs-bins { display: flex; align-items: flex-end; gap: 2px; height: 72px; padding-bottom: 1px; border-bottom: 1px solid var(--chart-axis, var(--border-strong)); }
 .sbs-bin { flex: 1 1 0; height: 100%; padding: 0; border: 0; background: transparent; display: flex; align-items: flex-end; min-width: 0; }
 .sbs-bin span { display: block; width: 100%; height: var(--h); border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 55%, var(--panel)); }
@@ -148,7 +153,17 @@
 .sbs-history li { display: flex; align-items: center; gap: 6px; }
 
 @media (max-width: 720px) {
+  .sbs-status, .sbs-brand { display: none; }
+  .sbs-studio .sb-topbar-actions { margin-left: 0; }
   .sbs-sql { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; overflow: auto; }
   .sbs-sql-editor, .sbs-sql-code, .sbs-sql-schema { grid-column: 1; grid-row: auto; min-height: 220px; }
   .sbs-picker select { max-width: 160px; }
+}
+
+/* The table's dark selected-header ink falls back to --accent-soft, its own
+   background, so the active row number and column label vanish. Studio sets
+   the host hooks the table exposes for exactly this. */
+.sbs-studio [data-theme="dark"] {
+  --grid-row-selected-ink: var(--accent-ink);
+  --grid-column-selected-ink: var(--accent-ink);
 }

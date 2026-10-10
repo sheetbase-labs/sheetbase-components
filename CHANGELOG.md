@@ -10,6 +10,34 @@ versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Studio** (`@sheetbase-labs/sheetbase-studio`, new package): explore and
+  chart any table. A field browser profiles every column (missing, distinct,
+  quantiles, top values, bins) and filters on click; the explorer, advanced
+  search, a read-only paged grid and a SQL pane follow one `AnalysisView`.
+  Small tables explore locally; large ones stay at the source with exact
+  aggregates and bins and labelled samples. Read-only SQL opens results as new
+  tables, and the view is shown as SQL, Ibis and pandas. Chart exports embed
+  provenance (source, table, query SQL, filter tree, chart spec, row count).
+- **Studio sources**: `MemorySource` (host rows), `DuckDbSource` (DuckDB-WASM;
+  CSV, TSV, JSON, Excel and Parquet uploads, offline-safe) and `HttpSource`
+  over a documented wire contract (`/api/studio/*` plus the existing pages and
+  aggregate routes).
+- **Shared**: `StudioDataSource`, `TableInfo`, `FieldProfile` and the studio
+  wire types; `workspaceSourceFor`.
+- **Filter parity**: `filterToSql` compiles filter trees to DuckDB SQL with
+  `buildPredicate` semantics; `packages/studio/fixtures/filter-parity.json`
+  pins JS, DuckDB and Python (Ibis) executors to the same results.
+- **Python** (`python/`, `sheetbase-studio`): `sheetbase.serve(df)` /
+  `sheetbase serve` and the `sheetbase.explore(df)` notebook widget, backed by
+  Ibis — pandas, polars, pyarrow, files or any Ibis backend. SQL is checked
+  read-only with sqlglot; `apply_view` reproduces a Studio view in code.
+- **Explorer**: `RemoteDatasetSource.histogram` (exact server bins) and
+  `.sample` (seeded samples, labelled on the chart) so remote datasets draw
+  histograms, scatter, box, violin and heatmap; count charts plot group sizes
+  without a measure; `shareUrl` lets embedding hosts opt out of URL hash
+  writes; `defaultChartSpec`, `smartKindFor`, `binsToRows`, `bucketsToRows`,
+  `ROW_ID` and `HISTOGRAM_BIN` are exported.
+
 - **Table**: host-driven layout and control on `Spreadsheet` — `height`
   (`number | "fill"`), `stretch` (`"none" | "last" | "all"`, measured against
   the scroll container), `rowHeaders: false` to drop the row-number column and

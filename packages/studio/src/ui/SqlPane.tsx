@@ -154,6 +154,7 @@ export function SqlPane(props: SqlPaneProps) {
             {codeTab === 'sql' && props.enabled && <button type="button" className="sb-btn" onClick={() => setSql(code)}>Edit as query</button>}
           </span>
         </div>
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable code block must be keyboard-focusable to scroll (WCAG 2.1.1) */}
         <pre className="sbs-code" tabIndex={0}>{code}</pre>
       </section>
     </div>

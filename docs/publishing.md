@@ -1,12 +1,13 @@
 # Publishing & consumption
 
-**Decision: private publish to GitHub Packages (DEC-12).** The six library
+**Decision: private publish to GitHub Packages (DEC-12).** The seven library
 packages (`@sheetbase-labs/sheetbase-shared`,
 `@sheetbase-labs/sheetbase-table`,
 `@sheetbase-labs/sheetbase-advanced-search`,
 `@sheetbase-labs/sheetbase-explorer`,
 `@sheetbase-labs/sheetbase-schemaeditor`,
-`@sheetbase-labs/sheetbase-rulesengine`) publish to GitHub Packages at
+`@sheetbase-labs/sheetbase-rulesengine`,
+`@sheetbase-labs/sheetbase-studio`) publish to GitHub Packages at
 `https://npm.pkg.github.com`, scoped to the `sheetbase-labs` organisation.
 `sheetbase-demo` stays private and is never published. Nothing is published to
 public npm: the packages are private, every manifest carries
@@ -107,13 +108,31 @@ directory in dependency order — `publishConfig` routes to GitHub Packages:
 ```bash
 bun install
 bun run typecheck && bun run lint && bun run test
-bun run pack:smoke            # packs all six, installs + typechecks as a consumer
+bun run pack:smoke            # packs all seven, installs + typechecks as a consumer
 cd packages/shared       && bun publish --access restricted
 cd ../table              && bun publish --access restricted
 cd ../advanced-search    && bun publish --access restricted
 cd ../explorer           && bun publish --access restricted
 cd ../schema-editor      && bun publish --access restricted
 cd ../rules-engine       && bun publish --access restricted
+cd ../studio             && bun publish --access restricted
+```
+
+Studio's peers are the same as the table's (`react`, `react-dom`,
+`@tanstack/react-virtual`). DuckDB-WASM, `hyparquet` and `read-excel-file` are
+real dependencies left external to `dist-lib` and loaded lazily — a host's
+bundler resolves them, and nothing downloads until a file or SQL needs them.
+
+## The Python package
+
+`python/` (`sheetbase-studio` on the same version line — `scripts/version.mjs`
+bumps it too) is not published to a package index. CI builds the Studio UI
+into it and uploads the wheel as a workflow artifact; install that wheel, or
+build one locally:
+
+```bash
+bun run --filter @sheetbase-labs/sheetbase-studio build:python
+uv build python            # dist/sheetbase_studio-<version>-py3-none-any.whl
 ```
 
 CI runs `pack-smoke --skip-build` on every PR after the lib builds, so a

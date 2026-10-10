@@ -50,7 +50,9 @@ describe.skipIf(!PYTHON)('Python server matches the in-memory reference', () => 
       const [left, right] = await Promise.all([memory.aggregate('runs', query), http.aggregate('runs', query)])
       expect(right.totalRows, summary).toBe(left.totalRows)
       expect(right.buckets.map(({ key, series, count }) => ({ key, series, count })), summary).toEqual(left.buckets.map(({ key, series, count }) => ({ key, series, count })))
-      right.buckets.forEach((bucket, index) => expect(bucket.value ?? Number.NaN).toBeCloseTo(left.buckets[index]?.value ?? Number.NaN, 9))
+      for (const [index, bucket] of right.buckets.entries()) {
+        expect(bucket.value ?? Number.NaN).toBeCloseTo(left.buckets[index]?.value ?? Number.NaN, 9)
+      }
     }
   })
 

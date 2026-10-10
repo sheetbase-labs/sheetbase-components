@@ -221,6 +221,23 @@ realised client-side), and `workspace.source` is readable via
 `useWorkspaceSource()`. See `docs/workbench-composition.md` for the per-pane
 remote dataflow.
 
+## Studio data sources
+
+`StudioDataSource` (`source.ts`) is the contract Sheetbase Studio explores
+through: a catalog of `TableInfo`s plus `page` and `aggregate`, and
+optionally `profile` (per-field `FieldProfile`s), `histogram` (exact bins),
+`sample` (seeded random rows), `sql` (read-only; registers a `query` table)
+and `upload`. `capabilities` says which optional parts a source offers, so the
+UI can explain what it can't do rather than show wrong numbers. Every request
+that carries a filter must apply it with `buildPredicate` semantics or reject
+it — the same executor obligation as `DatasetQuery.filterTree`.
+
+The wire shapes are plain JSON, so other runtimes implement the same contract
+(the `sheetbase-studio` Python package does, over Ibis).
+`workspaceSourceFor(source, tableId)` binds one table to the workbench's
+`WorkspaceDataSource`. Implementations live in
+`@sheetbase-labs/sheetbase-studio`.
+
 ## Build
 
 `bun run build:lib` emits `dist-lib` (ESM + bundled `style.css`) and

@@ -39,7 +39,10 @@ export interface SheetbaseStudioProps {
   allowUpload?: boolean
   /** Where the in-browser DuckDB loads from (self-hosted for offline use). */
   wasm?: DuckDbWasmOptions
+  /** Controlled theme; omit to let the studio own it (with a toggle). */
   theme?: ThemeMode
+  /** Uncontrolled starting theme when nothing is stored. Default `"system"` — follows the OS / notebook. */
+  defaultTheme?: ThemeMode
   onThemeChange?(theme: ThemeMode): void
   /** Prefix for everything the studio persists (layout, views, charts). */
   persistKey?: string
@@ -68,7 +71,7 @@ export function SheetbaseStudio(props: SheetbaseStudioProps) {
   const persistKey = props.persistKey ?? 'sheetbase-studio'
   const limit = props.materialiseLimit ?? DEFAULT_LIMIT
   const allowUpload = props.allowUpload !== false
-  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({ theme: props.theme, onThemeChange: props.onThemeChange })
+  const { activeTheme, resolvedTheme, toggleTheme } = usePersistedTheme({ theme: props.theme, defaultTheme: props.defaultTheme ?? 'system', onThemeChange: props.onThemeChange })
   const given = useMemo(() => asList(props.sources), [props.sources])
   const uploadTarget = useMemo(() => given.find((source) => typeof source.upload === 'function'), [given])
   const [localSource, setLocalSource] = useState<MemorySource | null>(null)
@@ -241,6 +244,8 @@ export function SheetbaseStudio(props: SheetbaseStudioProps) {
       onToggleTheme={toggleTheme}
       bodyClassName="sbs-body"
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a file drop target; the keyboard path is the "Open file…" button */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: same drop target as above */}
       <div
         className={`sbs-drop${dragging ? ' is-dragging' : ''}`}
         onDragOver={allowUpload ? (event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setDragging(true) } } : undefined}

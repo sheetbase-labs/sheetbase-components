@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AdvancedSearch } from '@sheetbase-labs/sheetbase-advanced-search'
 import { App as Explorer, defaultChartSpec, serializeChartSvg, downloadText, type ChartSpec } from '@sheetbase-labs/sheetbase-explorer'
@@ -68,6 +69,23 @@ export const DEFAULT_LAYOUT: Layout = {
       ],
     },
   ],
+}
+
+/** Narrow screens: one stack, every pane a tab. */
+export const NARROW_LAYOUT: Layout = { kind: 'stack', id: 'sbs-all', panes: ['chart', 'fields', 'filters', 'table', 'sql'], active: 'chart' }
+const NARROW_WIDTH = 760
+
+/** Width of an element, tracked — decides the wide or narrow pane layout. */
+function useWidth(ref: React.RefObject<HTMLElement | null>): number | null {
+  const [width, setWidth] = useState<number | null>(null)
+  useEffect(() => {
+    const element = ref.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? null))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref])
+  return width
 }
 
 export interface WorkspaceProps {
@@ -249,6 +267,9 @@ export function Workspace(props: WorkspaceProps) {
     source, table, view, query: wb.query, chart: spec, sql: viewToSql(code), matchingRows,
   }), [source, table, view, wb.query, spec, code, matchingRows])
   const chartHost = useRef<HTMLDivElement>(null)
+  const layoutHost = useRef<HTMLDivElement>(null)
+  const width = useWidth(layoutHost)
+  const narrow = width !== null && width < NARROW_WIDTH
   const [exportNote, setExportNote] = useState<string | null>(null)
   const exportSvg = useCallback(() => {
     const stage = chartHost.current?.querySelector<HTMLElement>('.chart-stage')
@@ -305,11 +326,6 @@ export function Workspace(props: WorkspaceProps) {
     {
       id: 'chart',
       title: 'Chart',
-      actions: (
-        <>
-          <button type="button" className="sb-btn" onClick={exportSvg} title="Download the chart as SVG with its provenance embedded">Export SVG</button>
-        </>
-      ),
       content: (
         <div ref={chartHost} className="sbs-chart-host">
           <Explorer dataset={dataset} view={view} onViewChange={setView} spec={spec} onSpecChange={setSpec} theme={props.theme} onThemeChange={props.onThemeChange} showPanel={false} shareUrl={false} />
@@ -389,7 +405,10 @@ export function Workspace(props: WorkspaceProps) {
     </span>
   )
   const actions = (
-    <button type="button" className="sb-btn" onClick={exportProvenance} title="Download the source, table, filters, chart and SQL behind this view">Provenance</button>
+    <>
+      <button type="button" className="sb-btn" onClick={exportSvg} title="Download the chart as SVG with its provenance embedded">Export chart</button>
+      <button type="button" className="sb-btn" onClick={exportProvenance} title="Download the source, table, filters, chart and SQL behind this view">Provenance</button>
+    </>
   )
   return (
     <>
@@ -397,16 +416,21 @@ export function Workspace(props: WorkspaceProps) {
         status,
         actions,
         body: (
-          <PaneLayout
-            panes={panes}
-            defaultLayout={DEFAULT_LAYOUT}
-            persistKey={`${props.persistKey}:layout`}
-            adapter={layoutAdapter}
-            surface="shared"
-            paneMenu="hover"
-            theme={props.theme}
-            className="sb-panes--fit sbs-panes"
-          />
+          <div ref={layoutHost} className="sbs-layout-host">
+            {width !== null && (
+              <PaneLayout
+                key={narrow ? 'narrow' : 'wide'}
+                panes={panes}
+                defaultLayout={narrow ? NARROW_LAYOUT : DEFAULT_LAYOUT}
+                persistKey={`${props.persistKey}:layout${narrow ? ':narrow' : ''}`}
+                adapter={layoutAdapter}
+                surface="shared"
+                paneMenu="hover"
+                theme={props.theme}
+                className="sb-panes--fit sbs-panes"
+              />
+            )}
+          </div>
         ),
       })}
     </>

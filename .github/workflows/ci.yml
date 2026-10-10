@@ -53,8 +53,51 @@ jobs:
         working-directory: packages/advanced-search
         run: bun run build && bun run build:lib
 
+      - name: Build studio demo and library
+        working-directory: packages/studio
+        run: bun run build && bun run build:lib
+
       - name: Pack smoke — tarballs install + typecheck as a consumer
         run: node scripts/pack-smoke.mjs --skip-build
+
+  python:
+    name: Python package (sheetbase-studio)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install
+        run: bun install
+
+      - name: Build the Studio UI into the package
+        run: bun run --filter @sheetbase-labs/sheetbase-studio build:python
+
+      - name: Install the package
+        run: uv venv && uv pip install -e "python[dev]"
+
+      - name: pytest (filter parity, backend, server, widget)
+        run: .venv/bin/pytest python
+
+      - name: TypeScript ↔ Python contract test
+        env:
+          SHEETBASE_PYTHON: ${{ github.workspace }}/.venv/bin/python
+        working-directory: packages/studio
+        run: bunx vitest run src/sources/python.test.ts
+
+      - name: Build wheel
+        run: uv build python --out-dir dist-python
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheetbase-studio-wheel
+          path: dist-python/*.whl
 
   table-e2e:
     name: Table Playwright (${{ matrix.browser }})

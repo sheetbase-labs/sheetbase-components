@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes the six libraries to GitHub Packages (private, scoped to
+# Publishes the seven libraries to GitHub Packages (private, scoped to
 # `sheetbase-labs`) in dependency order when a v* tag lands.
 #
 # Auth is the built-in Actions token — `permissions: packages: write` plus
@@ -66,6 +66,6 @@ jobs:
 
       - name: Publish in dependency order (private, GitHub Packages)
         run: |
-          for pkg in shared table advanced-search explorer schema-editor rules-engine; do
+          for pkg in shared table advanced-search explorer schema-editor rules-engine studio; do
             (cd "packages/$pkg" && bun publish --access restricted)
           done
