@@ -302,7 +302,7 @@ export function Workspace(props: WorkspaceProps) {
       title: 'Chart',
       content: (
         <div ref={chartHost} className="sbs-chart-host">
-          <Explorer dataset={dataset} view={view} onViewChange={setView} spec={spec} onSpecChange={setSpec} theme={props.theme} onThemeChange={props.onThemeChange} showPanel={false} shareUrl={false} />
+          <Explorer dataset={dataset} view={view} onViewChange={setView} spec={spec} onSpecChange={setSpec} theme={props.theme} onThemeChange={props.onThemeChange} showPanel={false} shareUrl={false} showImport={false} />
         </div>
       ),
     },
@@ -399,7 +399,7 @@ export function Workspace(props: WorkspaceProps) {
                 persistKey={`${props.persistKey}:layout${mode === 'wide' ? '' : `:${mode}`}`}
                 adapter={layoutAdapter}
                 surface="shared"
-                paneMenu="hover"
+                paneMenu={mode === 'narrow' ? 'off' : 'hover'}
                 theme={props.theme}
                 className="sb-panes--fit sbs-panes"
               />

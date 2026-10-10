@@ -5,7 +5,8 @@ import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popove
 import { ROW_ID } from './lib/explore'
 import type { ChartKind, ChartSpec, DataAdapter, Dataset, SavedExploration } from './lib/types'
 
-export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, viewFilterLocked, onReset, onField, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+export function CommandBar({ showImport = true, menu, spec, dataset, sources, saved, libraryName, exportStatus, importStatus, dark, showThemeToggle, setSpec, onAnalysisSpec, viewFilterLocked, onReset, onField, onChoosePlot, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile, onMenuToggle, onMenuClose, onToggleDark }: {
+  showImport?: boolean
   menu: Menu
   spec: ChartSpec
   dataset: Dataset
@@ -45,7 +46,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
       <span className="command-spacer"/>{showThemeToggle && <ThemeToggleButton theme={dark ? 'dark' : 'light'} onToggle={onToggleDark} />}{menu && <button type="button" aria-label="Close menu" className="menu-backdrop" onClick={onMenuClose} />}
     </div>
     <div className="sb-subbar explorer-subbar">
-      <ViewMenus menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
+      <ViewMenus showImport={showImport} menu={menu} onMenuToggle={onMenuToggle} spec={spec} dataset={dataset} setSpec={setSpec} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} onExportSvg={onExportSvg} onExportPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} onSaveExploration={onSaveExploration} onLoadExploration={onLoadExploration} onDeleteExploration={onDeleteExploration} onLibraryName={onLibraryName} onLoadSource={onLoadSource} onOpenFile={onOpenFile} />
       <button type="button" className="explorer-reset" onClick={onReset}>Reset</button>
     </div>
   </>)

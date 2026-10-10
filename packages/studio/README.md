@@ -155,7 +155,8 @@ in a full page, a side panel or a notebook cell:
 
 `layoutModeFor(width, height)` and `LAYOUTS` expose the choice; each mode keeps
 its own saved arrangement. The chart always draws at its stage's real size, so
-text never scales. The top bar and toolbars wrap rather than hide controls,
+text never scales. Below 720 px the top bar is one row — table, source and a
+"⋯ More actions" menu with the rest — the chart toolbars tighten to two rows,
 and the fields pane condenses at its own width (container queries).
 
 ## Development

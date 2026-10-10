@@ -86,10 +86,18 @@ versions follow [SemVer](https://semver.org/).
   hosts that size it themselves.
 - **Explorer**: the command bar wraps instead of clipping tools at narrow
   widths.
+- **Explorer**: narrow canvases tighten both toolbars so the tools fit in two
+  rows on a phone. `showImport={false}` hides the Import menu for hosts that
+  own the data (Studio does), so the chart can't diverge from the page.
 - **Table**: in the default dark theme the selected row number and column
   label were drawn in their own background colour (fallback ink was
   `--accent-soft`); they now use `--accent-ink`. Presets that set
   `--grid-*-selected-ink` (v3) are unchanged.
+- **Studio**: on phones and narrow embeds the top bar is one row — table,
+  source and a "⋯ More actions" menu holding the row count, Open file, Export
+  chart, Provenance and the theme; notices float under the bar. A single
+  tabbed stack drops the redundant pane menu, and section headers (SQL "This
+  view as code") wrap their actions under the title.
 - **Advanced search**: the summary agrees with its counts — "1 condition ·
   1 group" — and its status text truncates before the Preview/Clear actions
   are pushed out of a narrow bar.

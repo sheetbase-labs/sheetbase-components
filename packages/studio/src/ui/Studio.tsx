@@ -14,6 +14,7 @@ import type { DuckDbWasmOptions } from '../sources/duckdb-wasm'
 import { ACCEPTED_FILE_TYPES } from '../sources/file'
 import { MemorySource } from '../sources/memory'
 import { loadAllRows, type Row } from './data'
+import { MoreMenu } from './MoreMenu'
 import { Workspace } from './Workspace'
 
 export interface TableRef {
@@ -220,11 +221,11 @@ export function SheetbaseStudio(props: SheetbaseStudioProps) {
       </select>
     </label>
   )
-  const fileButton = allowUpload && (
-    <>
-      <button type="button" className="sb-btn" onClick={() => fileInput.current?.click()} title="CSV, TSV, Parquet, JSON or Excel">Open file…</button>
-      <input ref={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple hidden onChange={(event) => { void openFiles(event.target.files); event.target.value = '' }} />
-    </>
+  const openFileButton = allowUpload && (
+    <button type="button" className="sb-btn" onClick={() => fileInput.current?.click()} title="CSV, TSV, Parquet, JSON or Excel">Open file…</button>
+  )
+  const fileInputElement = allowUpload && (
+    <input ref={fileInput} type="file" accept={ACCEPTED_FILE_TYPES} multiple hidden onChange={(event) => { void openFiles(event.target.files); event.target.value = '' }} />
   )
   const brand = <span className="sbs-brand">{props.title ?? 'Studio'}</span>
   const sourceBadge = resolved && <span className="sbs-badge" title={`${resolved.source.label} (${resolved.source.kind})`}>{resolved.source.kind}</span>
@@ -239,8 +240,19 @@ export function SheetbaseStudio(props: SheetbaseStudioProps) {
     <SheetbaseShell
       theme={activeTheme}
       className={`sbs-studio${props.className ? ` ${props.className}` : ''}`}
-      toolbar={<>{brand}{picker}{sourceBadge}{fileButton}{noticeEl}</>}
-      actions={<>{chrome.status}{chrome.actions}</>}
+      toolbar={<>{brand}{picker}{sourceBadge}<span className="sbs-wide-only">{openFileButton}</span>{fileInputElement}{noticeEl}</>}
+      actions={
+        <>
+          <span className="sbs-wide-only">{chrome.status}{chrome.actions}</span>
+          {/* Narrow hosts: the same actions behind one button, so the bar stays one row. */}
+          <MoreMenu className="sbs-narrow-only">
+            {chrome.status && <div className="sbs-more-status">{chrome.status}</div>}
+            {openFileButton}
+            {chrome.actions}
+            <button type="button" className="sb-btn" onClick={toggleTheme}>{resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
+          </MoreMenu>
+        </>
+      }
       onToggleTheme={toggleTheme}
       bodyClassName="sbs-body"
     >

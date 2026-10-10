@@ -107,6 +107,12 @@ export interface AppProps {
    * Default true; embedding hosts that own the URL pass false.
    */
   shareUrl?: boolean
+  /**
+   * Show the Import menu (sample sources, open a file into the chart). Default
+   * true; hosts that own the data — and its filters and provenance — pass false
+   * so the chart can't quietly diverge from the rest of the page.
+   */
+  showImport?: boolean
   /** Rows sampled for raw-row charts on remote datasets. Default 5000. */
   remoteSampleSize?: number
 }
@@ -689,7 +695,7 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <CommandBar showImport={props.showImport !== false} menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
     {remoteRawCurrent?.sampled && !remoteState && (
       <div className="remote-note remote-note--strip">Drawn from a random sample of {remoteRawCurrent.rows.length.toLocaleString()} of {remoteRawCurrent.totalRows.toLocaleString()} matching rows. Aggregated charts and histograms use every row.</div>
     )}

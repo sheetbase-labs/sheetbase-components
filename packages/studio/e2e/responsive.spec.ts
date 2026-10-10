@@ -112,3 +112,45 @@ test("adapts to its container, not the window (notebook cell)", async ({ page })
   // 600px wide is below the narrow threshold: one tabbed stack.
   await expect(page.getByRole("tab", { name: "Fields" })).toBeVisible();
 });
+
+test.describe("phone headers", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the top bar is one row with the rest behind More actions", async ({ page }) => {
+    await ready(page);
+    const bar = page.locator(".sbs-studio > .sb-frame > .sb-topbar");
+    expect((await bar.boundingBox())?.height ?? 0).toBeLessThanOrEqual(40);
+    await expect(bar.getByRole("button", { name: "Export chart" })).toBeHidden();
+
+    const more = page.getByRole("button", { name: "More actions" });
+    await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    for (const name of ["Open file…", "Export chart", "Provenance", "Dark mode"]) {
+      await expect(page.getByRole("button", { name })).toBeVisible();
+    }
+    // Escape closes and hands focus back to the trigger.
+    await page.keyboard.press("Escape");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(more).toBeFocused();
+
+    // Choosing an item runs it and closes the menu.
+    await more.click();
+    await page.getByRole("button", { name: "Dark mode" }).click();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".sbs-studio")).toHaveAttribute("data-theme", "dark");
+  });
+
+  test("headers above the chart stay compact", async ({ page }) => {
+    await ready(page);
+    const stage = await page.locator(".chart-stage").boundingBox();
+    // Top bar + pane tabs + two chart toolbars.
+    expect(stage?.y ?? 999).toBeLessThanOrEqual(170);
+    // One stack of tabs needs no pane menu beside Studio's own.
+    await expect(page.getByRole("button", { name: "Pane actions" })).toHaveCount(0);
+  });
+
+  test("the chart's Import menu is Studio's job, not the explorer's", async ({ page }) => {
+    await ready(page);
+    await expect(page.locator(".explorer-subbar").getByRole("button", { name: /^Import/ })).toHaveCount(0);
+  });
+});

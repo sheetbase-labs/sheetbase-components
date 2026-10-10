@@ -5,6 +5,13 @@
 .sbs-studio > .sb-frame > .sb-topbar { gap: 6px; }
 .sbs-studio > .sb-frame > .sb-topbar .sb-btn { white-space: nowrap; flex: none; }
 .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { gap: 8px; min-width: 0; }
+.sbs-wide-only { display: contents; }
+.sbs-narrow-only { display: none; }
+.sbs-more { position: relative; }
+.sbs-more-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 6px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); }
+.sbs-more-panel .sb-btn { width: 100%; justify-content: flex-start; text-align: left; height: 32px; }
+.sbs-more-status { padding: 4px 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.sbs-more-status .sbs-status { white-space: normal; flex-wrap: wrap; }
 .sbs-body { min-height: 0; height: 100%; display: flex; }
 .sbs-body > * { flex: 1 1 0; min-width: 0; min-height: 0; }
 
@@ -131,12 +138,15 @@
 .sbs-sql-code { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); }
 .sbs-sql:not(:has(.sbs-sql-schema)) { grid-template-columns: minmax(0, 1fr); }
 .sbs-section-head {
-  flex: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 10px;
+  flex: none; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; min-height: 32px; padding: 4px 8px 4px 10px; box-sizing: border-box;
   border-bottom: 1px solid var(--border); background: var(--panel-2);
   font-size: 10px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
 }
 .sbs-section-head small { text-transform: none; letter-spacing: 0; font-weight: 500; }
-.sbs-section-actions { display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.sbs-section-head > span:first-child { white-space: nowrap; }
+/* Narrow panes: the actions drop under the title instead of colliding with it. */
+.sbs-section-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.sbs-section-actions .sb-btn, .sbs-section-actions .sb-segmented button { white-space: nowrap; }
 .sbs-section-actions .sb-segmented button { text-transform: none; }
 .sbs-code {
   flex: 1 1 auto; min-height: 0; margin: 0; padding: 10px 12px; overflow: auto; border: 0; resize: none; outline: none;
@@ -164,13 +174,18 @@
   .sbs-field-row .sbs-spark, .sbs-field-row .sbs-spark--empty, .sbs-field-row .sbs-hint { display: none; }
 }
 
-/* Narrow hosts (phones, a notebook cell, a side panel): the top bar wraps
-   rather than hiding actions off the edge. Sized by the studio, not the viewport. */
+/* Narrow hosts (phones, a notebook cell, a side panel): one row — table,
+   source and a "⋯" menu holding the rest. Sized by the studio, not the viewport. */
 @container sbs-studio (max-width: 720px) {
-  .sbs-studio > .sb-frame > .sb-topbar { height: auto; min-height: 33px; flex-wrap: wrap; row-gap: 2px; padding-block: 3px; }
-  .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { margin-left: auto; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; }
-  .sbs-brand { display: none; }
+  .sbs-studio > .sb-frame > .sb-topbar { flex-wrap: nowrap; overflow: visible; position: relative; z-index: 30; gap: 6px; }
+  .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { margin-left: auto; flex: none; }
+  .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions > .sb-theme-btn { display: none; }
+  .sbs-wide-only, .sbs-brand { display: none; }
+  .sbs-narrow-only { display: block; }
+  .sbs-picker { flex: 1 1 auto; min-width: 0; }
+  .sbs-picker select { width: 100%; max-width: none; text-overflow: ellipsis; }
+  /* Notices (an upload in progress, an error) float under the one-row bar instead of squeezing it. */
+  .sbs-notice { position: absolute; top: calc(100% + 4px); left: 8px; right: 8px; z-index: 50; padding: 6px 8px 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); box-shadow: var(--shadow); white-space: normal; justify-content: space-between; }
   .sbs-sql { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; overflow: auto; }
   .sbs-sql-editor, .sbs-sql-code, .sbs-sql-schema { grid-column: 1; grid-row: auto; min-height: 220px; }
-  .sbs-picker select { max-width: 160px; }
 }

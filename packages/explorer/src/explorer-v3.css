@@ -84,3 +84,14 @@
 :where(.sheetbase-explorer) tbody tr.selected-data-row td { background: var(--accent-soft) !important; }
 :where(.sheetbase-explorer) tbody tr.selected-data-row td:first-child { box-shadow: inset 2px 0 var(--accent); }
 @media (max-width: 1100px) { .explorer-tool small { display: none; }.filter-popover { width: 430px; }.series-legend { max-width:45%; } }
+
+/* Narrow hosts (phones, a notebook cell): the toolbars size by the canvas's own
+   width and tighten so the tools stay on as few rows as possible. */
+.explorer-canvas-v3 { container: sb-explorer-canvas / inline-size; }
+@container sb-explorer-canvas (max-width: 480px) {
+  .explorer-commandbar-v4 { gap: 1px; padding: 0 4px; }
+  .explorer-subbar { gap: 1px; padding: 3px 4px; }
+  .explorer-commandbar-v4 .explorer-tool, .explorer-subbar .explorer-tool { padding: 0 6px; gap: 2px; }
+  .explorer-tool small, .explorer-tool b { display: none; }
+  .explorer-reset { padding: 0 8px; }
+}

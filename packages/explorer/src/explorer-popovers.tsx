@@ -244,7 +244,8 @@ export function DataMenus({ menu, onMenuToggle, spec, dataset, setSpec, onAnalys
   )
 }
 
-export function ViewMenus({ menu, onMenuToggle, spec, dataset, setSpec, sources, saved, libraryName, exportStatus, importStatus, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile }: {
+export function ViewMenus({ showImport = true, menu, onMenuToggle, spec, dataset, setSpec, sources, saved, libraryName, exportStatus, importStatus, onExportSvg, onExportPng, onCopySpec, onCopyLink, onSaveExploration, onLoadExploration, onDeleteExploration, onLibraryName, onLoadSource, onOpenFile }: {
+  showImport?: boolean
   menu: Menu
   onMenuToggle(id: Exclude<Menu, null>): void
   spec: ChartSpec
@@ -272,7 +273,7 @@ export function ViewMenus({ menu, onMenuToggle, spec, dataset, setSpec, sources,
       <div className="tool-anchor"><MenuButton id="style" label="Style" active={menu === 'style'} onToggle={onMenuToggle} />{menu === 'style' && <div className="tool-popover inspector-popover style-popover"><StylePopover spec={spec} columns={dataset.columns} setSpec={setSpec} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="export" label="Export" active={menu === 'export'} onToggle={onMenuToggle} />{menu === 'export' && <div className="tool-popover inspector-popover"><ExportPopover status={exportStatus} onSvg={onExportSvg} onPng={onExportPng} onCopySpec={onCopySpec} onCopyLink={onCopyLink} /></div>}</div>
       <div className="tool-anchor"><MenuButton id="library" label="Library" detail={saved.length ? String(saved.length) : undefined} active={menu === 'library'} onToggle={onMenuToggle} />{menu === 'library' && <div className="tool-popover inspector-popover library-popover"><LibraryPopover saved={saved} name={libraryName} onName={onLibraryName} onSave={onSaveExploration} onLoad={onLoadExploration} onDelete={onDeleteExploration} /></div>}</div>
-      <div className="tool-anchor"><MenuButton id="import" label="Import" active={menu === 'import'} onToggle={onMenuToggle} />{menu === 'import' && <div className="tool-popover inspector-popover"><ImportPopover sources={sources} status={importStatus} onLoadSource={onLoadSource} onOpenFile={onOpenFile} /></div>}</div>
+      {showImport && <div className="tool-anchor"><MenuButton id="import" label="Import" active={menu === 'import'} onToggle={onMenuToggle} />{menu === 'import' && <div className="tool-popover inspector-popover"><ImportPopover sources={sources} status={importStatus} onLoadSource={onLoadSource} onOpenFile={onOpenFile} /></div>}</div>}
     </>
   )
 }
