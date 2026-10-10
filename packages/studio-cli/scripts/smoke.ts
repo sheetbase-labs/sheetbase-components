@@ -95,9 +95,21 @@ try {
   const script = /src="\.?\/?(assets\/[^"]+\.js)"/.exec(html)?.[1]
   check('serves UI assets', Boolean(script) && (await api(`/${script}`)).ok)
 } finally {
+  // Wait for the server to exit before cleaning up: Windows keeps the
+  // unpacked DuckDB DLL locked until the process is gone.
+  const exited = new Promise<void>((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) resolve()
+    else child.once('exit', () => resolve())
+  })
   child.kill()
-  fixtures.cleanup()
-  rmSync(cache, { recursive: true, force: true })
+  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 10_000))])
+  for (const [label, remove] of [['fixtures', () => fixtures.cleanup()], ['cache', () => rmSync(cache, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })]] as const) {
+    try {
+      remove()
+    } catch (error) {
+      console.warn(`(couldn't remove the ${label} directory: ${error instanceof Error ? error.message : String(error)})`)
+    }
+  }
 }
 
 if (failures) {

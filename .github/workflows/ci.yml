@@ -248,7 +248,15 @@ jobs:
 
       - name: Live database tests (seed + explore through the connectors)
         working-directory: packages/studio-cli
-        run: bun run fetch:natives && bunx vitest run test/databases.test.ts --reporter=default --reporter=github-actions
+        shell: bash
+        run: |
+          bun run fetch:natives
+          set -o pipefail
+          bunx vitest run test/databases.test.ts 2>&1 | tee vitest.log || {
+            # Surface the failure in the run summary (annotations).
+            grep -E "Error|×|FAIL|→|expected" vitest.log | head -40 | sed 's/^/::error title=databases::/'
+            exit 1
+          }
 
       - name: Build and smoke-test the binary against both databases
         working-directory: packages/studio-cli
