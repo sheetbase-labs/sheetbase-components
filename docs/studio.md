@@ -1,16 +1,10 @@
 # Studio — design record
 
-What Sheetbase Studio is for, the decisions behind it, and what is
-deliberately left out. Usage lives in `packages/studio/README.md` and
-`python/README.md`.
+What Sheetbase Studio is for, the decisions behind it, and what is deliberately left out. Usage lives in `packages/studio/README.md` and `python/README.md`.
 
 ## Goal
 
-Scientists often open a dataset without knowing what is in it. Studio makes
-the first ten minutes productive — what columns exist, how complete they are,
-how values distribute, what a filter does to the rest — and lets power users
-slice with SQL, against any upstream: rows a host already has, an uploaded
-file, an API, a database, or a pandas/Ibis object in Python.
+Scientists often open a dataset without knowing what is in it. Studio makes the first ten minutes productive — what columns exist, how complete they are, how values distribute, what a filter does to the rest — and lets power users slice with SQL, against any upstream: rows a host already has, an uploaded file, an API, a database, or a pandas/Ibis object in Python.
 
 ## Decisions (October 2026)
 
@@ -44,34 +38,19 @@ SheetbaseStudio
        └─ SQL      (source.sql → new query table; view as SQL/Ibis/pandas)
 ```
 
-**Local or at source.** A table with a known row count at or below
-`materialiseLimit` (50,000) is paged into the browser once; everything else
-stays at the source. The UI says which (*at source*), so sampled charts are
-never mistaken for complete ones.
+**Local or at source.** A table with a known row count at or below `materialiseLimit` (50,000) is paged into the browser once; everything else stays at the source. The UI says which (*at source*), so sampled charts are never mistaken for complete ones.
 
-**Read-only throughout.** No source writes back; the rules engine (the write
-path) is not part of Studio.
+**Read-only throughout.** No source writes back; the rules engine (the write path) is not part of Studio.
 
-**Provenance.** Exports carry the source, table (with the SQL that made a
-query table), filter tree, chart spec, readable SQL and matching row count —
-enough to reproduce or audit a figure. `sheetbase.apply_view` reproduces the
-view on an Ibis table with exact semantics.
+**Provenance.** Exports carry the source, table (with the SQL that made a query table), filter tree, chart spec, readable SQL and matching row count — enough to reproduce or audit a figure. `sheetbase.apply_view` reproduces the view on an Ibis table with exact semantics.
 
-**Any size.** Wide, short and narrow layouts are picked from the body's own
-size; the e2e suite (`packages/studio/e2e`) checks phone, tablet, laptop and
-wall sizes, a resize across every layout, and an embedded 600×520 cell.
+**Any size.** Wide, short and narrow layouts are picked from the body's own size; the e2e suite (`packages/studio/e2e`) checks phone, tablet, laptop and wall sizes, a resize across every layout, and an embedded 600×520 cell.
 
 ## Known limits and follow-ups
 
-- **Saved views** remain the design in `docs/saved-views.md`; Studio persists
-  the current view and chart per table in local storage only.
-- **Datetimes without an offset** are read as UTC on the server and in DuckDB;
-  the browser's `buildPredicate` reads them in local time. ISO strings with
-  `Z` (what every source emits) agree everywhere.
-- **Mixed-type text columns**: DuckDB and Ibis casts are stricter than JS
-  `Number()`/`Date.parse` for exotic forms (hex, slashed dates).
-- **Samples** on the Python side are seeded Bernoulli samples capped at *n*;
-  very small filtered sets can return slightly fewer than *n* rows.
+- **Saved views** remain the design in `docs/saved-views.md`; Studio persists the current view and chart per table in local storage only.
+- **Datetimes without an offset** are read as UTC on the server and in DuckDB; the browser's `buildPredicate` reads them in local time. ISO strings with `Z` (what every source emits) agree everywhere.
+- **Mixed-type text columns**: DuckDB and Ibis casts are stricter than JS `Number()`/`Date.parse` for exotic forms (hex, slashed dates).
+- **Samples** on the Python side are seeded Bernoulli samples capped at *n*; very small filtered sets can return slightly fewer than *n* rows.
 - **Wide tables**: profiles cover the first 200 fields.
-- **No live JupyterLab test** in CI yet: the widget's kernel side is tested in
-  pytest and its front end against the HTTP API with a model double.
+- **No live JupyterLab test** in CI yet: the widget's kernel side is tested in pytest and its front end against the HTTP API with a model double.

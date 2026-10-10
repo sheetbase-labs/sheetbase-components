@@ -1,23 +1,14 @@
 # Sheetbase Studio
 
-Explore and chart any table. Studio puts the Sheetbase components around one
-shared view so a scientist can find out what a dataset holds before they know
-what to ask of it, and a power user can drop to SQL without leaving the page:
+Explore and chart any table. Studio puts the Sheetbase components around one shared view so a scientist can find out what a dataset holds before they know what to ask of it, and a power user can drop to SQL without leaving the page:
 
-- **Fields** — every column profiled: missing values, distinct count,
-  quantiles, range, most frequent values and a distribution. Hints flag
-  mostly-empty, constant and unique-per-row columns. Click a value or a bin to
-  filter on it; *Chart it*, *As x*, *As y* and *Colour by* drive the chart.
+- **Fields** — every column profiled: missing values, distinct count, quantiles, range, most frequent values and a distribution. Hints flag mostly-empty, constant and unique-per-row columns. Click a value or a bin to filter on it; *Chart it*, *As x*, *As y* and *Colour by* drive the chart.
 - **Chart** — the explorer, controlled by the studio.
 - **Filters** — the advanced search builder (AND / OR / NOT).
 - **Rows** — the read-only paged grid.
-- **SQL** — read-only queries whose results open as new, explorable tables,
-  plus the current view written as SQL, Ibis and pandas.
+- **SQL** — read-only queries whose results open as new, explorable tables, plus the current view written as SQL, Ibis and pandas.
 
-All five panes follow the same `AnalysisView`, so a click in one re-filters the
-others. Every chart can be exported as SVG with its **provenance** embedded
-(source, table, the SQL behind a query table, filter tree, chart spec, matching
-row count); the top bar's *Provenance* button saves the same record as JSON.
+All five panes follow the same `AnalysisView`, so a click in one re-filters the others. Every chart can be exported as SVG with its **provenance** embedded (source, table, the SQL behind a query table, filter tree, chart spec, matching row count); the top bar's *Provenance* button saves the same record as JSON.
 
 ```tsx
 import { SheetbaseStudio, MemorySource } from "@sheetbase-labs/sheetbase-studio";
@@ -28,20 +19,11 @@ const source = new MemorySource({ tables: [{ id: "runs", label: "Bioreactor runs
 <SheetbaseStudio sources={source} />
 ```
 
-Peers: `react`, `react-dom` and `@tanstack/react-virtual` (the grid). Like the
-other packages it renders inside `.sheetbase-scope` and reads only theme
-variables, so a host retheme applies. Uncontrolled, it follows the OS (or
-notebook) light/dark setting until the user toggles it — pass `defaultTheme`
-to start elsewhere, or `theme` + `onThemeChange` to own it.
+Peers: `react`, `react-dom` and `@tanstack/react-virtual` (the grid). Like the other packages it renders inside `.sheetbase-scope` and reads only theme variables, so a host retheme applies. Uncontrolled, it follows the OS (or notebook) light/dark setting until the user toggles it — pass `defaultTheme` to start elsewhere, or `theme` + `onThemeChange` to own it.
 
 ## Sources
 
-A source is anything that implements `StudioDataSource` from
-`@sheetbase-labs/sheetbase-shared`: a catalog of tables plus `page`,
-`aggregate`, and optionally `profile`, `histogram`, `sample`, `sql` and
-`upload`. Every operation runs where the data lives; the UI only ever receives
-pages, buckets, profiles, bins and samples. Pass one source or several — the
-table picker groups tables by source.
+A source is anything that implements `StudioDataSource` from `@sheetbase-labs/sheetbase-shared`: a catalog of tables plus `page`, `aggregate`, and optionally `profile`, `histogram`, `sample`, `sql` and `upload`. Every operation runs where the data lives; the UI only ever receives pages, buckets, profiles, bins and samples. Pass one source or several — the table picker groups tables by source.
 
 | Source | For | Executes |
 |---|---|---|
@@ -50,29 +32,20 @@ table picker groups tables by source.
 | `createHttpSource({ baseUrl })` | your API, or `sheetbase serve` | the server |
 | `HttpSource.connect(transport)` | anything else that can carry a request (the notebook widget uses its comm) | the other end |
 
-Files (CSV, TSV, JSON/NDJSON, Excel, Parquet) can be dropped anywhere on the
-studio or opened from the top bar. They go to the first source that accepts
-uploads, otherwise into an in-browser DuckDB.
+Files (CSV, TSV, JSON/NDJSON, Excel, Parquet) can be dropped anywhere on the studio or opened from the top bar. They go to the first source that accepts uploads, otherwise into an in-browser DuckDB.
 
 ### Small tables come local, large ones stay put
 
-Tables with at most `materialiseLimit` rows (default 50,000) are pulled into
-the browser once: profiles are instant and box, violin and heatmap charts use
-every row. Larger tables — and any table whose row count the source can't give
-cheaply — stay at the source, and the top bar says so (*at source*). There:
+Tables with at most `materialiseLimit` rows (default 50,000) are pulled into the browser once: profiles are instant and box, violin and heatmap charts use every row. Larger tables — and any table whose row count the source can't give cheaply — stay at the source, and the top bar says so (*at source*). There:
 
 - aggregated charts (bar, line, pie, …) aggregate at the source;
 - histograms use exact bins from the source;
-- scatter, box, violin and heatmap draw a seeded random sample of 5,000
-  matching rows, with a strip saying how many rows the sample stands for;
-- profiles and the matching-row count come from the source and follow the
-  filter (or all rows — the *Filtered / All rows* switch).
+- scatter, box, violin and heatmap draw a seeded random sample of 5,000 matching rows, with a strip saying how many rows the sample stands for;
+- profiles and the matching-row count come from the source and follow the filter (or all rows — the *Filtered / All rows* switch).
 
 ### Offline and locked-down deployments
 
-DuckDB-WASM loads its worker and `.wasm` from jsDelivr by default. To serve
-them yourself (air-gapped labs, GxP systems), import them with Vite's `?url`
-and pass the bundles:
+DuckDB-WASM loads its worker and `.wasm` from jsDelivr by default. To serve them yourself (air-gapped labs, GxP systems), import them with Vite's `?url` and pass the bundles:
 
 ```ts
 import mvpModule from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
@@ -83,15 +56,11 @@ import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
 <SheetbaseStudio wasm={{ bundles: { mvp: { mainModule: mvpModule, mainWorker: mvpWorker }, eh: { mainModule: ehModule, mainWorker: ehWorker } } }} … />
 ```
 
-Ingestion never needs a DuckDB extension: rows and JSON load through DuckDB's
-built-in CSV reader, Excel is parsed in JavaScript, and Parquet falls back to
-a pure-JS reader (`hyparquet`) when DuckDB's Parquet extension can't be
-fetched. Nothing is downloaded until someone opens a file or runs SQL.
+Ingestion never needs a DuckDB extension: rows and JSON load through DuckDB's built-in CSV reader, Excel is parsed in JavaScript, and Parquet falls back to a pure-JS reader (`hyparquet`) when DuckDB's Parquet extension can't be fetched. Nothing is downloaded until someone opens a file or runs SQL.
 
 ## The wire contract
 
-`HttpSource` speaks the routes the table and explorer already use, plus a few
-under `/api/studio` (all JSON; errors are non-2xx with `{ error }`):
+`HttpSource` speaks the routes the table and explorer already use, plus a few under `/api/studio` (all JSON; errors are non-2xx with `{ error }`):
 
 | Route | Body / params | Response |
 |---|---|---|
@@ -104,48 +73,29 @@ under `/api/studio` (all JSON; errors are non-2xx with `{ error }`):
 | `POST /api/studio/sql` | `{ sql }` | `TableInfo` of the new query table |
 | `POST /api/studio/upload` | multipart `file` | `{ tables: TableInfo[] }` |
 
-Types are in `@sheetbase-labs/sheetbase-shared` (`source.ts`). Rows are plain
-JSON: numbers, booleans, strings, ISO dates (`2026-03-15`) and datetimes
-(`2026-03-15T08:30:00.000Z`).
+Types are in `@sheetbase-labs/sheetbase-shared` (`source.ts`). Rows are plain JSON: numbers, booleans, strings, ISO dates (`2026-03-15`) and datetimes (`2026-03-15T08:30:00.000Z`).
 
-The [`sheetbase-studio` Python package](../../python/README.md) implements the
-contract over Ibis, so pandas, polars, Parquet files and Postgres/Snowflake/
-BigQuery tables all explore the same way — in the browser (`sheetbase serve`)
-or as a notebook widget (`sheetbase.explore(df)`).
+The [`sheetbase-studio` Python package](../../python/README.md) implements the contract over Ibis, so pandas, polars, Parquet files and Postgres/Snowflake/ BigQuery tables all explore the same way — in the browser (`sheetbase serve`) or as a notebook widget (`sheetbase.explore(df)`).
 
 ## One filter semantics, three executors
 
-Filters are `FilterNode` trees with `buildPredicate` semantics (loose
-equality, NULL handling, `NOT` = none of). They are executed by:
+Filters are `FilterNode` trees with `buildPredicate` semantics (loose equality, NULL handling, `NOT` = none of). They are executed by:
 
 - `MemorySource` — `buildPredicate` itself;
-- every DuckDB source — `filterToSql` (`src/lib/sql-compile.ts`), which picks
-  the same comparison arm per column type and value type and keeps every
-  condition NULL-free so `NOT` can't flip;
+- every DuckDB source — `filterToSql` (`src/lib/sql-compile.ts`), which picks the same comparison arm per column type and value type and keeps every condition NULL-free so `NOT` can't flip;
 - the Python package — `sheetbase.compile_filter`, the same rules over Ibis.
 
-`fixtures/filter-parity.json` pins them together: 70+ cases run against
-DuckDB here, in the Python tests, and through a live Python server when
-`SHEETBASE_PYTHON` is set (`src/sources/python.test.ts`). Regenerate it after
-changing the cases with `bun run parity`.
+`fixtures/filter-parity.json` pins them together: 70+ cases run against DuckDB here, in the Python tests, and through a live Python server when `SHEETBASE_PYTHON` is set (`src/sources/python.test.ts`). Regenerate it after changing the cases with `bun run parity`.
 
-`filterToSql(tree, types, { mode: "readable" })` gives the hand-written
-version shown in the SQL pane; `viewToSql`, `viewToIbis` and `viewToPandas`
-write the whole view.
+`filterToSql(tree, types, { mode: "readable" })` gives the hand-written version shown in the SQL pane; `viewToSql`, `viewToIbis` and `viewToPandas` write the whole view.
 
 ## Read-only SQL
 
-SQL must be one `SELECT` / `WITH` query. In the browser it runs as
-`CREATE TEMP VIEW … AS (<query>)`, which DuckDB only accepts for a query, so
-DDL, DML and a second statement fail to parse rather than run. The Python
-server checks queries with sqlglot first (see its README). Results register as
-`query_N` tables in the catalog and can be filtered, profiled, charted and
-joined by later queries.
+SQL must be one `SELECT` / `WITH` query. In the browser it runs as `CREATE TEMP VIEW … AS (<query>)`, which DuckDB only accepts for a query, so DDL, DML and a second statement fail to parse rather than run. The Python server checks queries with sqlglot first (see its README). Results register as `query_N` tables in the catalog and can be filtered, profiled, charted and joined by later queries.
 
 ## Screen sizes and embedding
 
-Studio sizes itself to its container, not the window, so the same rules hold
-in a full page, a side panel or a notebook cell:
+Studio sizes itself to its container, not the window, so the same rules hold in a full page, a side panel or a notebook cell:
 
 | Body size | Layout |
 | --- | --- |
@@ -153,11 +103,7 @@ in a full page, a side panel or a notebook cell:
 | ≥ 760 px wide, 300–600 px tall | Fields beside one tabbed stack (chart, filters, rows, SQL) |
 | < 760 px wide, or < 300 px tall | One tabbed stack |
 
-`layoutModeFor(width, height)` and `LAYOUTS` expose the choice; each mode keeps
-its own saved arrangement. The chart always draws at its stage's real size, so
-text never scales. Below 720 px the top bar is one row — table, source and a
-"⋯ More actions" menu with the rest — the chart toolbars tighten to two rows,
-and the fields pane condenses at its own width (container queries).
+`layoutModeFor(width, height)` and `LAYOUTS` expose the choice; each mode keeps its own saved arrangement. The chart always draws at its stage's real size, so text never scales. Below 720 px the top bar is one row — table, source and a "⋯ More actions" menu with the rest — the chart toolbars tighten to two rows, and the fields pane condenses at its own width (container queries).
 
 ## Development
 
@@ -170,5 +116,4 @@ bun run --filter @sheetbase-labs/sheetbase-studio build:python   # UI for the Py
 bun run --filter @sheetbase-labs/sheetbase-studio test:e2e       # Playwright: layout from 320×568 to 2560×1440
 ```
 
-Tests run the DuckDB compiler and sources against native DuckDB
-(`@duckdb/node-api`) — the same SQL the WASM engine runs in the browser.
+Tests run the DuckDB compiler and sources against native DuckDB (`@duckdb/node-api`) — the same SQL the WASM engine runs in the browser.
