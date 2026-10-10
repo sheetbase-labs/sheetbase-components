@@ -565,6 +565,9 @@ function samePoint(a: GridPoint, b: GridPoint): boolean {
   return a.row === b.row && a.column === b.column;
 }
 
+/** What the clipboard handlers read: React's synthetic event or a native one. */
+type ClipboardEventLike = { preventDefault(): void; clipboardData: DataTransfer };
+
 export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(function Spreadsheet({
   initialData,
   initialState,
@@ -2106,7 +2109,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   }, [data, fieldIds, keyFor]);
 
   /** Writes both clipboard channels: raw TSV plus the calculated-values channel Excel re-paste uses. */
-  const writeClipboard = useCallback((event: React.ClipboardEvent, payload: SpreadsheetClipboardPayload, source: GridSelection) => {
+  const writeClipboard = useCallback((event: ClipboardEventLike, payload: SpreadsheetClipboardPayload, source: GridSelection) => {
     event.clipboardData.setData("text/plain", payload.text);
     // The calculated channel is keyed by displayed coordinate so the second
     // read lines up with the same selection; values come from the stored cell.
@@ -2124,7 +2127,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     event.clipboardData.setData("application/x-sheetbase-values", selectionToTsv(calculated, source));
   }, [cellKeyAt, data, sourceRowOf, worksheet]);
 
-  const onCopy = (event: React.ClipboardEvent) => {
+  const onCopy = (event: ClipboardEventLike) => {
     event.preventDefault();
     const payload = clipboardPayloadFor(selection);
     const resolved = resolveClipboardPayload(clipboard?.onCopy?.(payload), payload);
@@ -2135,7 +2138,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     updateCutStatus(null);
     announce(`Copied ${selectionLabel(selection)}`);
   };
-  const onCut = (event: React.ClipboardEvent) => {
+  const onCut = (event: ClipboardEventLike) => {
     event.preventDefault();
     if (readOnly) return;
     const payload = clipboardPayloadFor(selection);
@@ -2149,7 +2152,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     const intended = beforeCellsChange ? clearRangeTargets(data, selection, keyFor) : undefined;
     commit(clearSelection(data, selection, canEdit, keyFor), "Cut range", selectionAddresses(selection, keyFor), { source: "clear", intended });
   };
-  const onPaste = (event: React.ClipboardEvent) => {
+  const onPaste = (event: ClipboardEventLike) => {
     event.preventDefault();
     if (readOnly) { pasteValuesNext.current = false; return; }
     const values = event.clipboardData.getData("application/x-sheetbase-values");
@@ -2207,6 +2210,33 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     };
     applyChunk();
   };
+  // Browsers aim copy/cut/paste at the document's text selection, not at focus.
+  // Clicking a cell doesn't move that selection, so after an editor closes it
+  // can sit outside the grid and Ctrl+C on the focused grid reaches some other
+  // element. While the grid has focus, take those strays too; events that
+  // already target the grid (or its cell editor) stay with the React handlers.
+  const clipboardHandlers = useRef({ onCopy, onCut, onPaste });
+  clipboardHandlers.current = { onCopy, onCut, onPaste };
+  useEffect(() => {
+    const forward = (kind: "onCopy" | "onCut" | "onPaste") => (event: ClipboardEvent) => {
+      const root = viewportRef.current;
+      if (!root || !event.clipboardData || event.defaultPrevented) return;
+      if (event.target instanceof Node && root.contains(event.target)) return;
+      if (!root.contains(document.activeElement)) return;
+      clipboardHandlers.current[kind]({ preventDefault: () => event.preventDefault(), clipboardData: event.clipboardData });
+    };
+    const onDocumentCopy = forward("onCopy");
+    const onDocumentCut = forward("onCut");
+    const onDocumentPaste = forward("onPaste");
+    document.addEventListener("copy", onDocumentCopy);
+    document.addEventListener("cut", onDocumentCut);
+    document.addEventListener("paste", onDocumentPaste);
+    return () => {
+      document.removeEventListener("copy", onDocumentCopy);
+      document.removeEventListener("cut", onDocumentCut);
+      document.removeEventListener("paste", onDocumentPaste);
+    };
+  }, []);
 
   const resizeColumn = (column: number, event: React.PointerEvent) => {
     event.preventDefault();

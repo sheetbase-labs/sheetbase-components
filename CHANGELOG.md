@@ -89,6 +89,11 @@ versions follow [SemVer](https://semver.org/).
 - **Explorer**: narrow canvases tighten both toolbars so the tools fit in two
   rows on a phone. `showImport={false}` hides the Import menu for hosts that
   own the data (Studio does), so the chart can't diverge from the page.
+- **Table**: copy, cut and paste work whenever the grid has focus. Browsers
+  aim clipboard events at the page's text selection, which a cell click
+  doesn't move — after an editor closed it could sit outside the grid, so
+  Ctrl+C silently did nothing (seen on Chromium 141). Stray events are now
+  taken by the focused grid; events inside it are unchanged.
 - **Table**: in the default dark theme the selected row number and column
   label were drawn in their own background colour (fallback ink was
   `--accent-soft`); they now use `--accent-ink`. Presets that set
