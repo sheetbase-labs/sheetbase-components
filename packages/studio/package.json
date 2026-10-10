@@ -37,7 +37,9 @@
     "build:standalone": "vite build --config vite.standalone.config.ts",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "parity": "bun scripts/gen-parity.ts"
+    "parity": "UPDATE_PARITY=1 vitest run src/lib/parity.test.ts",
+    "build:widget": "vite build --config vite.widget.config.ts",
+    "build:python": "bun run build:standalone && bun run build:widget"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",

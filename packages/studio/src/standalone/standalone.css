@@ -1,0 +1,5 @@
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--app); }
+#root { padding: 10px; box-sizing: border-box; display: flex; }
+#root > .sbs-studio { flex: 1 1 auto; min-height: 0; }
+.sbs-standalone-error { margin: auto; color: var(--muted); font: 13px var(--font-sans); }

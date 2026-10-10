@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sheetbase-studio"
+version = "0.6.0"
+description = "Explore and chart pandas, Ibis and database tables in Sheetbase Studio — a local server and a notebook widget."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "iamgp", email = "garethprice@me.com" }]
+dependencies = [
+  "ibis-framework[duckdb]>=10,<13",
+  # Ibis 12 builds DROP VIEW statements sqlglot 28+ no longer accepts.
+  "sqlglot>=25,<28",
+  "pandas>=2.1",
+  "pyarrow>=15",
+]
+
+[project.optional-dependencies]
+widget = ["anywidget>=0.9"]
+excel = ["openpyxl>=3.1"]
+dev = ["pytest>=8", "anywidget>=0.9", "openpyxl>=3.1"]
+
+[project.scripts]
+sheetbase = "sheetbase.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sheetbase"]
+artifacts = ["src/sheetbase/static/**"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/sheetbase", "README.md", "tests"]
+artifacts = ["src/sheetbase/static/**"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# DuckDB deprecations raised inside Ibis, not here.
+filterwarnings = ["ignore:fetch_arrow_table:DeprecationWarning"]

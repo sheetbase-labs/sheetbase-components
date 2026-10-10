@@ -21,12 +21,14 @@ export async function loadAllRows(
 ): Promise<Row[]> {
   const fieldIds = table.fields.map((field) => field.id)
   const rows: Row[] = []
+  // Servers may cap a page below what was asked for: advance by what came
+  // back, and stop only at the reported total (or an empty page).
   const chunk = 10_000
-  for (let start = 0; ; start += chunk) {
-    const page = await source.page(table.id, { rowStart: start, rowCount: chunk, fieldIds }, signal)
+  for (;;) {
+    const page = await source.page(table.id, { rowStart: rows.length, rowCount: chunk, fieldIds }, signal)
     for (const record of page.records) rows.push(record.values)
     onProgress?.(rows.length)
-    if (page.records.length < chunk || rows.length >= page.totalRows) break
+    if (page.records.length === 0 || rows.length >= page.totalRows) break
   }
   return rows
 }

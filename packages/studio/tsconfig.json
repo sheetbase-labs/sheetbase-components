@@ -20,5 +20,5 @@
       "@sheetbase-labs/sheetbase-advanced-search": ["../advanced-search/src/index.ts"]
     }
   },
-  "include": ["src", "vite.config.ts", "vite.lib.config.ts", "vite.standalone.config.ts"]
+  "include": ["src", "vite.config.ts", "vite.lib.config.ts", "vite.standalone.config.ts", "vite.widget.config.ts"]
 }
