@@ -19,7 +19,7 @@ const run = (cmd, args, cwd = root) => {
   execFileSync(cmd, args, { cwd, stdio: "inherit" });
 };
 
-const publishable = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine"];
+const publishable = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine", "studio"];
 
 if (!skipBuild) run("bun", ["run", "build:lib"]);
 
@@ -72,11 +72,14 @@ import { AdvancedSearch } from "@sheetbase-labs/sheetbase-advanced-search";
 import { App as Explorer } from "@sheetbase-labs/sheetbase-explorer";
 import { SchemaEditor } from "@sheetbase-labs/sheetbase-schemaeditor";
 import { RulesEngine, ruleWritesForRows } from "@sheetbase-labs/sheetbase-rulesengine";
+import { MemorySource, SheetbaseStudio, createHttpSource, filterToSql } from "@sheetbase-labs/sheetbase-studio";
 
 export const smoke = {
   buildPredicate, toFieldDataType, createMemoryPagedAdapter, DataPageCache,
   AdvancedSearch, Explorer, SchemaEditor, RulesEngine, ruleWritesForRows,
+  MemorySource, SheetbaseStudio, createHttpSource, filterToSql,
 };
+export const studio = <SheetbaseStudio sources={new MemorySource({ tables: [{ id: "t", rows: [{ a: 1 }] }] })} />;
 export const element = <AdvancedSearch />;
 `);
 

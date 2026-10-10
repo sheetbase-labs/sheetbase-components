@@ -187,6 +187,29 @@ test("Enter edits the active cell, moves down past read-only cells and pastes on
   await expect(cellAt(page, 8, 1)).toContainText("SMP-2084");
 });
 
+test("copies the focused grid even when the page's text selection is elsewhere", async ({ page, browserName }) => {
+  test.skip(browserName === "firefox", "Firefox does not dispatch copy for synthesised shortcuts");
+  await page.goto("/default", { waitUntil: "domcontentloaded" });
+  await cellAt(page, 0, 1).click(); // B1
+  // Browsers aim copy at the text selection, not focus. Park it outside the
+  // grid the way a closed editor or an earlier click can leave it.
+  await page.evaluate(() => {
+    const outside = document.createElement("p");
+    outside.textContent = "outside the grid";
+    document.body.append(outside);
+    const range = document.createRange();
+    range.selectNodeContents(outside);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await page.keyboard.press("ControlOrMeta+c");
+  await expect(page.locator(".copy-outline")).toBeVisible();
+  await cellAt(page, 9, 1).click(); // B10
+  await page.keyboard.press("Enter");
+  await expect(cellAt(page, 9, 1)).toContainText("SMP-2084");
+});
+
 test("double-clicking the fill handle fills to the adjacent data extent", async ({ page }) => {
   await page.goto("/default", { waitUntil: "domcontentloaded" });
   await cellAt(page, 0, 6).click(); // G1 "Complete"

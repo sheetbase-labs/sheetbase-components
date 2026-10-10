@@ -2,7 +2,7 @@
 
 .explorer-frame-v3 { grid-template-rows: 48px minmax(0, 1fr) 250px; }
 .explorer-workspace-v3 { display: block; min-height: 0; background: var(--canvas); }
-.explorer-canvas-v3 { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: 33px auto minmax(0, 1fr); background: var(--canvas); }
+.explorer-canvas-v3 { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); background: var(--canvas); }
 .explorer-commandbar { position: relative; z-index: 20; display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .tool-anchor { position: relative; flex: 0 0 auto; }
 .explorer-tool { height: 24px; display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
@@ -23,7 +23,7 @@
 .bottom-panel-v3 { position: relative; margin: 0; border-radius: 0; box-shadow: none; }
 .explorer-frame-v4 { grid-template-rows: minmax(0, 1fr) 250px; }
 /* Neutral strip like table/sb bars; hover keeps the indigo accent language. */
-.explorer-commandbar-v4 { height: 33px; padding: 0 8px; border-bottom-color: var(--border); background: var(--panel-2); color: var(--text); }
+.explorer-commandbar-v4 { height: auto; min-height: 33px; flex-wrap: wrap; padding: 0 8px; border-bottom-color: var(--border); background: var(--panel-2); color: var(--text); }
 .explorer-commandbar-v4 .explorer-tool:hover, .explorer-commandbar-v4 .explorer-tool.active { background: var(--accent-soft); color: var(--accent-dark); }
 .explorer-subbar .explorer-tool { color: var(--accent-ink); }
 .explorer-subbar .explorer-tool small, .explorer-subbar .explorer-tool b { color: inherit; opacity: 0.75; }
@@ -84,3 +84,14 @@
 :where(.sheetbase-explorer) tbody tr.selected-data-row td { background: var(--accent-soft) !important; }
 :where(.sheetbase-explorer) tbody tr.selected-data-row td:first-child { box-shadow: inset 2px 0 var(--accent); }
 @media (max-width: 1100px) { .explorer-tool small { display: none; }.filter-popover { width: 430px; }.series-legend { max-width:45%; } }
+
+/* Narrow hosts (phones, a notebook cell): the toolbars size by the canvas's own
+   width and tighten so the tools stay on as few rows as possible. */
+.explorer-canvas-v3 { container: sb-explorer-canvas / inline-size; }
+@container sb-explorer-canvas (max-width: 480px) {
+  .explorer-commandbar-v4 { gap: 1px; padding: 0 4px; }
+  .explorer-subbar { gap: 1px; padding: 3px 4px; }
+  .explorer-commandbar-v4 .explorer-tool, .explorer-subbar .explorer-tool { padding: 0 6px; gap: 2px; }
+  .explorer-tool small, .explorer-tool b { display: none; }
+  .explorer-reset { padding: 0 8px; }
+}

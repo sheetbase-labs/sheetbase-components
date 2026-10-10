@@ -61,6 +61,39 @@ export interface RemotePage {
   revision?: string
 }
 
+/** A random sample of raw rows — what raw-row charts draw on a remote dataset. */
+export interface RemoteSampleQuery {
+  fields: string[]
+  n: number
+  /** Same tree the aggregate takes; authoritative over any flat list. */
+  filter?: GroupNode
+}
+
+export interface RemoteSample {
+  rows: DataRow[]
+  /** Rows matching the filter. */
+  totalRows: number
+  /** False when every matching row fit in the sample. */
+  sampled: boolean
+}
+
+/** Exact server-side histogram bins (shared edges across series). */
+export interface RemoteHistogramQuery {
+  field: string
+  bins: number
+  binWidth?: number
+  /** Series field: one count array per value, all on the same edges. */
+  by?: string
+  filter?: GroupNode
+}
+
+export interface RemoteHistogram {
+  edges: number[]
+  series: { key: string | null; counts: number[] }[]
+  totalRows: number
+  nulls: number
+}
+
 /** Capability a remote dataset exposes: server-side group+aggregate. */
 export interface RemoteDatasetSource {
   aggregate(query: AggregateQuery, signal?: AbortSignal): Promise<AggregateResponse>
@@ -69,6 +102,14 @@ export interface RemoteDatasetSource {
    * preview instead of the remote note. The chart never needs it.
    */
   page?(query: RemotePageQuery, signal?: AbortSignal): Promise<RemotePage>
+  /**
+   * Optional random sample — when present, raw-row charts (scatter without
+   * an aggregate, box, violin, heatmap) draw the sample with a "sampled"
+   * note instead of asking for an aggregate.
+   */
+  sample?(query: RemoteSampleQuery, signal?: AbortSignal): Promise<RemoteSample>
+  /** Optional exact bins — histograms then cover every matching row. */
+  histogram?(query: RemoteHistogramQuery, signal?: AbortSignal): Promise<RemoteHistogram>
 }
 
 export interface Dataset {

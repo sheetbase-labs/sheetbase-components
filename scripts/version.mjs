@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
-const packages = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine", "demo"];
+const packages = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine", "studio", "studio-cli", "demo"];
 
 const next = process.argv[2];
 if (!next || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(next)) {
@@ -26,5 +26,16 @@ for (const pkg of packages) {
   writeFileSync(file, bumped);
   const name = JSON.parse(text).name;
   console.log(`${name}: ${JSON.parse(text).version} → ${next}`);
+}
+// The Python package (python/) rides the same release line.
+for (const [file, pattern, replacement] of [
+  [join(root, "python", "pyproject.toml"), /^version = "[^"]+"/m, `version = "${next}"`],
+  [join(root, "python", "src", "sheetbase", "__init__.py"), /^__version__ = "[^"]+"/m, `__version__ = "${next}"`],
+]) {
+  const text = readFileSync(file, "utf8");
+  const bumped = text.replace(pattern, replacement);
+  if (bumped === text) throw new Error(`${file}: no version line found`);
+  writeFileSync(file, bumped);
+  console.log(`${file.slice(root.length + 1)} → ${next}`);
 }
 console.log(`\nNext: update CHANGELOG.md, commit, tag v${next}, push — the release workflow publishes.`);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GroupNode } from '@sheetbase-labs/sheetbase-shared'
-import { bucketsToRows, createHttpExplorerAdapter } from './http'
-import { ROW_ID } from '../explore'
+import { binsToRows, bucketsToRows, createHttpExplorerAdapter } from './http'
+import { HISTOGRAM_BIN, ROW_ID } from '../explore'
 import type { AggregateResponse } from '../types'
 
 const fields = [
@@ -127,5 +127,28 @@ describe('bucketsToRows', () => {
       { status: 'Complete', reviewer: 'Alice', result: 1.5, __sheetbaseCount: 3, [ROW_ID]: 0 },
       { status: 'Complete', reviewer: 'Bob', result: 2.5, __sheetbaseCount: 2, [ROW_ID]: 1 },
     ])
+  })
+})
+
+describe('binsToRows', () => {
+  it('emits one pre-binned row per (series × bin) on shared edges', () => {
+    const rows = binsToRows({
+      edges: [0, 5, 10],
+      series: [{ key: 'A', counts: [2, 3] }, { key: 'B', counts: [0, 4] }],
+      totalRows: 9,
+      nulls: 0,
+    }, 'line')
+    expect(rows).toEqual([
+      { x1: 0, x2: 5, count: 2, line: 'A', [HISTOGRAM_BIN]: true, [ROW_ID]: 0 },
+      { x1: 5, x2: 10, count: 3, line: 'A', [HISTOGRAM_BIN]: true, [ROW_ID]: 1 },
+      { x1: 0, x2: 5, count: 0, line: 'B', [HISTOGRAM_BIN]: true, [ROW_ID]: 2 },
+      { x1: 5, x2: 10, count: 4, line: 'B', [HISTOGRAM_BIN]: true, [ROW_ID]: 3 },
+    ])
+  })
+
+  it('leaves the series field off a single unkeyed series', () => {
+    const [row] = binsToRows({ edges: [1, 2], series: [{ key: null, counts: [7] }], totalRows: 7, nulls: 0 }, 'line')
+    expect(row).not.toHaveProperty('line')
+    expect(row?.count).toBe(7)
   })
 })

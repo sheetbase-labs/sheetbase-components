@@ -1,0 +1,30 @@
+{
+  "name": "sheetbase-studio-cli",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Sheetbase Studio as a single binary: the Studio UI and a DuckDB-backed server for files, SQLite, DuckDB, Postgres and MySQL.",
+  "type": "module",
+  "bin": {
+    "sheetbase-studio": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "build": "tsc -b",
+    "fetch:natives": "bun scripts/natives.ts",
+    "build:ui": "cd ../studio && vite build --config vite.standalone.config.ts --outDir ../studio-cli/.build/ui --emptyOutDir",
+    "build:binary": "bun scripts/build-binary.ts",
+    "smoke": "bun scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.5",
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-studio": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
+  }
+}

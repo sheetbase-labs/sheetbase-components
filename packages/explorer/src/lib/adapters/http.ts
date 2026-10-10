@@ -1,4 +1,5 @@
 import type {
+  RemoteHistogram,
   AggregateBucket,
   AggregateQuery,
   AggregateResponse,
@@ -9,7 +10,9 @@ import type {
   RemotePage,
   RemotePageQuery,
 } from '../types'
-import { ROW_ID } from '../explore'
+import { HISTOGRAM_BIN, ROW_ID } from '../explore'
+
+export { HISTOGRAM_BIN }
 
 export interface HttpExplorerField {
   key: string
@@ -46,6 +49,28 @@ export function bucketsToRows(buckets: readonly AggregateBucket[], query: Pick<A
     __sheetbaseCount: bucket.count,
     [ROW_ID]: index,
   }))
+}
+
+/**
+ * Shape exact server bins into the rows the histogram mark draws: one row
+ * per (series × bin) with `x1`/`x2`/`count`, the series value under its own
+ * field so `color` picks it up.
+ */
+export function binsToRows(histogram: RemoteHistogram, seriesField?: string): DataRow[] {
+  const rows: DataRow[] = []
+  for (const series of histogram.series) {
+    series.counts.forEach((count, index) => {
+      rows.push({
+        x1: histogram.edges[index],
+        x2: histogram.edges[index + 1],
+        count,
+        ...(seriesField && series.key !== null ? { [seriesField]: series.key } : {}),
+        [HISTOGRAM_BIN]: true,
+        [ROW_ID]: rows.length,
+      })
+    })
+  }
+  return rows
 }
 
 /**

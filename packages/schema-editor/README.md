@@ -11,14 +11,8 @@ bun run dev:schema          # http://localhost:5201/ — Vite dev server, HMR
 
 Two dev modes:
 
-- `bun run dev` (a.k.a. `dev:schema`) — the Vite module server with HMR.
-  `@sheetbase-labs/sheetbase-shared` is pre-bundled via `optimizeDeps` so the page fetches one
-  library module instead of ~20 source modules; restart after editing shared
-  source, or run `bun run build:lib`.
-- `bun run dev:bundled` — `vite build --watch` into `dist-dev/` served by
-  `vite preview`. The same page loads in ~3 requests instead of ~24, which
-  matters on high-latency links (the orb portal runs this mode); edits rebuild
-  in under a second, reload to pick them up.
+- `bun run dev` (a.k.a. `dev:schema`) — the Vite module server with HMR. `@sheetbase-labs/sheetbase-shared` is pre-bundled via `optimizeDeps` so the page fetches one library module instead of ~20 source modules; restart after editing shared source, or run `bun run build:lib`.
+- `bun run dev:bundled` — `vite build --watch` into `dist-dev/` served by `vite preview`. The same page loads in ~3 requests instead of ~24, which matters on high-latency links (the orb portal runs this mode); edits rebuild in under a second, reload to pick them up.
 
 ```tsx
 import { SchemaEditor } from "@sheetbase-labs/sheetbase-schemaeditor";

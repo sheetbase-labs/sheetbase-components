@@ -8,6 +8,7 @@ import './explorer-interactions.css'
 import './figure.css'
 
 export { App, type AppProps } from './App'
+export { initialSpec as defaultChartSpec, smartKindFor } from './explorer-popovers'
 export { Chart, ChartGroup, FigureSvg, type ChartProps, type ChartGroupProps, type ChartGroupEntry } from './Chart'
 export { FieldRolePanel, type FieldRolePanelProps, type FieldRolePanelSource } from './components/FieldRolePanel'
 export {
@@ -30,8 +31,8 @@ export type {
   AggregateBucket, AggregateKind, AggregateQuery, AggregateResponse,
   BarLayout, ChartKind, ChartSpec, ColumnKind, ColumnMeta,
   DataAdapter, DataRow, Dataset, ErrorMode, FigureMetrics, FilterLogic, FilterOperator,
-  FilterRule, PaletteKind, RemoteDatasetSource, RemotePage, RemotePageQuery,
-  SavedExploration,
+  FilterRule, PaletteKind, RemoteDatasetSource, RemoteHistogram, RemoteHistogramQuery,
+  RemotePage, RemotePageQuery, RemoteSample, RemoteSampleQuery, SavedExploration,
 } from './lib/types'
 export type { AnalysisView, SummaryKind } from '@sheetbase-labs/sheetbase-shared'
 export { sampleAdapter } from './lib/adapters/sample'
@@ -48,4 +49,6 @@ export {
 export { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 export { runSql, runSqlAsync } from './lib/sql'
 export { buildChart } from './lib/chart'
-export { filteredRows, preparedRows, replicateSummary } from './lib/explore'
+export { MIN_CHART_HEIGHT, stageChartHeight } from './lib/chart-size'
+export { HISTOGRAM_BIN, ROW_ID, filteredRows, preparedRows, replicateSummary } from './lib/explore'
+export { binsToRows, bucketsToRows } from './lib/adapters/http'

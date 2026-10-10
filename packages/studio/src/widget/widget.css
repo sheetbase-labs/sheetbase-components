@@ -1,0 +1,6 @@
+.sbs-widget { width: 100%; display: flex; }
+.sbs-widget > .sbs-studio { flex: 1 1 auto; min-height: 0; }
+.sbs-widget-note { padding: 12px; font: 13px system-ui, sans-serif; color: var(--muted, inherit); }
+
+/* The table package sets body { min-width: 1080px } globally; Studio has a narrow layout. */
+html body { min-width: 0; }

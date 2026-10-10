@@ -39,7 +39,7 @@ import { scalePoint } from '@tanstack/charts/scales/point'
 import { curveBasis, curveMonotoneX, curveStep } from 'd3-shape'
 import { scaleLinear as d3ScaleLinear, scaleLog, scaleSqrt, scaleSymlog } from 'd3-scale'
 import { resolveThemeColour, resolveThemeColours } from '@sheetbase-labs/sheetbase-shared'
-import { ERROR_HIGH, ERROR_LOW, ROW_ID, filteredRows, preparedRows, visibleRows } from './explore'
+import { ERROR_HIGH, ERROR_LOW, HISTOGRAM_BIN, ROW_ID, filteredRows, preparedRows, visibleRows } from './explore'
 import type { ChartMark } from '@tanstack/charts'
 import type { ChartSpec, DataRow, Dataset, ScaleKind } from './types'
 
@@ -172,7 +172,10 @@ function chartSpec(
 
   if (spec.kind === 'histogram') {
     if (xMeta.kind !== 'number') return null
-    const bins = binX(rows, ({ value: (row: DataRow) => Number(row[xField]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as never)
+    // Rows that are already bins (exact server-side histograms) draw as-is.
+    const bins = rows[0]?.[HISTOGRAM_BIN]
+      ? rows
+      : binX(rows, ({ value: (row: DataRow) => Number(row[xField]), thresholds: Math.max(3, Math.round(spec.histogramBins)), outputs: { count: { reduce: 'count' } } }) as never)
     marks.push(rect(bins as never, ({ id: 'histogram', x1: 'x1', x2: 'x2', y1: () => 0, y2: 'count', inset: spec.barGap, radius: spec.barRadius, fill: semanticColour ? undefined : markColour, fillOpacity: spec.fillOpacity, ...(spec.color ? { color: spec.color } : {}) }) as never))
   } else if (spec.kind === 'box') {
     if (!spec.y || yMeta?.kind !== 'number') return null

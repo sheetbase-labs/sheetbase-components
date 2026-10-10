@@ -2,6 +2,8 @@ import { testCondition, toFilterClause } from '@sheetbase-labs/sheetbase-shared'
 import type { ChartSpec, DataRow, Dataset, FilterRule } from './types'
 
 export const ROW_ID = '__sheetbaseRowId'
+/** Marks rows that are already histogram bins (`x1`, `x2`, `count`) — exact server-side histograms. */
+export const HISTOGRAM_BIN = '__sheetbaseBin'
 export const ERROR_LOW = '__sheetbaseErrorLow'
 export const ERROR_HIGH = '__sheetbaseErrorHigh'
 

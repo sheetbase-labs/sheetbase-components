@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from '@sheetbase-labs/sheetbase-shared'
 import { DataTable } from './components/DataTable'
+import { stageChartHeight } from './lib/chart-size'
 import { datasetFromFile } from './lib/adapters/file'
-import { bucketsToRows } from './lib/adapters/http'
+import { binsToRows, bucketsToRows } from './lib/adapters/http'
 import { sampleAdapter } from './lib/adapters/sample'
 import { buildChart, describeChart } from './lib/chart'
-import { filteredRows } from './lib/explore'
+import { ROW_ID, filteredRows } from './lib/explore'
 import { filtersFromTree, treeFromFilters } from './lib/view'
 import { CURRENT_EXPLORATION_VERSION, decodeShareHash, defaultExplorerAdapter, encodeShareHash, EXPLORER_STORAGE_KEY, loadInitialExplorerState, useIdleExplorerSave, type PersistedExplorerState } from './lib/persistence'
 import { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 import { runSqlAsync } from './lib/sql'
 import { PlayIcon, ReloadIcon } from './components/icons'
-import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, FilterRule, SavedExploration } from './lib/types'
+import type { AggregateQuery, ChartKind, ChartSpec, DataAdapter, DataRow, Dataset, FilterRule, RemoteHistogramQuery, RemoteSampleQuery, SavedExploration } from './lib/types'
 import {
   ChartStage, CommandBar, ExplorerFrame, useDatasetSwap,
 } from './explorer-chrome'
@@ -40,6 +41,16 @@ function channelDefaults(loaded: Dataset): Partial<ChartSpec> {
 
 /** How many raw rows the Data tab previews for a remote dataset. */
 const REMOTE_PREVIEW_ROWS = 200
+/** Default sample size for raw-row charts on a remote dataset. */
+const REMOTE_SAMPLE_ROWS = 5000
+/** Group size emitted by preparedRows and bucketsToRows — the y of a count chart. */
+const COUNT_FIELD = '__sheetbaseCount'
+/** Kinds that always draw raw rows, whatever the aggregate. */
+const RAW_ROW_KINDS = new Set<ChartKind>(['histogram', 'box', 'violin', 'heatmap'])
+
+type RemoteRawRequest =
+  | { mode: 'bins'; query: RemoteHistogramQuery }
+  | { mode: 'sample'; query: RemoteSampleQuery }
 
 export interface AppProps {
   /** Dataset sources listed under Import. Defaults to the built-in sample. */
@@ -91,6 +102,19 @@ export interface AppProps {
    * then fills the explorer. Default true.
    */
   showPanel?: boolean
+  /**
+   * Mirror the spec into the page URL (`#…`) so the address is shareable.
+   * Default true; embedding hosts that own the URL pass false.
+   */
+  shareUrl?: boolean
+  /**
+   * Show the Import menu (sample sources, open a file into the chart). Default
+   * true; hosts that own the data — and its filters and provenance — pass false
+   * so the chart can't quietly diverge from the rest of the page.
+   */
+  showImport?: boolean
+  /** Rows sampled for raw-row charts on remote datasets. Default 5000. */
+  remoteSampleSize?: number
 }
 export function App(props: AppProps = {}) {
   const showPanel = props.showPanel !== false
@@ -133,9 +157,11 @@ export function App(props: AppProps = {}) {
   const [sqlError, setSqlError] = useState<string | null>(null)
   const [sqlRunning, setSqlRunning] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const shareUrl = props.shareUrl !== false
   useEffect(() => {
+    if (!shareUrl) return
     try { window.history.replaceState(null, '', encodeShareHash(spec, sql)) } catch { /* Non-http contexts have no URL to share. */ }
-  }, [spec, sql])
+  }, [spec, sql, shareUrl])
   const [tab, setTab] = useState<BottomTab>('data')
   const [dark, setDark] = useState(restored.theme === 'dark')
   const controlledTheme = props.theme
@@ -154,6 +180,13 @@ export function App(props: AppProps = {}) {
   const sources = useMemo<DataAdapter[]>(() => props.sources ?? [sampleAdapter], [props.sources])
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const chartStageRef = useRef<HTMLDivElement>(null)
+  // The stage mounts late (after a dataset loads), so track the element
+  // itself: a measuring effect keyed on a ref object would never re-run.
+  const [stageElement, setStageElement] = useState<HTMLDivElement | null>(null)
+  const attachStage = useCallback((element: HTMLDivElement | null) => {
+    chartStageRef.current = element
+    setStageElement(element)
+  }, [])
   const rootRef = useRef<HTMLDivElement>(null)
   const persisted = useMemo<PersistedExplorerState>(() => ({ version: CURRENT_EXPLORATION_VERSION, theme: isDark ? 'dark' : 'light', spec, sql, saved, updatedAt: new Date().toISOString() }), [spec, sql, saved, isDark])
   useIdleExplorerSave(EXPLORER_STORAGE_KEY, persisted, defaultExplorerAdapter)
@@ -253,15 +286,21 @@ export function App(props: AppProps = {}) {
     if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light'
     setThemeEpoch((epoch) => epoch + 1)
   }, [isDark])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dataset/panelCollapsed/panelHeight are deliberate re-measure triggers, not captures
+  // The chart draws at exactly the box its SVG is stretched to fill — the
+  // stage's content height — so it never scales its text or letterboxes.
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
-    const stage = chartStageRef.current
+    const stage = stageElement
     if (!stage) return
-    const resize = () => setMeasuredHeight(Math.max(260, Math.floor(stage.clientHeight)))
-    resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
-    // Re-measure when the dataset or panel chrome changes the stage's size.
-  }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
+    const resize = () => {
+      const style = getComputedStyle(stage)
+      setMeasuredHeight(stageChartHeight(stage.clientHeight, Number.parseFloat(style.paddingTop), Number.parseFloat(style.paddingBottom)))
+    }
+    resize()
+    const observer = new ResizeObserver(resize)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [stageElement, props.frame, props.chartHeight])
 
   // The shared analysis view, when the host provides one, overrides the
   // spec's filters/group/summary and adds sort/limit to the row pipeline.
@@ -404,19 +443,86 @@ export function App(props: AppProps = {}) {
     return () => controller.abort()
   }, [remote, dataset, view, remotePageRetry])
   const remotePageRows = remotePage?.dataset === dataset ? remotePage.rows : null
-  const remoteRows = remoteResult?.dataset === dataset ? remoteResult.rows : null
+  const remoteAggregateRows = remoteResult?.dataset === dataset ? remoteResult.rows : null
 
+  // Raw-row specs on a remote dataset: exact server bins for a histogram when
+  // the source can bin, otherwise a labelled random sample when it can
+  // sample. Without either, the chart keeps its "pick an aggregate" note.
+  const sampleSize = props.remoteSampleSize ?? REMOTE_SAMPLE_ROWS
+  const rawKey = useMemo<string | null>(() => {
+    if (!remote || remoteQuery || !chartSpec.x || !dataset) return null
+    const filter = view?.filter ?? treeFromFilters(chartSpec.filters ?? [], chartSpec.filterLogic ?? 'and')
+    const known = new Set(dataset.columns.map((column) => column.key))
+    const xKind = dataset.columns.find((column) => column.key === chartSpec.x)?.kind
+    let request: RemoteRawRequest | null = null
+    if (chartSpec.kind === 'histogram' && remote.histogram && xKind === 'number') {
+      const by = chartSpec.color ?? chartSpec.group
+      request = { mode: 'bins', query: {
+        field: chartSpec.x,
+        bins: Math.max(3, Math.round(chartSpec.histogramBins)),
+        ...(chartSpec.histogramBinWidth ? { binWidth: chartSpec.histogramBinWidth } : {}),
+        ...(by && known.has(by) ? { by } : {}),
+        filter,
+      } }
+    } else if (remote.sample) {
+      const fields = [chartSpec.x, chartSpec.y, chartSpec.group, chartSpec.color, chartSpec.facet, chartSpec.size, chartSpec.errorLow, chartSpec.errorHigh, chartSpec.labelField, chartSpec.excludeField, chartSpec.y2]
+        .filter((field): field is string => Boolean(field) && known.has(field as string))
+        .filter((field, index, all) => all.indexOf(field) === index)
+      request = { mode: 'sample', query: { fields, n: sampleSize, filter } }
+    }
+    return request ? JSON.stringify(request) : null
+  }, [remote, remoteQuery, dataset, view, sampleSize, chartSpec.x, chartSpec.y, chartSpec.group, chartSpec.color, chartSpec.facet, chartSpec.size, chartSpec.errorLow, chartSpec.errorHigh, chartSpec.labelField, chartSpec.excludeField, chartSpec.y2, chartSpec.kind, chartSpec.histogramBins, chartSpec.histogramBinWidth, chartSpec.filters, chartSpec.filterLogic])
+  const [remoteRaw, setRemoteRaw] = useState<{ dataset: Dataset; key: string; mode: 'bins' | 'sample'; rows: DataRow[]; totalRows: number; sampled: boolean } | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: remoteRetry is a manual re-fetch trigger bumped by the retry UI
+  useEffect(() => {
+    if (!remote || !rawKey || !dataset) return
+    const request = JSON.parse(rawKey) as RemoteRawRequest
+    const controller = new AbortController()
+    const run = request.mode === 'bins' && remote.histogram
+      ? remote.histogram(request.query, controller.signal).then((histogram) => ({ rows: binsToRows(histogram, request.query.by), totalRows: histogram.totalRows, sampled: false }))
+      : request.mode === 'sample' && remote.sample
+        ? remote.sample(request.query, controller.signal).then((sample) => ({ rows: sample.rows.map((row, index) => ({ ...row, [ROW_ID]: index })), totalRows: sample.totalRows, sampled: sample.sampled }))
+        : null
+    if (!run) return
+    run.then(
+      (result) => {
+        if (controller.signal.aborted) return
+        setRemoteRaw({ dataset, key: rawKey, mode: request.mode, ...result })
+        setRemoteError(null)
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted || error instanceof DOMException && error.name === 'AbortError') return
+        setRemoteError(error instanceof Error ? error.message : String(error))
+      },
+    )
+    return () => controller.abort()
+  }, [remote, rawKey, dataset, remoteRetry])
+  const remoteRawCurrent = remoteRaw && remoteRaw.dataset === dataset && remoteRaw.key === rawKey ? remoteRaw : null
+  const remoteRows = remoteQuery ? remoteAggregateRows : rawKey ? (remoteRawCurrent?.rows ?? null) : null
+
+  // A count needs no measure: both the client-side aggregate and server
+  // buckets carry the group size under COUNT_FIELD, so count charts plot that
+  // synthetic numeric column instead of whatever y happens to be.
+  const countChart = chartSpec.aggregate === 'count' && !RAW_ROW_KINDS.has(chartSpec.kind)
   const chartDataset = useMemo<Dataset | null>(() => {
     if (!dataset) return null
-    if (remote) return { ...dataset, rows: remoteRows ?? [] }
-    return viewRows ? { ...dataset, rows: viewRows } : dataset
-  }, [dataset, remote, remoteRows, viewRows])
+    const base = remote ? { ...dataset, rows: remoteRows ?? [] } : viewRows ? { ...dataset, rows: viewRows } : dataset
+    return countChart && !base.columns.some((column) => column.key === COUNT_FIELD)
+      ? { ...base, columns: [...base.columns, { key: COUNT_FIELD, kind: 'number', nullable: false, uniqueCount: 0 }] }
+      : base
+  }, [dataset, remote, remoteRows, viewRows, countChart])
 
   // Bucket rows are already filtered and aggregated: build the chart with a
   // pass-through spec so preparedRows/filteredRows don't re-apply either.
-  const chartSpecForBuild = useMemo<ChartSpec>(() => (remote
-    ? { ...chartSpec, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
-    : chartSpec), [remote, chartSpec])
+  // Sampled raw rows were filtered on the server but are otherwise raw, so
+  // only the filters are dropped.
+  const chartSpecForBuild = useMemo<ChartSpec>(() => {
+    const counted = countChart ? { ...chartSpec, y: COUNT_FIELD, yLabel: chartSpec.yLabel || 'Count', errorMode: 'none' as const } : chartSpec
+    if (!remote) return counted
+    return remoteQuery
+      ? { ...counted, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
+      : { ...counted, filters: [], filterLogic: 'and' }
+  }, [remote, remoteQuery, chartSpec, countChart])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch re-reads the palette after the root's data-theme is applied
   const chartPalette = useMemo(() => resolveThemeColours(chartSpec.palette, rootRef.current ?? undefined), [chartSpec.palette, themeEpoch])
@@ -424,9 +530,9 @@ export function App(props: AppProps = {}) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch rebuilds the chart after the root's data-theme is applied
   const definition = useMemo(() => {
     if (!chartDataset) return null
-    if (remote && (remoteQuery === null || remoteRows === null)) return null
+    if (remote && remoteRows === null) return null
     return buildChart(chartDataset, chartSpecForBuild, selectedRow, (window) => setSpec((current) => ({ ...current, zoomX: window })))
-  }, [chartDataset, chartSpecForBuild, remote, remoteQuery, remoteRows, selectedRow, setSpec, themeEpoch])
+  }, [chartDataset, chartSpecForBuild, remote, remoteRows, selectedRow, setSpec, themeEpoch])
   const visibleRows = useMemo(() => {
     if (!chartDataset) return []
     if (remote) return remoteRows ?? []
@@ -434,7 +540,7 @@ export function App(props: AppProps = {}) {
   }, [chartDataset, chartSpec, remote, remoteRows])
   const remoteState = !remote ? null
     : remoteError ? 'error' as const
-    : !remoteQuery ? 'raw' as const
+    : !remoteQuery && !rawKey ? 'raw' as const
     : remoteRows === null ? 'loading' as const
     : null
   const seriesField = chartSpec.color ?? chartSpec.group
@@ -589,7 +695,10 @@ export function App(props: AppProps = {}) {
 
   const body = (<>
     <main className="workspace explorer-workspace-v3"><section className="canvas-region explorer-canvas-v3">
-    <CommandBar menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    <CommandBar showImport={props.showImport !== false} menu={menu} spec={chartSpec} dataset={dataset} sources={sources} saved={saved} libraryName={libraryName} exportStatus={exportStatus} importStatus={importStatus} dark={isDark} showThemeToggle={showThemeToggle} setSpec={setSpec} onAnalysisSpec={setAnalysisSpec} viewFilterLocked={view !== undefined && viewFilters === undefined} onReset={resetChart} onField={setField} onChoosePlot={choosePlot} onExportSvg={exportSvgFile} onExportPng={exportPngFile} onCopySpec={copySpecJson} onCopyLink={copyShareLink} onSaveExploration={saveCurrentExploration} onLoadExploration={loadExploration} onDeleteExploration={deleteExploration} onLibraryName={setLibraryName} onLoadSource={loadSource} onOpenFile={openFile} onMenuToggle={(id) => setMenu((current) => current === id ? null : id)} onMenuClose={() => setMenu(null)} onToggleDark={toggleDark} />
+    {remoteRawCurrent?.sampled && !remoteState && (
+      <div className="remote-note remote-note--strip">Drawn from a random sample of {remoteRawCurrent.rows.length.toLocaleString()} of {remoteRawCurrent.totalRows.toLocaleString()} matching rows. Aggregated charts and histograms use every row.</div>
+    )}
     {crossFilterActive && crossFilter && (
       <div className="remote-note remote-note--strip">Cross-filtered by {crossFilter.map((match) => `${match.field} = ${String(match.value)}`).join(', ')}
         <button type="button" className="sb-btn" onClick={clearCrossFilter}>Clear</button>
@@ -601,9 +710,9 @@ export function App(props: AppProps = {}) {
             ? <><span>Aggregation failed: {remoteError}</span><button type="button" className="sb-btn" onClick={() => { setRemoteError(null); setRemoteRetry((n) => n + 1) }}>Retry</button></>
             : remoteState === 'raw'
               ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
-              : <><span className="sb-spinner" aria-hidden="true" /><span>Aggregating on the server…</span></>}
+              : <><span className="sb-spinner" aria-hidden="true" /><span>{remoteQuery ? 'Aggregating on the server…' : chartSpec.kind === 'histogram' && remote?.histogram ? 'Binning on the server…' : 'Sampling rows on the server…'}</span></>}
         </div></div>
-      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
+      : <ChartStage stageRef={attachStage} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>
@@ -613,7 +722,7 @@ export function App(props: AppProps = {}) {
       </details>
     )}
   </section></main>
-  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button type="button" className="sb-btn subtle" onClick={resetSql}><ReloadIcon size={13}/>Reset</button><button type="button" className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><PlayIcon size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
+  {showPanel && <BottomPanel tab={tab} onTab={(next) => { setTab(next); setPanelCollapsed(false) }} collapsed={panelCollapsed} onToggleCollapsed={() => setPanelCollapsed((value) => !value)} visibleCount={remote && tab === 'data' && remotePageRows ? remotePageRows.length : visibleRows.length} totalCount={remote ? (remotePage?.totalRows ?? remoteResult?.totalRows ?? remoteRawCurrent?.totalRows ?? 0) : dataset.rows.length} panelHeight={panelHeight} onResizeStart={startResize} onResizeStep={resizeBy}>{remote ? (tab === 'data' ? remoteTable ?? <div className="remote-note">Rows live on the server for this source — the chart above shows aggregated buckets.</div> : <div className="remote-note">SQL runs against rows in the browser; remote datasets stay on the server.</div>) : tab === 'data' ? <DataTable dataset={dataset} rows={visibleRows} selectedRow={selectedRow} onSelectRow={(index) => setSelectedRow((current) => current === index ? undefined : index)}/> : <div className="sql-workspace"><div className="sql-header"><span>Query the loaded data using <code>?</code> as the source table.</span><div><button type="button" className="sb-btn subtle" onClick={resetSql}><ReloadIcon size={13}/>Reset</button><button type="button" className="button primary" onClick={executeSql} disabled={sqlRunning}>{sqlRunning ? 'Running…' : <><PlayIcon size={13}/>Run query</>}</button></div></div><textarea aria-label="SQL query" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') executeSql() }}/>{sqlError && <div className="sql-error">{sqlError}</div>}</div>}</BottomPanel>}
   </>)
   return <ExplorerFrame framed={props.frame} rootRef={rootRef} panel={showPanel} panelCollapsed={panelCollapsed} panelHeight={panelHeight}>{body}</ExplorerFrame>
 }

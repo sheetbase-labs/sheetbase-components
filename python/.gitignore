@@ -1,0 +1,8 @@
+# Built from packages/studio (`bun run build:python`); shipped in wheels, not in git.
+src/sheetbase/static/*
+!src/sheetbase/static/.gitkeep
+__pycache__/
+*.egg-info/
+.pytest_cache/
+dist/
+.venv/

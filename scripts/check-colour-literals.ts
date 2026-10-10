@@ -5,7 +5,7 @@
  * `packages/shared/src/theme.css` and `themes/v3.css`), so a host can retheme it
  * to UI system v3 by loading a preset and mapping its own variables onto them.
  *
- * Scanned: TSX/TS/CSS in table, explorer, advanced-search and shared. Skipped:
+ * Scanned: TSX/TS/CSS in table, explorer, advanced-search, shared and studio. Skipped:
  *   - `themes/` directories and `theme.css` — the preset/definition files,
  *     which are the sanctioned home for literal token values;
  *   - `dist`/`dist-lib`/`dist-types` build output;
@@ -30,6 +30,9 @@ const PATTERNS = [
   "packages/shared/src/**/*.ts",
   "packages/shared/src/**/*.tsx",
   "packages/shared/src/**/*.css",
+  "packages/studio/src/**/*.ts",
+  "packages/studio/src/**/*.tsx",
+  "packages/studio/src/**/*.css",
 ];
 
 const SKIP = [

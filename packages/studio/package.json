@@ -1,0 +1,75 @@
+{
+  "name": "@sheetbase-labs/sheetbase-studio",
+  "version": "0.6.0",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sheetbase-labs/sheetbase-components.git",
+    "directory": "packages/studio"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "type": "module",
+  "main": "./dist-lib/sheetbase-studio.js",
+  "module": "./dist-lib/sheetbase-studio.js",
+  "types": "./dist-types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "import": "./dist-lib/sheetbase-studio.js"
+    },
+    "./styles.css": "./dist-lib/style.css"
+  },
+  "files": [
+    "dist-lib",
+    "dist-types",
+    "README.md"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:lib": "tsc -p tsconfig.lib.json && vite build --config vite.lib.config.ts",
+    "build:standalone": "vite build --config vite.standalone.config.ts",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "parity": "UPDATE_PARITY=1 vitest run src/lib/parity.test.ts",
+    "build:widget": "vite build --config vite.widget.config.ts",
+    "build:python": "bun run build:standalone && bun run build:widget",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.32.0",
+    "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
+    "@sheetbase-labs/sheetbase-explorer": "workspace:*",
+    "@sheetbase-labs/sheetbase-shared": "workspace:*",
+    "@sheetbase-labs/sheetbase-table": "workspace:*",
+    "hyparquet": "^1.31.3",
+    "hyparquet-compressors": "^1.1.2",
+    "read-excel-file": "^9.3.12"
+  },
+  "peerDependencies": {
+    "@tanstack/react-virtual": "^3.14.10",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@duckdb/node-api": "1.5.5-r.5",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@playwright/test": "^1.63.0",
+    "@tanstack/react-virtual": "^3.14.10",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.2.7"
+  }
+}

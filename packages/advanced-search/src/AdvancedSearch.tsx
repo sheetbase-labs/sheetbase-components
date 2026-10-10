@@ -33,6 +33,7 @@ import {
 import { DataGrid } from "@sheetbase-labs/sheetbase-table";
 import { applySearch } from "./predicate";
 import type { SearchOperator, SearchRow } from "./types";
+import { treeSummary } from "./summary";
 
 export type SearchFieldInput = string | SheetbaseField;
 
@@ -306,7 +307,7 @@ export function AdvancedSearch({ value, initialSpec, onChange, fields = [], rows
           <div className="sb-topbar">
             <div className="sb-toolbar-group">
               {matches && <span className="sb-stat">{matches.length} / {rows.length} match</span>}
-              <span className="sb-stat" title={describeFilter(spec.filter)}>{nodes.conditions} conditions · {nodes.groups} groups{flattened ? " · flat query" : " · tree query"}</span>
+              <span className="sb-stat" title={describeFilter(spec.filter)}>{treeSummary(nodes.conditions, nodes.groups, Boolean(flattened))}</span>
             </div>
             <div className="sb-topbar-actions">
               {theme === undefined && <ThemeToggleButton theme={activeTheme} onToggle={toggleTheme} />}
