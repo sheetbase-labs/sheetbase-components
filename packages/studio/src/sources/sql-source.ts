@@ -118,18 +118,23 @@ export class DuckDbSqlSource implements StudioDataSource {
     return next
   }
 
-  /** Register a relation (table or view name) the engine already knows. */
-  async registerTable(id: string, relation: string, extra: Partial<Pick<TableInfo, 'label' | 'kind' | 'sql' | 'description'>> = {}): Promise<TableInfo> {
+  /**
+   * Register a relation (table or view name) the engine already knows.
+   * `countRows: false` leaves `rowCount` unknown (null) — for tables in an
+   * attached database, where counting at startup could be slow; the Studio
+   * then keeps them at the source.
+   */
+  async registerTable(id: string, relation: string, extra: Partial<Pick<TableInfo, 'label' | 'kind' | 'sql' | 'description'>> & { countRows?: boolean } = {}): Promise<TableInfo> {
     const described = await this.run(`DESCRIBE SELECT * FROM ${relation}`)
     const fields: SheetbaseField[] = described.map((row) => {
       const name = String(row.column_name)
       return { id: name, label: name, dataType: duckTypeToField(String(row.column_type)), nullable: String(row.null ?? 'YES') !== 'NO' }
     })
-    const [counted] = await this.run(`SELECT count(*) AS n FROM ${relation}`)
+    const counted = extra.countRows === false ? null : (await this.run(`SELECT count(*) AS n FROM ${relation}`))[0]
     const info: TableInfo = {
       id,
       label: extra.label ?? id,
-      rowCount: toNumber(counted?.n ?? 0),
+      rowCount: counted === null ? null : toNumber(counted?.n ?? 0),
       fields,
       kind: extra.kind ?? 'table',
       ...(extra.sql ? { sql: extra.sql } : {}),
@@ -137,6 +142,11 @@ export class DuckDbSqlSource implements StudioDataSource {
     }
     this.#tables.set(id, { info, relation, types: new Map(fields.map((field) => [field.id, field.dataType])) })
     return info
+  }
+
+  /** Ids already in the catalog — so new tables never take one. */
+  protected tableIds(): ReadonlySet<string> {
+    return new Set(this.#tables.keys())
   }
 
   async catalog(): Promise<readonly TableInfo[]> {

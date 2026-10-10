@@ -16,6 +16,8 @@ Private monorepo for Sheetbase UI packages. Shared field types, filter operators
 
 The `sheetbase-studio` Python package (`python/`) serves the Studio over pandas, polars, files or any Ibis backend — `sheetbase serve` in the browser, `sheetbase.explore(df)` in a notebook. See `python/README.md`.
 
+The `sheetbase-studio` binary (`packages/studio-cli`) is the zero-install option: one executable for Linux, macOS and Windows that serves the Studio over files, SQLite, DuckDB, Postgres and MySQL, read-only and offline. See `packages/studio-cli/README.md`.
+
 ## Run
 
 ```bash

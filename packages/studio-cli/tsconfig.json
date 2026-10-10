@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "types": ["bun-types"],
+    "paths": {
+      "@sheetbase-labs/sheetbase-shared": ["../shared/src/index.ts"],
+      "@sheetbase-labs/sheetbase-studio/node": ["../studio/src/node.ts"]
+    }
+  },
+  "include": ["src", "scripts", "test", "types", "vitest.config.ts"]
+}

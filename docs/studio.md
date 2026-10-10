@@ -46,6 +46,8 @@ SheetbaseStudio
 
 **Any size.** Wide, short and narrow layouts are picked from the body's own size; the e2e suite (`packages/studio/e2e`) checks phone, tablet, laptop and wall sizes, a resize across every layout, and an embedded 600×520 cell.
 
+**Single binary.** `packages/studio-cli` compiles the standalone UI and a server for the same wire contract into one Bun executable with native DuckDB. Data access reuses `DuckDbSource`/`DuckDbSqlSource` (the browser's SQL and filter compiler); SQLite, Postgres and MySQL go through DuckDB's official connectors, embedded so nothing is fetched at runtime. Databases attach read-only, and once startup has opened what was named, DuckDB is locked down: no other files, network, attaches or settings changes. The native DuckDB is pinned to the newest release with connector builds on PyPI (1.5.5 today).
+
 ## Known limits and follow-ups
 
 - **Saved views** remain the design in `docs/saved-views.md`; Studio persists the current view and chart per table in local storage only.
@@ -53,4 +55,6 @@ SheetbaseStudio
 - **Mixed-type text columns**: DuckDB and Ibis casts are stricter than JS `Number()`/`Date.parse` for exotic forms (hex, slashed dates).
 - **Samples** on the Python side are seeded Bernoulli samples capped at *n*; very small filtered sets can return slightly fewer than *n* rows.
 - **Wide tables**: profiles cover the first 200 fields.
+- **Binary: big Postgres/MySQL tables** are scanned through DuckDB's connectors; simple filters push down, but complex ones (case-insensitive text, loose matching) read the table into DuckDB. For very large warehouse tables the Python server (Ibis compiles to the database's own SQL) is the better fit.
+- **Binary: macOS builds aren't notarised** yet; Linux arm64 and Intel macOS are cross-compiled and not smoke-tested in CI.
 - **No live JupyterLab test** in CI yet: the widget's kernel side is tested in pytest and its front end against the HTTP API with a model double.

@@ -1,7 +1,9 @@
 name: Release
 
 # Publishes the seven libraries to GitHub Packages (private, scoped to
-# `sheetbase-labs`) in dependency order when a v* tag lands.
+# `sheetbase-labs`) in dependency order when a v* tag lands, and attaches the
+# `sheetbase-studio` binaries (five platforms, with SHA-256 checksums) to the
+# tag's GitHub release.
 #
 # Auth is the built-in Actions token — `permissions: packages: write` plus
 # `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` — so there is no long-lived
@@ -69,3 +71,78 @@ jobs:
           for pkg in shared table advanced-search explorer schema-editor rules-engine studio; do
             (cd "packages/$pkg" && bun publish --access restricted)
           done
+
+  binaries:
+    name: Studio binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux_amd64, smoke: true }
+          - { os: ubuntu-latest, target: linux_arm64, smoke: false }
+          - { os: macos-latest, target: osx_arm64, smoke: true }
+          - { os: macos-latest, target: osx_amd64, smoke: false }
+          - { os: windows-latest, target: windows_amd64, smoke: true }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Build
+        working-directory: packages/studio-cli
+        run: bun scripts/build-binary.ts ${{ matrix.target }}
+
+      - name: Smoke test
+        if: matrix.smoke
+        working-directory: packages/studio-cli
+        run: bun scripts/smoke.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheetbase-studio-${{ matrix.target }}
+          path: packages/studio-cli/dist/sheetbase-studio-*
+          if-no-files-found: error
+
+  release-assets:
+    name: Attach binaries to the release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [publish, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sheetbase-studio-*
+          path: dist
+          merge-multiple: true
+
+      - name: Package (tar.gz for Linux/macOS, zip for Windows) with checksums
+        working-directory: dist
+        run: |
+          for file in sheetbase-studio-*; do
+            case "$file" in *.sha256) continue ;; esac
+            if [ "${file%.exe}" != "$file" ]; then
+              cp "$file" sheetbase-studio.exe && zip -9 "${file%.exe}.zip" sheetbase-studio.exe && rm sheetbase-studio.exe
+            else
+              chmod +x "$file" && cp "$file" sheetbase-studio && tar -czf "$file.tar.gz" sheetbase-studio && rm sheetbase-studio
+            fi
+          done
+          sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update the release
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md."
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber dist/*.tar.gz dist/*.zip dist/SHA256SUMS.txt
+

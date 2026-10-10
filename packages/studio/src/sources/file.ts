@@ -101,6 +101,8 @@ export interface DuckDbSourceOptions {
   /** Supply an engine (tests, a shared instance); otherwise DuckDB-WASM starts on first use. */
   engine?: FileSqlEngine | (() => Promise<FileSqlEngine>)
   wasm?: DuckDbWasmOptions
+  /** Allow read-only SQL. Default true. */
+  sql?: boolean
 }
 
 /**
@@ -113,7 +115,7 @@ export class DuckDbSource extends DuckDbSqlSource {
   readonly #taken = new Set<string>()
 
   private constructor(options: DuckDbSourceOptions, engine: FileSqlEngine) {
-    super({ id: options.id ?? 'files', label: options.label ?? 'Files', kind: options.kind ?? 'file', engine })
+    super({ id: options.id ?? 'files', label: options.label ?? 'Files', kind: options.kind ?? 'file', engine, sql: options.sql })
     this.#engine = engine
   }
 
@@ -125,7 +127,7 @@ export class DuckDbSource extends DuckDbSqlSource {
   }
 
   #claim(name: string): string {
-    const id = tableNameFor(name, this.#taken)
+    const id = tableNameFor(name, new Set([...this.#taken, ...this.tableIds()]))
     this.#taken.add(id)
     return id
   }
@@ -153,7 +155,7 @@ export class DuckDbSource extends DuckDbSqlSource {
           return [name, value instanceof Date ? value.toISOString() : value ?? null]
         })))
         const label = sheets.length > 1 ? `${file.name} · ${sheet.sheet}` : file.name
-        tables.push(await this.addRows(rows, { name: sheets.length > 1 ? `${file.name}_${sheet.sheet}` : file.name, label, description: 'Excel upload' }))
+        tables.push(await this.addRows(rows, { name: sheets.length > 1 ? `${file.name.replace(/\.[^.]+$/, '')}_${sheet.sheet}` : file.name, label, description: 'Excel upload' }))
       }
       if (!tables.length) throw new Error(`${file.name} has no sheets with a header row.`)
       return tables
@@ -171,13 +173,44 @@ export class DuckDbSource extends DuckDbSqlSource {
       // (offline, locked-down networks); a pure-JS reader takes over.
       if (format !== 'parquet') throw error
       this.#taken.delete(id)
-      const [{ parquetReadObjects }, { compressors }] = await Promise.all([import('hyparquet'), import('hyparquet-compressors')])
-      const rows = await parquetReadObjects({ file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, compressors })
+      let rows: unknown[]
+      try {
+        const [{ parquetReadObjects }, { compressors }] = await Promise.all([import('hyparquet'), import('hyparquet-compressors')])
+        rows = await parquetReadObjects({ file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, compressors })
+      } catch {
+        // No fallback reader in this build (native DuckDB reads Parquet
+        // itself), or it failed too: DuckDB's own error is the useful one.
+        throw error
+      }
       return [await this.addRows(rows as Row[], { name: file.name, label: file.name, description: 'Parquet upload' })]
     } finally {
       await this.#engine.dropFile?.(path).catch(() => undefined)
     }
     return [await this.registerTable(id, quoteIdent(id), { label: file.name, description: `${format.toUpperCase()} upload` })]
+  }
+
+  /**
+   * Open a file the engine can read by path (a native DuckDB on a server):
+   * Parquet becomes a view, so a large file is scanned in place rather than
+   * copied; CSV/TSV are loaded by DuckDB straight from disk. Returns null for
+   * formats DuckDB doesn't read by path (JSON, Excel) — use `upload` for those.
+   */
+  async openPath(path: string, name: string): Promise<TableInfo | null> {
+    const format = detectFormat(name)
+    if (format !== 'parquet' && format !== 'csv' && format !== 'tsv') return null
+    const id = this.#claim(name)
+    try {
+      if (format === 'parquet') {
+        await this.run(`CREATE VIEW ${quoteIdent(id)} AS SELECT * FROM read_parquet(${quoteLiteral(path)})`)
+      } else {
+        const options = format === 'tsv' ? `delim = '\t', header = true, auto_detect = true` : 'header = true, auto_detect = true'
+        await this.run(`CREATE TABLE ${quoteIdent(id)} AS SELECT * FROM read_csv(${quoteLiteral(path)}, ${options})`)
+      }
+    } catch (error) {
+      this.#taken.delete(id)
+      throw error
+    }
+    return this.registerTable(id, quoteIdent(id), { label: name, description: `${format.toUpperCase()} file` })
   }
 
   /**

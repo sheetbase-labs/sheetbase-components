@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in `packages/*` and are consumed as workspace dependencies (`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`, `@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`, `@sheetbase-labs/sheetbase-rulesengine`, `@sheetbase-labs/sheetbase-advanced-search`, `@sheetbase-labs/sheetbase-studio`, `sheetbase-demo`). `python/` holds the `sheetbase-studio` Python package (Ibis-backed server and notebook widget).
+Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in `packages/*` and are consumed as workspace dependencies (`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`, `@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`, `@sheetbase-labs/sheetbase-rulesengine`, `@sheetbase-labs/sheetbase-advanced-search`, `@sheetbase-labs/sheetbase-studio`, `sheetbase-studio-cli`, `sheetbase-demo`). `python/` holds the `sheetbase-studio` Python package (Ibis-backed server and notebook widget); `packages/studio-cli` builds the single `sheetbase-studio` binary.
 
 ## Validate
 
@@ -39,6 +39,14 @@ uv venv && uv pip install -e "python[dev]" && .venv/bin/pytest python
 SHEETBASE_PYTHON=.venv/bin/python bun run --filter @sheetbase-labs/sheetbase-studio test   # + live TS↔Python contract test
 ```
 
+Single binary (`packages/studio-cli`):
+
+```bash
+bun run --filter sheetbase-studio-cli fetch:natives   # DuckDB binding + connectors into .cache/ (tests need them for SQLite)
+bun run --filter sheetbase-studio-cli build:binary    # this platform → packages/studio-cli/dist (add -- --all for five)
+bun run --filter sheetbase-studio-cli smoke           # run the built binary end to end
+```
+
 ## Conventions
 
 - **Shared contracts live in `packages/shared`** — field types, filter operators, `FilterNode` trees, `DatasetQuery`/`queryKey`, `buildPredicate`, theme CSS, `SheetbaseShell`/pane layout. Cross-package types and behaviour belong there, not in sibling packages.
@@ -49,7 +57,8 @@ SHEETBASE_PYTHON=.venv/bin/python bun run --filter @sheetbase-labs/sheetbase-stu
 - **Lint discipline**: `biome.json` is the baseline. `noUnusedImports` is an error; style/a11y debt is warnings pending later work. Suppress deliberately-incomplete hook dependency arrays and intentional numeric constants with targeted `biome-ignore` comments — do not silence files.
 - **Deliberate divergences** in lint/tooling config are documented in the config files themselves.
 - **One filter semantics, three executors**: `buildPredicate` (JS), the DuckDB compiler (`packages/studio/src/lib/sql-compile.ts`) and the Ibis compiler (`python/src/sheetbase/filters.py`). A change to predicate semantics changes all three and the parity fixture (`packages/studio/fixtures/filter-parity.json`).
-- **Studio is read-only.** Sources never write back; SQL is one SELECT/WITH query. Keep it that way unless a design decision says otherwise.
+- **Studio is read-only.** Sources never write back; SQL is one SELECT/WITH query. Keep it that way unless a design decision says otherwise. The binary also locks DuckDB down after startup (no other files, network, attaches or settings) — `src/engine.ts` `lockDown()`.
+- **The binary's DuckDB matches its connectors.** `@duckdb/node-api` (studio and studio-cli) is pinned to the newest DuckDB with `duckdb-extension-*` builds on PyPI; bump both together.
 
 ## Layout
 
@@ -64,6 +73,7 @@ packages/schema-editor/   schema canvas (reactflow)
 packages/rules-engine/    NL rule language → table mutations (dry-run today)
 packages/studio/          data exploration: profiles, explorer, search, grid, SQL
   fixtures/               filter-parity.json (shared with python/ tests)
+packages/studio-cli/      single `sheetbase-studio` binary: native DuckDB server + embedded UI
 packages/demo/            workbench composing the packages
 python/                   sheetbase-studio: Ibis backend, `sheetbase serve`, notebook widget
 .github/workflows/ci.yml  typecheck + lint + tests + builds + e2e

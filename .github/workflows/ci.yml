@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: DuckDB natives for the CLI tests
+        run: bun run --filter sheetbase-studio-cli fetch:natives
+
       - name: Unit tests
         run: bun run test
 
@@ -170,3 +173,84 @@ jobs:
       - name: Run Playwright (layout at phone → wall sizes)
         working-directory: packages/studio
         run: bunx playwright test --project=chromium
+
+  studio-binary:
+    name: Studio binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Smoke-tested on their own OS; the other two are cross-compiled.
+          - { os: ubuntu-latest, target: linux_amd64, smoke: true }
+          - { os: ubuntu-latest, target: linux_arm64, smoke: false }
+          - { os: macos-latest, target: osx_arm64, smoke: true }
+          - { os: macos-latest, target: osx_amd64, smoke: false }
+          - { os: windows-latest, target: windows_amd64, smoke: true }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Build
+        working-directory: packages/studio-cli
+        run: bun scripts/build-binary.ts ${{ matrix.target }}
+
+      - name: Smoke test
+        if: matrix.smoke
+        working-directory: packages/studio-cli
+        run: bun scripts/smoke.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sheetbase-studio-${{ matrix.target }}
+          path: packages/studio-cli/dist/sheetbase-studio-*
+          if-no-files-found: error
+
+  studio-databases:
+    name: Studio binary against Postgres and MySQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: studio
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot" --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      SHEETBASE_TEST_POSTGRES: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      SHEETBASE_TEST_MYSQL: mysql://root:root@127.0.0.1:3306/studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Live database tests (seed + explore through the connectors)
+        working-directory: packages/studio-cli
+        run: bun run fetch:natives && bunx vitest run test/databases.test.ts
+
+      - name: Build and smoke-test the binary against both databases
+        working-directory: packages/studio-cli
+        run: bun scripts/build-binary.ts && bun scripts/smoke.ts
+

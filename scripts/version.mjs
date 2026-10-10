@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
-const packages = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine", "studio", "demo"];
+const packages = ["shared", "table", "advanced-search", "explorer", "schema-editor", "rules-engine", "studio", "studio-cli", "demo"];
 
 const next = process.argv[2];
 if (!next || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(next)) {
