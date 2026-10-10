@@ -136,22 +136,13 @@ The plain demo (`/`) uses `renderCell` for status badges and a `Copy column name
 
 ## Host hooks
 
-A bound host (an ELN sheet, an external dataset) keeps its own data-integrity
-rules in front of the grid's local commit pipeline through the seams below.
-They are additive: omitting all of them preserves the current behaviour
-exactly.
+A bound host (an ELN sheet, an external dataset) keeps its own data-integrity rules in front of the grid's local commit pipeline through the seams below. They are additive: omitting all of them preserves the current behaviour exactly.
 
 ### Pre-commit mutation veto — `beforeCellsChange`
 
-Runs *before* a cell mutation is applied (edit, paste, fill, clear, move,
-replace, structural edit, local sort). Return `false` to reject the whole
-change set — no history entry, no bound field writes, no `onMutation`; assign
-to `change.next` to replace individual proposed values. A rejected single-cell
-edit applies nothing and leaves the editor open.
+Runs *before* a cell mutation is applied (edit, paste, fill, clear, move, replace, structural edit, local sort). Return `false` to reject the whole change set — no history entry, no bound field writes, no `onMutation`; assign to `change.next` to replace individual proposed values. A rejected single-cell edit applies nothing and leaves the editor open.
 
-For bulk operations the change list is the operation's full intended target set,
-including cells the grid would skip; see
-[Whole-operation veto for bulk writes](#whole-operation-veto-for-bulk-writes--intended-targets).
+For bulk operations the change list is the operation's full intended target set, including cells the grid would skip; see [Whole-operation veto for bulk writes](#whole-operation-veto-for-bulk-writes--intended-targets).
 
 ```ts
 beforeCellsChange?(
@@ -173,15 +164,9 @@ type SpreadsheetMutationSource =
 
 ### Clipboard before-hooks — `clipboard`
 
-`onCopy` / `onCut` / `onPaste` fire before the payload is written, cleared or
-applied. Return `false` to cancel, nothing/`true` to accept, or a payload to
-transform (`values` are re-parsed from replaced `text`). `onCutStatusChange`
-surfaces cut status (`{ label, range }`) and `null` when the cut is dismissed,
-so a host can render its own cut status.
+`onCopy` / `onCut` / `onPaste` fire before the payload is written, cleared or applied. Return `false` to cancel, nothing/`true` to accept, or a payload to transform (`values` are re-parsed from replaced `text`). `onCutStatusChange` surfaces cut status (`{ label, range }`) and `null` when the cut is dismissed, so a host can render its own cut status.
 
-The transform is a replacement, not just a veto — the returned payload is what
-reaches the clipboard (copy/cut) or the grid (paste). A paste hook can therefore
-rewrite formula relative references:
+The transform is a replacement, not just a veto — the returned payload is what reaches the clipboard (copy/cut) or the grid (paste). A paste hook can therefore rewrite formula relative references:
 
 ```ts
 clipboard={{
@@ -213,9 +198,7 @@ type SpreadsheetClipboardPayload = {
 
 ### Header menu hook — `columnMenuItems`
 
-Host entries appended to the column header menu; the list is filtered through
-`disabled?.()` before rendering. Use `contextMenuActions` for the row/column
-context menus.
+Host entries appended to the column header menu; the list is filtered through `disabled?.()` before rendering. Use `contextMenuActions` for the row/column context menus.
 
 ```ts
 columnMenuItems?: readonly SpreadsheetMenuAction[];
@@ -228,10 +211,7 @@ type SpreadsheetMenuAction = {
 
 ### Editor hooks — `customEditors`
 
-The first editor whose `matches({ point, columnId, field })` is true replaces
-the built-in input. `render` receives `columnId` and the cell's `storedValue`
-(not the display label) alongside `initialDraft`, `commit` and `cancel` — the
-hook a record picker or formula-reference editor uses.
+The first editor whose `matches({ point, columnId, field })` is true replaces the built-in input. `render` receives `columnId` and the cell's `storedValue` (not the display label) alongside `initialDraft`, `commit` and `cancel` — the hook a record picker or formula-reference editor uses.
 
 ```ts
 customEditors?: readonly SpreadsheetCustomEditor[];
@@ -248,9 +228,7 @@ type SpreadsheetCustomEditor = {
 
 ### Stored value vs display text — `DatasetFieldHeader.displayText`
 
-A column may map its stored value to display text. The grid renders the label
-while the stored value is untouched, so bound writes keep the real value (a
-record id, a category key). `renderCell`'s `display` also carries the label.
+A column may map its stored value to display text. The grid renders the label while the stored value is untouched, so bound writes keep the real value (a record id, a category key). `renderCell`'s `display` also carries the label.
 
 ```ts
 type DatasetFieldHeader = {
@@ -261,9 +239,7 @@ type DatasetFieldHeader = {
 
 ### Sort/filter surface — `onSortChange` / `onFiltersChange`
 
-`query` / `onQueryChange` carry the full `DatasetQuery`; these two fire only
-when the sort or filter clauses actually change, and `getQuery()` on the ref
-reads the live query.
+`query` / `onQueryChange` carry the full `DatasetQuery`; these two fire only when the sort or filter clauses actually change, and `getQuery()` on the ref reads the live query.
 
 ```ts
 onSortChange?(sorts: readonly SortClause[]): void;
@@ -273,45 +249,22 @@ onFiltersChange?(filters: readonly FilterClause[]): void;
 
 ### Local sort and filter for bound grids — `sortMode: "local"`
 
-A bound grid (`datasetHeader.recordIdForRow`) never reorders `data`: rows are
-records, so moving values between addresses would desync row→record identity.
-With `sortMode: "local"` (the default) the grid instead applies the query as a
-**view** — a display→source row mapping — so displayed order and hidden rows
-change while every value stays with its record:
+A bound grid (`datasetHeader.recordIdForRow`) never reorders `data`: rows are records, so moving values between addresses would desync row→record identity. With `sortMode: "local"` (the default) the grid instead applies the query as a **view** — a display→source row mapping — so displayed order and hidden rows change while every value stays with its record:
 
-- `query.sort` orders the displayed rows (numeric-aware, `nulls` honoured,
-  stable ties); `query.filters` + `filterLogic`, or the authoritative
-  `filterTree`, hide rows that do not match.
-- Rows with no record (`recordIdForRow` returns `undefined`) are placeholders,
-  not dataset rows, so an active view shows the records that exist instead of
-  thousands of empty rows.
-- A query that leaves order and membership unchanged costs nothing: the grid
-  keeps the identity mapping.
-- Selection, editing, clipboard, fill, move, find/replace and the write path all
-  operate on displayed rows and resolve each one back to its stored cell, so a
-  bound write still carries the right `recordId`/`fieldId`.
-- `cellState(row, column)`, `onSelectionChange.address`, `beforeCellsChange`
-  changes, `onPaste`'s target and field writes report **stored** rows/addresses;
-  `onSelectionChange.range` and the row numbers are displayed positions.
-- Row heights, hidden rows, direct formats and conditional-format rules are
-  stored against the owning row, so they travel with the record.
-- `onViewportChange` reports the stored rows behind the visible window (min/max)
-  so a viewport loader keeps loading what the user sees.
-- `sortMode: "server"` (used by `PagedSpreadsheet`) keeps the old contract: the
-  query goes to the host and no local view is applied.
+- `query.sort` orders the displayed rows (numeric-aware, `nulls` honoured, stable ties); `query.filters` + `filterLogic`, or the authoritative `filterTree`, hide rows that do not match.
+- Rows with no record (`recordIdForRow` returns `undefined`) are placeholders, not dataset rows, so an active view shows the records that exist instead of thousands of empty rows.
+- A query that leaves order and membership unchanged costs nothing: the grid keeps the identity mapping.
+- Selection, editing, clipboard, fill, move, find/replace and the write path all operate on displayed rows and resolve each one back to its stored cell, so a bound write still carries the right `recordId`/`fieldId`.
+- `cellState(row, column)`, `onSelectionChange.address`, `beforeCellsChange` changes, `onPaste`'s target and field writes report **stored** rows/addresses; `onSelectionChange.range` and the row numbers are displayed positions.
+- Row heights, hidden rows, direct formats and conditional-format rules are stored against the owning row, so they travel with the record.
+- `onViewportChange` reports the stored rows behind the visible window (min/max) so a viewport loader keeps loading what the user sees.
+- `sortMode: "server"` (used by `PagedSpreadsheet`) keeps the old contract: the query goes to the host and no local view is applied.
 
-The view primitives are exported for hosts and tests:
-`buildGridView(config)` → `{ rows, indexOf } | undefined`, plus
-`viewSourceRow`, `viewDisplayRow`, `viewCellKey`, `rowOffsetTable`,
-`compareGridValues` and `compareNullable`.
+The view primitives are exported for hosts and tests: `buildGridView(config)` → `{ rows, indexOf } | undefined`, plus `viewSourceRow`, `viewDisplayRow`, `viewCellKey`, `rowOffsetTable`, `compareGridValues` and `compareNullable`.
 
 ### Whole-operation veto for bulk writes — `intended` targets
 
-Handsontable's paste/fill/clear semantics are all-or-nothing: a host that must
-not write partially rejects the whole operation. `beforeCellsChange` therefore
-receives the operation's **full intended target set**, including cells the grid
-will not write because they are not editable. Those entries carry
-`editable: false`; every cell the grid will write has no `editable` field.
+Handsontable's paste/fill/clear semantics are all-or-nothing: a host that must not write partially rejects the whole operation. `beforeCellsChange` therefore receives the operation's **full intended target set**, including cells the grid will not write because they are not editable. Those entries carry `editable: false`; every cell the grid will write has no `editable` field.
 
 ```ts
 beforeCellsChange?(
@@ -327,26 +280,19 @@ type SpreadsheetCellChange = {
 };
 ```
 
-Return `false` to refuse the operation as a whole — nothing is applied, no
-history entry, no field writes, no `onMutation`:
+Return `false` to refuse the operation as a whole — nothing is applied, no history entry, no field writes, no `onMutation`:
 
 ```ts
 beforeCellsChange: (changes) => changes.every((change) => change.editable !== false)
 ```
 
-- `change.next` still replaces an individual proposed value, but only for cells
-  the grid writes; a non-editable target can be vetoed, never written.
-- Bulk operations (paste, fill, clear, move) report targets; a single-cell edit
-  and a structural change report their applied cells only.
-- A paste larger than 20,000 cells is applied in frame-sized slices, and its
-  whole target set is gated once before the first slice lands.
+- `change.next` still replaces an individual proposed value, but only for cells the grid writes; a non-editable target can be vetoed, never written.
+- Bulk operations (paste, fill, clear, move) report targets; a single-cell edit and a structural change report their applied cells only.
+- A paste larger than 20,000 cells is applied in frame-sized slices, and its whole target set is gated once before the first slice lands.
 
 ### Structural row hooks — `onBeforeRowsInsert` / `onRowsInserted` / `onBeforeRowsRemove` / `onRowsRemoved`
 
-The row menu and `ref.insertRows()` / `ref.deleteRows()` route through one
-decision that fires these hooks. **They fire for bound grids too** — the row
-menu's insert/delete entries are no longer hidden when `recordIdForRow` is set,
-so a bound host's deletion preflight and persistence always run.
+The row menu and `ref.insertRows()` / `ref.deleteRows()` route through one decision that fires these hooks. **They fire for bound grids too** — the row menu's insert/delete entries are no longer hidden when `recordIdForRow` is set, so a bound host's deletion preflight and persistence always run.
 
 ```ts
 onBeforeRowsInsert?(rowIndex: number, count: number): boolean | void;
@@ -355,19 +301,10 @@ onBeforeRowsRemove?(rowIndex: number, count: number): boolean | void;
 onRowsRemoved?(rowIndex: number, count: number): void;
 ```
 
-- `rowIndex` is the **stored** row (the record), resolved through a local view;
-  `count` is the number of rows acted on. Return `false` from the preflight to
-  block the whole operation.
-- The row menu acts on one row. A multi-row `ref.deleteRows(index, count)` under
-  an active local view reports the stored row of the first displayed row and the
-  displayed count; resolve records through `recordIdForRow` when a sorted or
-  filtered view could make the stored span non-contiguous.
-- **Unbound grid** — the mutation is applied locally (undoable) and the
-  after-hook fires only when it applied.
-- **Bound grid** (`datasetHeader.recordIdForRow`) — `data` is never reordered,
-  so nothing is applied locally: the after-hook fires and the host persists
-  (delete/create records) and pushes the rebuilt rows back through
-  `replaceData`. Writes can never target the wrong record.
+- `rowIndex` is the **stored** row (the record), resolved through a local view; `count` is the number of rows acted on. Return `false` from the preflight to block the whole operation.
+- The row menu acts on one row. A multi-row `ref.deleteRows(index, count)` under an active local view reports the stored row of the first displayed row and the displayed count; resolve records through `recordIdForRow` when a sorted or filtered view could make the stored span non-contiguous.
+- **Unbound grid** — the mutation is applied locally (undoable) and the after-hook fires only when it applied.
+- **Bound grid** (`datasetHeader.recordIdForRow`) — `data` is never reordered, so nothing is applied locally: the after-hook fires and the host persists (delete/create records) and pushes the rebuilt rows back through `replaceData`. Writes can never target the wrong record.
 - Read-only grids, and a displayed row a local view hides, are no-ops.
 
 ```tsx
@@ -390,25 +327,13 @@ stretch?: "none" | "last" | "all"; // default "none": keep the configured widths
 rowHeaders?: boolean;              // default true; false frees the row-header column
 ```
 
-- `height` sets the scroll container's height inline. `"fill"` writes
-  `height: 100%`, so the host's parent must be a sized box (the default
-  `TableLayout` cell already is).
-- `stretch` measures the scroll container and distributes slack width:
-  `"last"` gives it all to the last visible column, `"all"` shares it equally.
-  Hidden columns (`width: 0`) stay hidden and a column is never shrunk below
-  its configured width; a resize still writes the *configured* width, so the
-  host's persisted widths are unaffected.
-- `rowHeaders: false` removes the row-number column and the select-all corner
-  and shifts every column left by the header width.
+- `height` sets the scroll container's height inline. `"fill"` writes `height: 100%`, so the host's parent must be a sized box (the default `TableLayout` cell already is).
+- `stretch` measures the scroll container and distributes slack width: `"last"` gives it all to the last visible column, `"all"` shares it equally. Hidden columns (`width: 0`) stay hidden and a column is never shrunk below its configured width; a resize still writes the *configured* width, so the host's persisted widths are unaffected.
+- `rowHeaders: false` removes the row-number column and the select-all corner and shifts every column left by the header width.
 
 ### Initial column order — `orderColumnsById`
 
-The grid is positional: `fieldIds[i]`, `datasetHeader.fields[].column`,
-`initialData` addresses, `columnWidths[i]` and `onColumnMove(from, to)` all
-index the same column, and the host already rebuilds those arrays when it
-persists a move. There is therefore no separate in-component display order to
-set — the order **is** the order of the host's arrays. For a saved initial
-order, order the host's columns before mapping:
+The grid is positional: `fieldIds[i]`, `datasetHeader.fields[].column`, `initialData` addresses, `columnWidths[i]` and `onColumnMove(from, to)` all index the same column, and the host already rebuilds those arrays when it persists a move. There is therefore no separate in-component display order to set — the order **is** the order of the host's arrays. For a saved initial order, order the host's columns before mapping:
 
 ```ts
 import { orderColumnsById } from "@sheetbase-labs/sheetbase-table";
@@ -417,16 +342,11 @@ const columns = orderColumnsById(allColumns, presentation.columnOrder);
 // then build fieldIds / datasetHeader / initialData from `columns`, as usual
 ```
 
-`orderColumnsById(columns, order)` puts ids named by `order` first (unknown and
-duplicate ids dropped), then the remaining columns in their existing order.
+`orderColumnsById(columns, order)` puts ids named by `order` first (unknown and duplicate ids dropped), then the remaining columns in their existing order.
 
 ### Formula-engine seams — `formulaEngine`
 
-The package owns calculation (ADR-0048 option (b)) — it compiles and evaluates
-`"=…"` inputs itself — so a host's *engine instance* cannot be injected; the
-supported "host owns calculation" mode remains `calculationAuthority: "host"`
-(formulas stay inert text, values arrive through hydration). What can be
-configured are the seams of the engine that does run:
+The package owns calculation (ADR-0048 option (b)) — it compiles and evaluates `"=…"` inputs itself — so a host's *engine instance* cannot be injected; the supported "host owns calculation" mode remains `calculationAuthority: "host"` (formulas stay inert text, values arrive through hydration). What can be configured are the seams of the engine that does run:
 
 ```ts
 type SpreadsheetFormulaEngine = {
@@ -437,22 +357,13 @@ type SpreadsheetFormulaEngine = {
 };
 ```
 
-`formulaNormalizer` receives the text *after* the built-in `[fieldId]` → range
-substitution; both seams are read at mount, and a changed `formulaNormalizer`
-renormalises the sheet (remount to reset `initialData`-style state).
+`formulaNormalizer` receives the text *after* the built-in `[fieldId]` → range substitution; both seams are read at mount, and a changed `formulaNormalizer` renormalises the sheet (remount to reset `initialData`-style state).
 
-There is deliberately no way to inject a foreign engine instance or a
-`sheetName`: one `Spreadsheet` is one sheet backed by the package's engine, and
-multi-sheet ownership stays with the host (the package's `TableWorkbook`
-composes several). The transitional ELN `formulas: { engine, sheetName }` is
-obsolete under ADR-0048 option (b) — the server adopts this engine, so
-calculation lives in (or behind) the grid, and `calculationAuthority: "host"`
-covers a host that still owns calculation.
+There is deliberately no way to inject a foreign engine instance or a `sheetName`: one `Spreadsheet` is one sheet backed by the package's engine, and multi-sheet ownership stays with the host (the package's `TableWorkbook` composes several). The transitional ELN `formulas: { engine, sheetName }` is obsolete under ADR-0048 option (b) — the server adopts this engine, so calculation lives in (or behind) the grid, and `calculationAuthority: "host"` covers a host that still owns calculation.
 
 ### Imperative handle — select and scroll
 
-`SpreadsheetHandle` (the `ref`, or the handle passed to `onReady`) exposes the
-interaction commands a host needs after it changes its own rows:
+`SpreadsheetHandle` (the `ref`, or the handle passed to `onReady`) exposes the interaction commands a host needs after it changes its own rows:
 
 ```ts
 selectCell(row: number, column: number, options?: { extend?: boolean }): void;
@@ -460,12 +371,7 @@ selectCellAddress(address: string, options?: { extend?: boolean }): boolean;
 scrollCellIntoView(row: number, column: number): void;
 ```
 
-`selectCell` takes **displayed** coordinates, clamps them to the grid, moves the
-selection (extending from the anchor when `extend` is true), scrolls the cell
-into view and focuses the grid. `selectCellAddress` takes a **stored** A1
-address, resolves it through a local sort/filter view, and returns `false` when
-the address is malformed or the row is hidden. `scrollCellIntoView` scrolls
-without touching the selection or focus.
+`selectCell` takes **displayed** coordinates, clamps them to the grid, moves the selection (extending from the anchor when `extend` is true), scrolls the cell into view and focuses the grid. `selectCellAddress` takes a **stored** A1 address, resolves it through a local sort/filter view, and returns `false` when the address is malformed or the row is hidden. `scrollCellIntoView` scrolls without touching the selection or focus.
 
 ```tsx
 const [table, setTable] = useState<SpreadsheetHandle | null>(null);
@@ -473,13 +379,9 @@ const [table, setTable] = useState<SpreadsheetHandle | null>(null);
 table?.selectCellAddress(`A${rows.length}`);
 ```
 
-`onReady(handle)` fires once after mount for hosts that hold no ref; the same
-handle is available through `ref`.
+`onReady(handle)` fires once after mount for hosts that hold no ref; the same handle is available through `ref`.
 
-`selectCell`/`selectCellAddress` clamp against the row count of the latest
-render, so call them after a data change has rendered (e.g. in an effect that
-runs when the rows change, or after `await`ing the state update) — calling them
-synchronously after `replaceData` in the same tick clamps to the old row count.
+`selectCell`/`selectCellAddress` clamp against the row count of the latest render, so call them after a data change has rendered (e.g. in an effect that runs when the rows change, or after `await`ing the state update) — calling them synchronously after `replaceData` in the same tick clamps to the old row count.
 
 ## Multi-select option fields and large pastes
 

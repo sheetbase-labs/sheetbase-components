@@ -14,9 +14,7 @@ Private monorepo for Sheetbase UI packages. Shared field types, filter operators
 | `@sheetbase-labs/sheetbase-advanced-search` | Nested AND/OR/NOT search |
 | `@sheetbase-labs/sheetbase-studio` | Data exploration: field profiles, explorer, filters, rows and read-only SQL over any data source |
 
-The `sheetbase-studio` Python package (`python/`) serves the Studio over
-pandas, polars, files or any Ibis backend — `sheetbase serve` in the browser,
-`sheetbase.explore(df)` in a notebook. See `python/README.md`.
+The `sheetbase-studio` Python package (`python/`) serves the Studio over pandas, polars, files or any Ibis backend — `sheetbase serve` in the browser, `sheetbase.explore(df)` in a notebook. See `python/README.md`.
 
 ## Run
 
@@ -35,8 +33,7 @@ bun run dev:search     # :5203
 bun run dev:studio     # :5204
 ```
 
-The million-row paged demo and the explorer's remote source need the
-example API running too: `cd packages/table && bun run dev:api` (:8787).
+The million-row paged demo and the explorer's remote source need the example API running too: `cd packages/table && bun run dev:api` (:8787).
 
 GitHub Actions on this repo run unit tests for every package, table/explorer/schema/rules/search production and library builds, table bundle budget and benches, explorer benches, a pack smoke test (tarballs install + typecheck as an external consumer), and table Playwright e2e on Chromium, Firefox and WebKit.
 

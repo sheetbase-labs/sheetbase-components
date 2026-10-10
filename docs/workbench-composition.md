@@ -1,14 +1,10 @@
 # Workbench composition
 
-The demo workbench (`packages/demo/src/Workbench.tsx`) is the reference
-composition: five components docked as panes that interoperate through one
-workspace. This document is the recipe — each piece below is shared code, and
-the demo consumes it rather than re-deriving it.
+The demo workbench (`packages/demo/src/Workbench.tsx`) is the reference composition: five components docked as panes that interoperate through one workspace. This document is the recipe — each piece below is shared code, and the demo consumes it rather than re-deriving it.
 
 ## The layout
 
-A `PaneLayout` tree gives every component a real pane — draggable tabs,
-resizable splits, closable panes — persisted under one key:
+A `PaneLayout` tree gives every component a real pane — draggable tabs, resizable splits, closable panes — persisted under one key:
 
 ```tsx
 <PaneLayout
@@ -22,20 +18,16 @@ resizable splits, closable panes — persisted under one key:
 />
 ```
 
-Closed panes are a `ReadonlySet<string>` the host persists under its own key;
-"New pane…" re-opens the first closed id via `PaneLayoutHandle.addPane`.
+Closed panes are a `ReadonlySet<string>` the host persists under its own key; "New pane…" re-opens the first closed id via `PaneLayoutHandle.addPane`.
 
 ## The one-AnalysisView rule
 
-`AnalysisView` (shared) is the contract between the search pane and the
-explorer — filter tree, grouping, summary, sort, limit. **Keep exactly one**
-and hand it to both:
+`AnalysisView` (shared) is the contract between the search pane and the explorer — filter tree, grouping, summary, sort, limit. **Keep exactly one** and hand it to both:
 
 - `AdvancedSearch` gets `value={view}` + `onChange` (a partial merge).
 - `Explorer` gets `view={view}` + `onViewChange` (a full replace).
 
-`useWorkbench` owns this triad — the view, the compiled `DatasetQuery` the
-table follows, and the derived row slices:
+`useWorkbench` owns this triad — the view, the compiled `DatasetQuery` the table follows, and the derived row slices:
 
 ```tsx
 const wb = useWorkbench({
@@ -53,36 +45,19 @@ const wb = useWorkbench({
 <WorkspaceProvider value={wb.workspace}> ... </WorkspaceProvider>
 ```
 
-- `wb.viewRows` — rows after the view's filter + sort + limit; feed the
-  explorer dataset and the rules dry-run.
-- `wb.filteredRows` — filter + sort without the limit; the "filtered N / M"
-  counter.
-- `wb.workspace` — the `WorkspaceProvider` value (`{ fields, rows, query }`)
-  the table reads through `useWorkspace`.
+- `wb.viewRows` — rows after the view's filter + sort + limit; feed the explorer dataset and the rules dry-run.
+- `wb.filteredRows` — filter + sort without the limit; the "filtered N / M" counter.
+- `wb.workspace` — the `WorkspaceProvider` value (`{ fields, rows, query }`) the table reads through `useWorkspace`.
 
-The view flows back too: clicking a chart mark ANDs `eq` conditions into
-`view.filter` (x bucket key, plus the series field when the mark carries
-one) — the search pane shows them, the compiled query re-filters the
-table, and remote datasets re-aggregate. Clicking the mark again removes
-them (`andCondition`/`withoutCondition` from shared do the tree edits; a
-dismiss chip duplicates the affordance). Cross-filter conditions are
-ordinary conditions — the search pane can edit or remove them.
+The view flows back too: clicking a chart mark ANDs `eq` conditions into `view.filter` (x bucket key, plus the series field when the mark carries one) — the search pane shows them, the compiled query re-filters the table, and remote datasets re-aggregate. Clicking the mark again removes them (`andCondition`/`withoutCondition` from shared do the tree edits; a dismiss chip duplicates the affordance). Cross-filter conditions are ordinary conditions — the search pane can edit or remove them.
 
 ## The query channel
 
-Search compiles the view to a `DatasetQuery` (with `filterTree` authoritative —
-see the shared README) and reports it through `onDatasetQueryChange`. The host
-forwards it to `WorkspaceProvider`; a paged table pane reads it via
-`useWorkspace().query` and refetches. Never translate the query into something
-component-local — `queryKey` makes it a stable cache key.
+Search compiles the view to a `DatasetQuery` (with `filterTree` authoritative — see the shared README) and reports it through `onDatasetQueryChange`. The host forwards it to `WorkspaceProvider`; a paged table pane reads it via `useWorkspace().query` and refetches. Never translate the query into something component-local — `queryKey` makes it a stable cache key.
 
 ## Persistence
 
-Each pane persists under its own key with a `PersistenceAdapter`
-(`createLocalStorageAdapter` by default; `createHttpAdapter(baseUrl)` for a
-database-backed host speaking `GET {baseUrl}?key=` / `PUT {baseUrl}
-{key,state}` — the table's `createHttpPresentationAdapter` and the explorer's
-`createHttpExplorerAdapter` are thin wrappers over it):
+Each pane persists under its own key with a `PersistenceAdapter` (`createLocalStorageAdapter` by default; `createHttpAdapter(baseUrl)` for a database-backed host speaking `GET {baseUrl}?key=` / `PUT {baseUrl} {key,state}` — the table's `createHttpPresentationAdapter` and the explorer's `createHttpExplorerAdapter` are thin wrappers over it):
 
 | Pane | State | Key (demo) |
 |---|---|---|
@@ -93,44 +68,25 @@ database-backed host speaking `GET {baseUrl}?key=` / `PUT {baseUrl}
 
 ## Schema → table headers
 
-`SchemaEditor`'s `onHeaderFieldsChange` emits `SheetbaseField[]` (with the
-column index) for the selected model; the host stores them and they become the
-workspace `fields` — so renaming a field in the schema pane re-labels the
-table column.
+`SchemaEditor`'s `onHeaderFieldsChange` emits `SheetbaseField[]` (with the column index) for the selected model; the host stores them and they become the workspace `fields` — so renaming a field in the schema pane re-labels the table column.
 
 ## Views are dataset-relative
 
-A view's field references — filter conditions, `groupBy`, `sort`, and the
-explorer's chart channels/filters — only mean something against a field set
-that has them. `pruneViewToFields(view, fields)` is the boundary: conditions
-on unknown fields drop out of the tree (emptied child groups collapse), and
-`groupBy`/`sort` bindings to unknown fields are dropped. Apply it at every
-point where a view meets a field set it wasn't built against:
+A view's field references — filter conditions, `groupBy`, `sort`, and the explorer's chart channels/filters — only mean something against a field set that has them. `pruneViewToFields(view, fields)` is the boundary: conditions on unknown fields drop out of the tree (emptied child groups collapse), and `groupBy`/`sort` bindings to unknown fields are dropped. Apply it at every point where a view meets a field set it wasn't built against:
 
-- `useWorkbench` prunes the persisted view it merges over `initialView` —
-  a view saved under one dataset can't compile into another's queries.
-- The host prunes on schema edits (`onHeaderFieldsChange`) and when swapping
-  datasets, and recompiles the `DatasetQuery` from the pruned view in the
-  same commit so a stale query never fires against the new dataset.
-- The explorer reconciles chart channels and `spec.filters` against the
-  incoming dataset's columns on its own (same rule, chart-shaped state).
+- `useWorkbench` prunes the persisted view it merges over `initialView` — a view saved under one dataset can't compile into another's queries.
+- The host prunes on schema edits (`onHeaderFieldsChange`) and when swapping datasets, and recompiles the `DatasetQuery` from the pruned view in the same commit so a stale query never fires against the new dataset.
+- The explorer reconciles chart channels and `spec.filters` against the incoming dataset's columns on its own (same rule, chart-shaped state).
 
-Without this a persisted `material` filter would reach a dataset that has no
-`material` column — remote executors then reject the query rather than
-return wrong data.
+Without this a persisted `material` filter would reach a dataset that has no `material` column — remote executors then reject the query rather than return wrong data.
 
 ## Rules → filtered rows → write-back
 
-`RulesEngine` receives `rows={wb.viewRows}` (what the user sees is what the
-rules evaluate). Write-back is host-owned: `onApplyWrites` commits through the
-same `PagedDataAdapter` the table reads, mirrors accepted writes into the
-workspace `rows`, invalidates the shared `DataPageCache`, and remounts the
-table so it re-reads committed state.
+`RulesEngine` receives `rows={wb.viewRows}` (what the user sees is what the rules evaluate). Write-back is host-owned: `onApplyWrites` commits through the same `PagedDataAdapter` the table reads, mirrors accepted writes into the workspace `rows`, invalidates the shared `DataPageCache`, and remounts the table so it re-reads committed state.
 
 ## Scaling to server data
 
-`useWorkbench` takes `source` instead of `rows` — exactly one of the two is
-required (it throws `TypeError` otherwise):
+`useWorkbench` takes `source` instead of `rows` — exactly one of the two is required (it throws `TypeError` otherwise):
 
 ```tsx
 const wb = useWorkbench({
@@ -141,34 +97,17 @@ const wb = useWorkbench({
 wb.remote === true;                     // viewRows / filteredRows are null
 ```
 
-`WorkspaceDataSource` is the structural twin of `PagedDataAdapter.fetchPage`
-(plus an optional `aggregate` twin of the explorer's remote contract) — any
-real adapter satisfies it. On remote sources the workbench dataflow is
-unchanged except for who realises rows:
+`WorkspaceDataSource` is the structural twin of `PagedDataAdapter.fetchPage` (plus an optional `aggregate` twin of the explorer's remote contract) — any real adapter satisfies it. On remote sources the workbench dataflow is unchanged except for who realises rows:
 
-- **Table** pages through a host adapter (`HttpPagedDataAdapter`) driven by
-  the workspace `query` — `QueryTable` needs no changes.
-- **Explorer** gets a `Dataset` literal whose `remote.aggregate` /
-  `remote.page` bridge the source; charts aggregate server-side.
-- **Search** still edits the shared `view`; its live preview takes the
-  source's first filtered page (`fetchPage` with the compiled
-  `filterTree`) — already-filtered rows, so the client re-filter is a no-op.
-- **Rules** get `source={remoteRulesSource}` + `filterTree={wb.query.filterTree}`
-  instead of `rows` — the component fetches a capped sample (first 200
-  matching rows) through `fetchPage` and dry-runs it with every label
-  stating the sampled scope. Apply commits real recordIds but says
-  "sampled rows"; auto-apply is disabled (it would keep writing to a
-  sample while implying dataset coverage). See the rules-engine README's
-  server-resident section for the all-matching-rows design.
-- The **"filtered N / M"** counter reads the preview page's `totalRows`
-  (matched) against an unfiltered page's `totalRows`.
+- **Table** pages through a host adapter (`HttpPagedDataAdapter`) driven by the workspace `query` — `QueryTable` needs no changes.
+- **Explorer** gets a `Dataset` literal whose `remote.aggregate` / `remote.page` bridge the source; charts aggregate server-side.
+- **Search** still edits the shared `view`; its live preview takes the source's first filtered page (`fetchPage` with the compiled `filterTree`) — already-filtered rows, so the client re-filter is a no-op.
+- **Rules** get `source={remoteRulesSource}` + `filterTree={wb.query.filterTree}` instead of `rows` — the component fetches a capped sample (first 200 matching rows) through `fetchPage` and dry-runs it with every label stating the sampled scope. Apply commits real recordIds but says "sampled rows"; auto-apply is disabled (it would keep writing to a sample while implying dataset coverage). See the rules-engine README's server-resident section for the all-matching-rows design.
+- The **"filtered N / M"** counter reads the preview page's `totalRows` (matched) against an unfiltered page's `totalRows`.
 
-The demo workbench (`packages/demo/src/Workbench.tsx`) shows the whole thing:
-a source selector swaps between the materialised sample and the remote
-`experiments` API.
+The demo workbench (`packages/demo/src/Workbench.tsx`) shows the whole thing: a source selector swaps between the materialised sample and the remote `experiments` API.
 
 ## Follow-ups
 
 Saved views / named workspaces are a natural next layer — `PersistenceAdapter`
-+ the view triad already imply the shape — but are deliberately not built yet.
-The option space and open product questions are in `docs/saved-views.md`.
++ the view triad already imply the shape — but are deliberately not built yet. The option space and open product questions are in `docs/saved-views.md`.

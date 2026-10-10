@@ -1,18 +1,10 @@
 # AGENTS.md
 
-Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in
-`packages/*` and are consumed as workspace dependencies
-(`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`,
-`@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`,
-`@sheetbase-labs/sheetbase-rulesengine`,
-`@sheetbase-labs/sheetbase-advanced-search`,
-`@sheetbase-labs/sheetbase-studio`, `sheetbase-demo`). `python/` holds the
-`sheetbase-studio` Python package (Ibis-backed server and notebook widget).
+Bun 1.x workspace monorepo for the Sheetbase component set. Packages live in `packages/*` and are consumed as workspace dependencies (`@sheetbase-labs/sheetbase-shared`, `@sheetbase-labs/sheetbase-table`, `@sheetbase-labs/sheetbase-explorer`, `@sheetbase-labs/sheetbase-schemaeditor`, `@sheetbase-labs/sheetbase-rulesengine`, `@sheetbase-labs/sheetbase-advanced-search`, `@sheetbase-labs/sheetbase-studio`, `sheetbase-demo`). `python/` holds the `sheetbase-studio` Python package (Ibis-backed server and notebook widget).
 
 ## Validate
 
-Run from the repo root unless noted. Order matters: typecheck and lint before
-tests when changing contracts.
+Run from the repo root unless noted. Order matters: typecheck and lint before tests when changing contracts.
 
 ```bash
 bun install
@@ -49,37 +41,15 @@ SHEETBASE_PYTHON=.venv/bin/python bun run --filter @sheetbase-labs/sheetbase-stu
 
 ## Conventions
 
-- **Shared contracts live in `packages/shared`** — field types, filter
-  operators, `FilterNode` trees, `DatasetQuery`/`queryKey`, `buildPredicate`,
-  theme CSS, `SheetbaseShell`/pane layout. Cross-package types and behaviour
-  belong there, not in sibling packages.
-- **`DatasetQuery.filterTree` is authoritative** over flat `filters` for
-  executors that evaluate it (see `packages/shared/README.md`). Both may be
-  emitted; consumers must not prefer the flat list when a tree exists.
-- **Bound vs unbound grids**: a `Spreadsheet` is bound when its
-  `datasetHeader` supplies `recordIdForRow`. Bound grids delegate persistence
-  and structure ops (row insert/delete, column ops, local sort) to the host —
-  the grid mutates only what it owns. Check `recordIdForRow` before adding
-  mutating behaviour, not `readOnly`.
-- **Write path**: cell edits go through `runFieldWrite`/`onFieldWrite`; bulk
-  mutations derive bound writes via `fieldWritesForMutation` and emit
-  `onFieldWrites`. Never update `data` without keeping `recordIdsRef`/field
-  identity in sync.
-- **Presentation persistence is idle-scheduled** — reload-dependent e2e tests
-  must wait for the save to land (see the existing `waitForFunction` pattern
-  in `e2e/specs`).
-- **Lint discipline**: `biome.json` is the baseline. `noUnusedImports` is an
-  error; style/a11y debt is warnings pending later work. Suppress
-  deliberately-incomplete hook dependency arrays and intentional numeric
-  constants with targeted `biome-ignore` comments — do not silence files.
-- **Deliberate divergences** in lint/tooling config are documented in the
-  config files themselves.
-- **One filter semantics, three executors**: `buildPredicate` (JS), the DuckDB
-  compiler (`packages/studio/src/lib/sql-compile.ts`) and the Ibis compiler
-  (`python/src/sheetbase/filters.py`). A change to predicate semantics changes
-  all three and the parity fixture (`packages/studio/fixtures/filter-parity.json`).
-- **Studio is read-only.** Sources never write back; SQL is one SELECT/WITH
-  query. Keep it that way unless a design decision says otherwise.
+- **Shared contracts live in `packages/shared`** — field types, filter operators, `FilterNode` trees, `DatasetQuery`/`queryKey`, `buildPredicate`, theme CSS, `SheetbaseShell`/pane layout. Cross-package types and behaviour belong there, not in sibling packages.
+- **`DatasetQuery.filterTree` is authoritative** over flat `filters` for executors that evaluate it (see `packages/shared/README.md`). Both may be emitted; consumers must not prefer the flat list when a tree exists.
+- **Bound vs unbound grids**: a `Spreadsheet` is bound when its `datasetHeader` supplies `recordIdForRow`. Bound grids delegate persistence and structure ops (row insert/delete, column ops, local sort) to the host — the grid mutates only what it owns. Check `recordIdForRow` before adding mutating behaviour, not `readOnly`.
+- **Write path**: cell edits go through `runFieldWrite`/`onFieldWrite`; bulk mutations derive bound writes via `fieldWritesForMutation` and emit `onFieldWrites`. Never update `data` without keeping `recordIdsRef`/field identity in sync.
+- **Presentation persistence is idle-scheduled** — reload-dependent e2e tests must wait for the save to land (see the existing `waitForFunction` pattern in `e2e/specs`).
+- **Lint discipline**: `biome.json` is the baseline. `noUnusedImports` is an error; style/a11y debt is warnings pending later work. Suppress deliberately-incomplete hook dependency arrays and intentional numeric constants with targeted `biome-ignore` comments — do not silence files.
+- **Deliberate divergences** in lint/tooling config are documented in the config files themselves.
+- **One filter semantics, three executors**: `buildPredicate` (JS), the DuckDB compiler (`packages/studio/src/lib/sql-compile.ts`) and the Ibis compiler (`python/src/sheetbase/filters.py`). A change to predicate semantics changes all three and the parity fixture (`packages/studio/fixtures/filter-parity.json`).
+- **Studio is read-only.** Sources never write back; SQL is one SELECT/WITH query. Keep it that way unless a design decision says otherwise.
 
 ## Layout
 
@@ -102,16 +72,8 @@ python/                   sheetbase-studio: Ibis backend, `sheetbase serve`, not
 ## Gotchas
 
 - The paged demo and explorer "Remote" source need `dev:api` running.
-- `dist-lib/` is consumed by sibling examples at dev time — rebuild
-  `build:lib` after changing shared/table contracts.
-- `@sheetbase-labs/sheetbase-shared` is externalized from the table library build; consumers
-  must install both packages.
-- Studio tests need no browser: the DuckDB compiler runs against native
-  DuckDB (`@duckdb/node-api`). In the browser DuckDB-WASM can't download
-  extensions offline, so ingestion uses CSV (built in) and JS parsers — don't
-  switch row loading back to `read_json`.
+- `dist-lib/` is consumed by sibling examples at dev time — rebuild `build:lib` after changing shared/table contracts.
+- `@sheetbase-labs/sheetbase-shared` is externalized from the table library build; consumers must install both packages.
+- Studio tests need no browser: the DuckDB compiler runs against native DuckDB (`@duckdb/node-api`). In the browser DuckDB-WASM can't download extensions offline, so ingestion uses CSV (built in) and JS parsers — don't switch row loading back to `read_json`.
 - Ibis 12 breaks with sqlglot ≥ 28; `python/pyproject.toml` pins it.
-- Packages publish to npm in lockstep (`docs/publishing.md`). `bun pm pack`
-  rewrites `workspace:*` to real versions; peers are `react`, `react-dom`,
-  and `@tanstack/react-virtual` (table only — it is externalized, never put
-  it back in `dependencies`).
+- Packages publish to npm in lockstep (`docs/publishing.md`). `bun pm pack` rewrites `workspace:*` to real versions; peers are `react`, `react-dom`, and `@tanstack/react-virtual` (table only — it is externalized, never put it back in `dependencies`).
