@@ -23,7 +23,7 @@ For pandas or Ibis objects, or warehouses DuckDB can't reach (Snowflake, BigQuer
 | SQLite (`.sqlite`, `.db`, `sqlite://`) | `--db` | read-only |
 | DuckDB (`.duckdb`, `duckdb://`) | `--db` | read-only |
 | Postgres (`postgres://`, `postgresql://`) | `--db` | read-only, via DuckDB's postgres connector |
-| MySQL / MariaDB (`mysql://`) | `--db` | read-only, via DuckDB's mysql connector |
+| MySQL / MariaDB (`mysql://`) | `--db` | read-only, via DuckDB's mysql connector; aggregates run in DuckDB (the connector's aggregate pushdown is off — it mis-binds filtered counts in DuckDB 1.5) |
 
 `--db` is repeatable; name a database with `name=<url>`. `--table` (repeatable) picks tables by `name`, `schema.name` or `alias.schema.name`. Database tables appear under SQL-friendly names — `assays`, or `qc_assays` when the chosen tables span several schemas — and the same names work in the SQL editor. Their row counts are taken on first use, so connecting to a large database stays fast.
 

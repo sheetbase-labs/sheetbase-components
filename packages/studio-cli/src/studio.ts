@@ -83,6 +83,9 @@ export async function openStudio(options: OpenStudioOptions): Promise<OpenedStud
       const extension = EXTENSION_FOR[target.kind]
       if (extension && !loaded.has(extension)) {
         await engine.exec(`LOAD ${quoteLiteral(await options.extensionPath(extension))}`)
+        // DuckDB 1.5's MySQL aggregate pushdown fails to bind filtered counts
+        // ("Failed to bind column reference"); DuckDB aggregates the rows itself.
+        if (extension === 'mysql_scanner') await engine.exec('SET mysql_aggregate_pushdown_enabled = false')
         loaded.add(extension)
       }
       try {
