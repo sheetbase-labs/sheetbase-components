@@ -23,7 +23,10 @@ if (!existsSync(binary)) throw new Error(`No binary at ${binary}; build it first
 let failures = 0
 function check(label: string, ok: boolean, detail = '') {
   console.log(`${ok ? '✓' : '✗'} ${label}${!ok && detail ? ` — ${detail}` : ''}`)
-  if (!ok) failures++
+  if (ok) return
+  failures++
+  // In CI, each failure is also an annotation, readable from the run summary.
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=smoke: ${label}::${`${label}${detail ? ` — ${detail}` : ''}`.replace(/%/g, '%25').replace(/\r?\n/g, '%0A').slice(0, 900)}`)
 }
 
 const cache = mkdtempSync(join(tmpdir(), 'sheetbase-smoke-cache-'))
@@ -98,6 +101,7 @@ try {
 }
 
 if (failures) {
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=smoke: server output::${output.replace(/%/g, '%25').replace(/\r?\n/g, '%0A').slice(0, 1800)}`)
   console.error(`\n${failures} smoke check(s) failed`)
   process.exit(1)
 }
