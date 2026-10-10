@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { GroupNode, StudioDataSource } from '@sheetbase-labs/sheetbase-shared'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createNodeEngine } from '../test/node-engine'
-import { DuckDbSource } from './file'
+import { DuckDbSource, parseJsonRows, rowsToCsv } from './file'
 import { MemorySource } from './memory'
 import { cleanStatement } from './sql-source'
 
@@ -158,5 +158,48 @@ describe('memory and DuckDB sources agree', () => {
       { key: '1', count: 1, value: 0.5 },
     ])
     await expect(duck.upload(file('notes.docx', 'x'))).rejects.toThrow(/Unsupported file type/)
+  })
+  it('falls back to a pure-JS Parquet reader when DuckDB cannot read Parquet', async () => {
+    const native = await createNodeEngine()
+    closers.push(native.close)
+    const path = await native.registerFile('fallback.parquet', new Uint8Array())
+    await native.query(`COPY (SELECT range AS i, 'w' || range AS name, DATE '2026-01-01' + CAST(range AS INTEGER) AS day FROM range(5)) TO '${path}' (FORMAT parquet)`)
+    const bytes = readFileSync(path)
+    // Simulate the offline browser: the Parquet extension can't load.
+    const offline = { ...native, query: async (sql: string) => { if (sql.includes('read_parquet')) throw new Error('extension unavailable'); return native.query(sql) } }
+    const source = await DuckDbSource.create({ engine: offline })
+    const [table] = await source.upload(file('plates.parquet', bytes))
+    expect(table?.id).toBe('plates')
+    expect(table?.rowCount).toBe(5)
+    expect(table?.fields.map((field) => field.dataType)).toEqual(['number', 'text', 'date'])
+    const page = await source.page(table?.id ?? '', { rowStart: 0, rowCount: 2, fieldIds: [], sort: [{ fieldId: 'i', direction: 'desc' }] })
+    expect(page.records.map((record) => record.values.name)).toEqual(['w4', 'w3'])
+  })
+})
+
+describe('row ingestion helpers', () => {
+  it('writes CSV that keeps empty strings distinct from nulls', () => {
+    const csv = rowsToCsv([{ a: 'x "q"', b: 1.5, c: true }, { a: '', b: null, c: null }, { a: null, b: 'NaN', c: 'TRUE' }], [
+      { id: 'a', label: 'a', dataType: 'text' },
+      { id: 'b', label: 'b', dataType: 'number' },
+      { id: 'c', label: 'c', dataType: 'boolean' },
+    ])
+    expect(csv).toBe('"a","b","c"\n"x ""q""",1.5,true\n"",,\n,,true\n')
+  })
+
+  it('round-trips nulls and empty strings through DuckDB', async () => {
+    const engine = await createNodeEngine()
+    const source = await DuckDbSource.create({ engine })
+    const table = await source.addRows([{ a: '', n: null }, { a: null, n: 2 }], { name: 'nulls', fields: [{ id: 'a', label: 'a', dataType: 'text' }, { id: 'n', label: 'n', dataType: 'number' }] })
+    const rows = await engine.query(`SELECT a IS NULL AS a_null, a = '' AS a_empty, n FROM ${table.id}`)
+    engine.close()
+    expect(rows).toEqual([{ a_null: false, a_empty: true, n: null }, { a_null: true, a_empty: null, n: 2 }])
+  })
+
+  it('parses JSON arrays, wrapped arrays and NDJSON', () => {
+    expect(parseJsonRows('[{"a":1},{"a":2}]')).toEqual([{ a: 1 }, { a: 2 }])
+    expect(parseJsonRows('{"data":[{"a":1}]}')).toEqual([{ a: 1 }])
+    expect(parseJsonRows('{"a":1}\n{"a":2}\n')).toEqual([{ a: 1 }, { a: 2 }])
+    expect(() => parseJsonRows('{"a":1}\nnope')).toThrow(/Line 2/)
   })
 })

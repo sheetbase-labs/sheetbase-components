@@ -22,8 +22,14 @@
     },
     "./styles.css": "./dist-lib/style.css"
   },
-  "files": ["dist-lib", "dist-types", "README.md"],
-  "sideEffects": ["**/*.css"],
+  "files": [
+    "dist-lib",
+    "dist-types",
+    "README.md"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -34,11 +40,13 @@
     "parity": "bun scripts/gen-parity.ts"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev57.0",
+    "@duckdb/duckdb-wasm": "1.32.0",
     "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
     "@sheetbase-labs/sheetbase-explorer": "workspace:*",
     "@sheetbase-labs/sheetbase-shared": "workspace:*",
     "@sheetbase-labs/sheetbase-table": "workspace:*",
+    "hyparquet": "^1.31.3",
+    "hyparquet-compressors": "^1.1.2",
     "read-excel-file": "^9.3.12"
   },
   "peerDependencies": {

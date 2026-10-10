@@ -37,10 +37,12 @@ export function inferFields(rows: readonly Row[], sampleSize = 5000): SheetbaseF
     const present = sample.map((row) => row[key]).filter((value) => !isBlank(value))
     let dataType: FieldDataType = 'text'
     if (present.length) {
-      if (present.every((value) => typeof value === 'number' && Number.isFinite(value))) dataType = 'number'
+      if (present.every((value) => (typeof value === 'number' && Number.isFinite(value)) || typeof value === 'bigint')) dataType = 'number'
       else if (present.every((value) => typeof value === 'boolean')) dataType = 'boolean'
       else if (present.every((value) => value instanceof Date || (typeof value === 'string' && (ISO_DATE.test(value) || ISO_DATETIME.test(value)) && !Number.isNaN(Date.parse(value))))) {
-        dataType = present.every((value) => typeof value === 'string' && ISO_DATE.test(value)) ? 'date' : 'datetime'
+        const dateOnly = (value: unknown) => (typeof value === 'string' && ISO_DATE.test(value))
+          || (value instanceof Date && value.getUTCHours() === 0 && value.getUTCMinutes() === 0 && value.getUTCSeconds() === 0 && value.getUTCMilliseconds() === 0)
+        dataType = present.every(dateOnly) ? 'date' : 'datetime'
       }
     }
     return { id: key, label: key, dataType, nullable: present.length < sample.length }

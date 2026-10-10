@@ -24,6 +24,8 @@ export function plainValue(value: unknown): unknown {
   if (typeof value === 'bigint') return Number(value)
   if (value === null || value === undefined) return value ?? null
   if (Array.isArray(value)) return value.map(plainValue)
+  // Arrow lists of numbers arrive as typed arrays.
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView) && !(value instanceof Uint8Array)) return Array.from(value as unknown as ArrayLike<number | bigint>, plainValue)
   if (typeof value === 'object') {
     const candidate = value as { toArray?: () => unknown[]; toJSON?: () => unknown }
     if (typeof candidate.toArray === 'function' && !(value instanceof Uint8Array)) return candidate.toArray().map(plainValue)

@@ -35,6 +35,59 @@ const DUCK_TYPES: Record<FieldDataType, string> = {
   relationship: 'VARCHAR',
 }
 
+/**
+ * Rows → CSV for DuckDB's built-in reader. CSV (unlike JSON or Parquet) needs
+ * no DuckDB extension, so ingestion works offline in the browser. Strings are
+ * always quoted so an empty string stays distinct from NULL (an unquoted
+ * empty field).
+ */
+export function rowsToCsv(rows: readonly Row[], fields: readonly SheetbaseField[]): string {
+  const quote = (text: string) => `"${text.replace(/"/g, '""')}"`
+  const lines = [fields.map((field) => quote(field.id)).join(',')]
+  for (const row of rows) {
+    lines.push(fields.map((field) => {
+      const value = row[field.id]
+      if (value === null || value === undefined) return ''
+      if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+      if (typeof value === 'boolean') return value ? 'true' : 'false'
+      if (field.dataType === 'boolean') {
+        const text = String(value).trim().toLowerCase()
+        return text === 'true' || text === 'false' ? text : ''
+      }
+      if (field.dataType === 'number') {
+        const n = Number(String(value).replace(/,/g, ''))
+        return String(value).trim() !== '' && Number.isFinite(n) ? String(n) : ''
+      }
+      return quote(typeof value === 'object' ? JSON.stringify(value) : String(value))
+    }).join(','))
+  }
+  return `${lines.join('\n')}\n`
+}
+
+/** Parse a JSON upload: an array of objects, `{ rows: [...] }`-style, or newline-delimited JSON. */
+export function parseJsonRows(text: string): Row[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) return parsed.filter((item): item is Row => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+    if (parsed && typeof parsed === 'object') {
+      const firstArray = Object.values(parsed).find((value) => Array.isArray(value))
+      if (Array.isArray(firstArray)) return firstArray as Row[]
+      return [parsed as Row]
+    }
+  } catch {
+    // Not one JSON document — try newline-delimited JSON.
+  }
+  return trimmed.split(/\r?\n/).filter((line) => line.trim()).map((line, index) => {
+    try {
+      return JSON.parse(line) as Row
+    } catch {
+      throw new Error(`Line ${index + 1} is not valid JSON.`)
+    }
+  })
+}
+
 /** The minimal file surface: a browser `File` satisfies it. */
 export interface FileLike {
   name: string
@@ -82,6 +135,11 @@ export class DuckDbSource extends DuckDbSqlSource {
     const format = detectFormat(file.name)
     if (!format) throw new Error(`Unsupported file type: ${file.name}. Use CSV, TSV, Parquet, JSON or Excel (.xlsx).`)
     const bytes = new Uint8Array(await file.arrayBuffer())
+    if (format === 'json') {
+      const rows = parseJsonRows(new TextDecoder().decode(bytes))
+      if (!rows.length) throw new Error(`${file.name} has no rows.`)
+      return [await this.addRows(rows, { name: file.name, label: file.name, description: 'JSON upload' })]
+    }
     if (format === 'xlsx') {
       const { default: readXlsxFile } = await import('read-excel-file/browser')
       const sheets = await readXlsxFile(new Blob([bytes]))
@@ -95,19 +153,27 @@ export class DuckDbSource extends DuckDbSqlSource {
           return [name, value instanceof Date ? value.toISOString() : value ?? null]
         })))
         const label = sheets.length > 1 ? `${file.name} · ${sheet.sheet}` : file.name
-        tables.push(await this.addRows(rows, { name: sheets.length > 1 ? `${file.name}_${sheet.sheet}` : file.name, label }))
+        tables.push(await this.addRows(rows, { name: sheets.length > 1 ? `${file.name}_${sheet.sheet}` : file.name, label, description: 'Excel upload' }))
       }
       if (!tables.length) throw new Error(`${file.name} has no sheets with a header row.`)
       return tables
     }
     const id = this.#claim(file.name)
-    const path = await this.#engine.registerFile(`${id}.${format === 'json' ? 'json' : format}`, bytes)
+    // The engine may transfer (detach) the buffer it is given; keep ours for the fallback.
+    const path = await this.#engine.registerFile(`${id}.${format}`, bytes.slice())
     const reader = format === 'parquet' ? `read_parquet(${quoteLiteral(path)})`
-      : format === 'json' ? `read_json_auto(${quoteLiteral(path)})`
       : format === 'tsv' ? `read_csv(${quoteLiteral(path)}, delim = '\t', header = true, auto_detect = true)`
       : `read_csv(${quoteLiteral(path)}, header = true, auto_detect = true)`
     try {
       await this.run(`CREATE TABLE ${quoteIdent(id)} AS SELECT * FROM ${reader}`)
+    } catch (error) {
+      // DuckDB reads Parquet through an extension it may not be able to fetch
+      // (offline, locked-down networks); a pure-JS reader takes over.
+      if (format !== 'parquet') throw error
+      this.#taken.delete(id)
+      const [{ parquetReadObjects }, { compressors }] = await Promise.all([import('hyparquet'), import('hyparquet-compressors')])
+      const rows = await parquetReadObjects({ file: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, compressors })
+      return [await this.addRows(rows as Row[], { name: file.name, label: file.name, description: 'Parquet upload' })]
     } finally {
       await this.#engine.dropFile?.(path).catch(() => undefined)
     }
@@ -118,19 +184,18 @@ export class DuckDbSource extends DuckDbSqlSource {
    * Load rows the host already has. Declared `fields` fix the column types
    * (inferred types otherwise); dates are ISO strings in, DATE/TIMESTAMP in SQL.
    */
-  async addRows(rows: readonly Row[], options: { name: string; label?: string; fields?: readonly SheetbaseField[]; id?: string }): Promise<TableInfo> {
+  async addRows(rows: readonly Row[], options: { name: string; label?: string; fields?: readonly SheetbaseField[]; id?: string; description?: string }): Promise<TableInfo> {
     const fields = options.fields ?? inferFields(rows)
     const id = options.id ?? this.#claim(options.name)
     if (options.id) this.#taken.add(options.id)
-    const path = await this.#engine.registerFile(`${id}.json`, JSON.stringify(rows.map((row) => normaliseRow(row, fields))))
+    if (!fields.length) throw new Error(`${options.label ?? options.name} has no columns.`)
+    const path = await this.#engine.registerFile(`${id}.csv`, rowsToCsv(rows.map((row) => normaliseRow(row, fields)), fields))
     const columns = fields.map((field) => `${quoteLiteral(field.id)}: ${quoteLiteral(DUCK_TYPES[field.dataType])}`).join(', ')
     try {
-      await this.run(rows.length
-        ? `CREATE OR REPLACE TABLE ${quoteIdent(id)} AS SELECT * FROM read_json(${quoteLiteral(path)}, format = 'array', columns = {${columns}})`
-        : `CREATE OR REPLACE TABLE ${quoteIdent(id)} (${fields.map((field) => `${quoteIdent(field.id)} ${DUCK_TYPES[field.dataType]}`).join(', ')})`)
+      await this.run(`CREATE OR REPLACE TABLE ${quoteIdent(id)} AS SELECT * FROM read_csv(${quoteLiteral(path)}, header = true, auto_detect = false, delim = ',', quote = '"', escape = '"', nullstr = '', allow_quoted_nulls = false, columns = {${columns}})`)
     } finally {
       await this.#engine.dropFile?.(path).catch(() => undefined)
     }
-    return this.registerTable(id, quoteIdent(id), { label: options.label ?? options.name })
+    return this.registerTable(id, quoteIdent(id), { label: options.label ?? options.name, ...(options.description ? { description: options.description } : {}) })
   }
 }
