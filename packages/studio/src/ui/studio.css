@@ -2,6 +2,9 @@
 
 .sbs-studio { width: 100%; height: 100%; min-height: 0; display: block; container: sbs-studio / inline-size; }
 .sbs-studio > .sb-frame { width: 100%; height: 100%; min-height: 0; }
+/* The top bar bleeds to the frame edge (negative margin); sizing its row to
+   the bar keeps the gutter under it equal to the 4px between panes. */
+.sbs-studio > .sb-frame.sb-shell-frame { grid-template-rows: auto minmax(0, 1fr); }
 .sbs-studio > .sb-frame > .sb-topbar { gap: 6px; }
 .sbs-studio > .sb-frame > .sb-topbar .sb-btn { white-space: nowrap; flex: none; }
 .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { gap: 8px; min-width: 0; }
@@ -47,6 +50,8 @@
 .sbs-layout-host > * { flex: 1 1 0; min-width: 0; min-height: 0; }
 .sbs-panes { width: 100%; height: 100%; }
 .sbs-pane { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--panel); color: var(--text); font-family: var(--font-sans); font-size: var(--text-size); }
+/* Studio's own panes are pane surfaces, like the chart, filter and rows panels: bordered and rounded. */
+.sbs-pane { box-sizing: border-box; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .sbs-chart-host { width: 100%; height: 100%; min-height: 0; display: flex; }
 .sbs-chart-host > * { flex: 1 1 0; min-width: 0; min-height: 0; }
 

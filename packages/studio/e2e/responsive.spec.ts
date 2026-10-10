@@ -154,3 +154,43 @@ test.describe("phone headers", () => {
     await expect(page.locator(".explorer-subbar").getByRole("button", { name: /^Import/ })).toHaveCount(0);
   });
 });
+
+/** Panes whose visible card isn't bordered and rounded on all four corners. */
+function squareCorners(page: Page) {
+  return page.evaluate(() => {
+    const radii = (s: CSSStyleDeclaration) => [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomRightRadius, s.borderBottomLeftRadius].map((v) => Number.parseFloat(v) || 0)
+    const labels: Record<string, string> = { 'sbs-fields': 'Fields', 'sbs-chart-host': 'Chart', 'sb-search': 'Filters', 'table-surface': 'Rows', 'sbs-sql': 'SQL' }
+    const visible = (e: Element) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
+    const bad: string[] = []
+    for (const body of document.querySelectorAll('.sbs-layout-host .sb-pane-body')) {
+      if (body.parentElement?.closest('.sb-pane-body')) continue
+      const b = body.getBoundingClientRect()
+      if (b.width < 2 || b.height < 2) continue
+      const name = Object.entries(labels).find(([cls]) => [...body.querySelectorAll(`.${cls}`)].some(visible))?.[1] ?? 'pane'
+      const fills = (e: Element) => { const r = e.getBoundingClientRect(); return Math.abs(r.left - b.left) < 3 && Math.abs(r.top - b.top) < 3 && Math.abs(r.right - b.right) < 3 && Math.abs(r.bottom - b.bottom) < 3 }
+      const card = [...body.querySelectorAll('*')].find((e) => { if (!fills(e)) return false; const s = getComputedStyle(e); return Number.parseFloat(s.borderTopWidth) >= 1 && radii(s).every((v) => v >= 8) })
+      if (!card) bad.push(name)
+    }
+    return bad
+  })
+}
+
+for (const [width, height] of [[1440, 900], [1280, 500], [390, 844]] as const) {
+  test(`every pane is a rounded card at ${width}×${height}, with even gutters`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await ready(page)
+    const tabs = await page.locator('.sb-pane-tabs [role=tab]').all()
+    expect(await squareCorners(page)).toEqual([])
+    for (const tab of tabs) {
+      await tab.click()
+      expect(await squareCorners(page), await tab.innerText()).toEqual([])
+    }
+    // The gutter under the top bar matches the 4px between panes.
+    const gap = await page.evaluate(() => {
+      const bar = document.querySelector('.sbs-studio > .sb-frame > .sb-topbar')?.getBoundingClientRect()
+      const body = document.querySelector('.sbs-studio > .sb-frame > .sb-shell-body')?.getBoundingClientRect()
+      return bar && body ? Math.round(body.top - bar.bottom) : null
+    })
+    expect(gap).toBe(4)
+  })
+}
