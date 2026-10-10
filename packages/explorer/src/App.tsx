@@ -42,6 +42,10 @@ function channelDefaults(loaded: Dataset): Partial<ChartSpec> {
 const REMOTE_PREVIEW_ROWS = 200
 /** Default sample size for raw-row charts on a remote dataset. */
 const REMOTE_SAMPLE_ROWS = 5000
+/** Group size emitted by preparedRows and bucketsToRows — the y of a count chart. */
+const COUNT_FIELD = '__sheetbaseCount'
+/** Kinds that always draw raw rows, whatever the aggregate. */
+const RAW_ROW_KINDS = new Set<ChartKind>(['histogram', 'box', 'violin', 'heatmap'])
 
 type RemoteRawRequest =
   | { mode: 'bins'; query: RemoteHistogramQuery }
@@ -476,21 +480,29 @@ export function App(props: AppProps = {}) {
   const remoteRawCurrent = remoteRaw && remoteRaw.dataset === dataset && remoteRaw.key === rawKey ? remoteRaw : null
   const remoteRows = remoteQuery ? remoteAggregateRows : rawKey ? (remoteRawCurrent?.rows ?? null) : null
 
+  // A count needs no measure: both the client-side aggregate and server
+  // buckets carry the group size under COUNT_FIELD, so count charts plot that
+  // synthetic numeric column instead of whatever y happens to be.
+  const countChart = chartSpec.aggregate === 'count' && !RAW_ROW_KINDS.has(chartSpec.kind)
   const chartDataset = useMemo<Dataset | null>(() => {
     if (!dataset) return null
-    if (remote) return { ...dataset, rows: remoteRows ?? [] }
-    return viewRows ? { ...dataset, rows: viewRows } : dataset
-  }, [dataset, remote, remoteRows, viewRows])
+    const base = remote ? { ...dataset, rows: remoteRows ?? [] } : viewRows ? { ...dataset, rows: viewRows } : dataset
+    return countChart && !base.columns.some((column) => column.key === COUNT_FIELD)
+      ? { ...base, columns: [...base.columns, { key: COUNT_FIELD, kind: 'number', nullable: false, uniqueCount: 0 }] }
+      : base
+  }, [dataset, remote, remoteRows, viewRows, countChart])
 
   // Bucket rows are already filtered and aggregated: build the chart with a
   // pass-through spec so preparedRows/filteredRows don't re-apply either.
   // Sampled raw rows were filtered on the server but are otherwise raw, so
   // only the filters are dropped.
-  const chartSpecForBuild = useMemo<ChartSpec>(() => (remote
-    ? remoteQuery
-      ? { ...chartSpec, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
-      : { ...chartSpec, filters: [], filterLogic: 'and' }
-    : chartSpec), [remote, remoteQuery, chartSpec])
+  const chartSpecForBuild = useMemo<ChartSpec>(() => {
+    const counted = countChart ? { ...chartSpec, y: COUNT_FIELD, yLabel: chartSpec.yLabel || 'Count', errorMode: 'none' as const } : chartSpec
+    if (!remote) return counted
+    return remoteQuery
+      ? { ...counted, aggregate: 'none', filters: [], filterLogic: 'and', errorMode: 'none' }
+      : { ...counted, filters: [], filterLogic: 'and' }
+  }, [remote, remoteQuery, chartSpec, countChart])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: themeEpoch re-reads the palette after the root's data-theme is applied
   const chartPalette = useMemo(() => resolveThemeColours(chartSpec.palette, rootRef.current ?? undefined), [chartSpec.palette, themeEpoch])

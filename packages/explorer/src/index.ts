@@ -8,6 +8,7 @@ import './explorer-interactions.css'
 import './figure.css'
 
 export { App, type AppProps } from './App'
+export { initialSpec as defaultChartSpec, smartKindFor } from './explorer-popovers'
 export { Chart, ChartGroup, FigureSvg, type ChartProps, type ChartGroupProps, type ChartGroupEntry } from './Chart'
 export { FieldRolePanel, type FieldRolePanelProps, type FieldRolePanelSource } from './components/FieldRolePanel'
 export {
