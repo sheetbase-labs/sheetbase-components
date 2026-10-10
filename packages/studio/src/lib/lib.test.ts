@@ -1,10 +1,11 @@
-import type { AnalysisView, GroupNode, SheetbaseField, StudioDataSource, TableInfo } from '@sheetbase-labs/sheetbase-shared'
+import type { AnalysisView, GroupNode, Layout, SheetbaseField, StudioDataSource, TableInfo } from '@sheetbase-labs/sheetbase-shared'
 import { defaultChartSpec } from '@sheetbase-labs/sheetbase-explorer'
 import { describe, expect, it } from 'vitest'
 import { assignRole, chartForField } from './presets'
 import { buildProvenance, readSvgProvenance, svgWithProvenance } from './provenance'
 import { viewToIbis, viewToPandas, viewToSql } from './view-code'
 import { percent } from '../ui/data'
+import { LAYOUTS, layoutModeFor } from '../ui/layouts'
 
 const fields: SheetbaseField[] = [
   { id: 'status', label: 'status', dataType: 'text' },
@@ -88,5 +89,21 @@ describe('percent', () => {
     expect(percent(960, 1000)).toBe('96%')
     expect(percent(5, 100)).toBe('5.0%')
     expect(percent(0, 0)).toBe('—')
+  })
+})
+
+describe('layout modes', () => {
+  it('picks a layout from the body size', () => {
+    expect(layoutModeFor(1376, 830)).toBe('wide')
+    expect(layoutModeFor(1376, 599)).toBe('short')
+    expect(layoutModeFor(1376, 333)).toBe('short')
+    expect(layoutModeFor(780, 320)).toBe('short')
+    expect(layoutModeFor(1376, 299)).toBe('narrow')
+    expect(layoutModeFor(759, 1000)).toBe('narrow')
+  })
+
+  it('places every pane in every layout', () => {
+    const ids = (node: Layout): string[] => (node === null ? [] : node.kind === 'stack' ? [...node.panes] : node.children.flatMap(ids))
+    for (const layout of Object.values(LAYOUTS)) expect(ids(layout).sort()).toEqual(['chart', 'fields', 'filters', 'sql', 'table'])
   })
 })

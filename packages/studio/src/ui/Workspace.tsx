@@ -1,4 +1,5 @@
 import type React from 'react'
+import { LAYOUTS, layoutModeFor } from './layouts'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AdvancedSearch } from '@sheetbase-labs/sheetbase-advanced-search'
 import { App as Explorer, defaultChartSpec, serializeChartSvg, downloadText, type ChartSpec } from '@sheetbase-labs/sheetbase-explorer'
@@ -18,7 +19,6 @@ import {
   type AnalysisView,
   type ConditionNode,
   type FieldProfile,
-  type Layout,
   type PaneLayoutState,
   type PaneSpec,
   type ResolvedTheme,
@@ -42,51 +42,25 @@ const PROFILE_TOP = 8
 /** Wide tables profile this many fields per request; the rest load on demand. */
 const PROFILE_FIELD_CAP = 200
 
-export const DEFAULT_LAYOUT: Layout = {
-  kind: 'split',
-  id: 'sbs-root',
-  direction: 'row',
-  sizes: [0.23, 0.77],
-  children: [
-    { kind: 'stack', id: 'sbs-fields', panes: ['fields'], active: 'fields' },
-    {
-      kind: 'split',
-      id: 'sbs-main',
-      direction: 'column',
-      sizes: [0.6, 0.4],
-      children: [
-        {
-          kind: 'split',
-          id: 'sbs-top',
-          direction: 'row',
-          sizes: [0.64, 0.36],
-          children: [
-            { kind: 'stack', id: 'sbs-chart', panes: ['chart'], active: 'chart' },
-            { kind: 'stack', id: 'sbs-filters', panes: ['filters'], active: 'filters' },
-          ],
-        },
-        { kind: 'stack', id: 'sbs-data', panes: ['table', 'sql'], active: 'table' },
-      ],
-    },
-  ],
-}
 
-/** Narrow screens: one stack, every pane a tab. */
-export const NARROW_LAYOUT: Layout = { kind: 'stack', id: 'sbs-all', panes: ['chart', 'fields', 'filters', 'table', 'sql'], active: 'chart' }
-const NARROW_WIDTH = 760
-
-/** Width of an element, tracked — decides the wide or narrow pane layout. */
-function useWidth(ref: React.RefObject<HTMLElement | null>): number | null {
-  const [width, setWidth] = useState<number | null>(null)
+/** Size of an element, tracked — decides the pane layout. */
+function useSize(ref: React.RefObject<HTMLElement | null>): { width: number; height: number } | null {
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   useEffect(() => {
     const element = ref.current
     if (!element || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(([entry]) => setWidth(entry?.contentRect.width ?? null))
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return
+      const { width, height } = entry.contentRect
+      setSize((current) => (current && current.width === width && current.height === height ? current : { width, height }))
+    })
     observer.observe(element)
     return () => observer.disconnect()
   }, [ref])
-  return width
+  return size
 }
+
+export { DEFAULT_LAYOUT, LAYOUTS, NARROW_LAYOUT, SHORT_LAYOUT, layoutModeFor, type LayoutMode } from './layouts'
 
 export interface WorkspaceProps {
   source: StudioDataSource
@@ -268,8 +242,8 @@ export function Workspace(props: WorkspaceProps) {
   }), [source, table, view, wb.query, spec, code, matchingRows])
   const chartHost = useRef<HTMLDivElement>(null)
   const layoutHost = useRef<HTMLDivElement>(null)
-  const width = useWidth(layoutHost)
-  const narrow = width !== null && width < NARROW_WIDTH
+  const size = useSize(layoutHost)
+  const mode = size ? layoutModeFor(size.width, size.height) : null
   const [exportNote, setExportNote] = useState<string | null>(null)
   const exportSvg = useCallback(() => {
     const stage = chartHost.current?.querySelector<HTMLElement>('.chart-stage')
@@ -417,12 +391,12 @@ export function Workspace(props: WorkspaceProps) {
         actions,
         body: (
           <div ref={layoutHost} className="sbs-layout-host">
-            {width !== null && (
+            {mode !== null && (
               <PaneLayout
-                key={narrow ? 'narrow' : 'wide'}
+                key={mode}
                 panes={panes}
-                defaultLayout={narrow ? NARROW_LAYOUT : DEFAULT_LAYOUT}
-                persistKey={`${props.persistKey}:layout${narrow ? ':narrow' : ''}`}
+                defaultLayout={LAYOUTS[mode]}
+                persistKey={`${props.persistKey}:layout${mode === 'wide' ? '' : `:${mode}`}`}
                 adapter={layoutAdapter}
                 surface="shared"
                 paneMenu="hover"

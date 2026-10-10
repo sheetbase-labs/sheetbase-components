@@ -57,6 +57,10 @@ query table), filter tree, chart spec, readable SQL and matching row count —
 enough to reproduce or audit a figure. `sheetbase.apply_view` reproduces the
 view on an Ibis table with exact semantics.
 
+**Any size.** Wide, short and narrow layouts are picked from the body's own
+size; the e2e suite (`packages/studio/e2e`) checks phone, tablet, laptop and
+wall sizes, a resize across every layout, and an embedded 600×520 cell.
+
 ## Known limits and follow-ups
 
 - **Saved views** remain the design in `docs/saved-views.md`; Studio persists

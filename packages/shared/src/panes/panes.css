@@ -14,8 +14,8 @@
   flex-direction: column;
   overflow: hidden;
 }
-.sb-frame.sb-shell-frame { grid-template-rows: 33px minmax(0, 1fr); }
-.sb-frame.sb-shell-frame.has-subbar { grid-template-rows: 33px auto minmax(0, 1fr); }
+.sb-frame.sb-shell-frame { grid-template-rows: minmax(33px, auto) minmax(0, 1fr); } /* 33px as before; a host's wrapped topbar can grow */
+.sb-frame.sb-shell-frame.has-subbar { grid-template-rows: minmax(33px, auto) auto minmax(0, 1fr); }
 /* Frameless components drop their topbar; the body owns the single grid row. */
 .sb-frame.no-topbar { grid-template-rows: minmax(0, 1fr); }
 .sb-shell-flat {

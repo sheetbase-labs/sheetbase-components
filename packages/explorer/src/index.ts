@@ -49,5 +49,6 @@ export {
 export { downloadText, exportChartPng, serializeChartSvg, specJson } from './lib/export'
 export { runSql, runSqlAsync } from './lib/sql'
 export { buildChart } from './lib/chart'
+export { MIN_CHART_HEIGHT, stageChartHeight } from './lib/chart-size'
 export { HISTOGRAM_BIN, ROW_ID, filteredRows, preparedRows, replicateSummary } from './lib/explore'
 export { binsToRows, bucketsToRows } from './lib/adapters/http'

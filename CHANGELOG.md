@@ -77,6 +77,25 @@ versions follow [SemVer](https://semver.org/).
   and a Focus toggle that greys out models which are not upstream or
   downstream of the selection (full chain, not just neighbours).
 
+### Fixed
+
+- **Explorer**: the chart draws at its stage's real height. It was measured
+  once, before the stage mounted, so hosts that render the explorer after a
+  load got a fixed 420px figure that the browser scaled — unreadable text on
+  short screens, letterboxing on tall ones. `stageChartHeight` is exported for
+  hosts that size it themselves.
+- **Explorer**: the command bar wraps instead of clipping tools at narrow
+  widths.
+- **Table**: in the default dark theme the selected row number and column
+  label were drawn in their own background colour (fallback ink was
+  `--accent-soft`); they now use `--accent-ink`. Presets that set
+  `--grid-*-selected-ink` (v3) are unchanged.
+- **Advanced search**: the summary agrees with its counts — "1 condition ·
+  1 group" — and its status text truncates before the Preview/Clear actions
+  are pushed out of a narrow bar.
+- **Shared**: `.sb-subbar` and the shell frame's topbar row keep their 31/33px
+  minimum but grow when a host's bar wraps, instead of clipping the second row.
+
 ### Changed
 
 - **Packaging**: the six libraries are now scoped `@sheetbase-labs/*` and

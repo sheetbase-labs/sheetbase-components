@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { andCondition, applyView, emptyCondition, emptyRoot, resolveThemeColours, useResolvedTheme, withoutCondition, type AnalysisView, type FilterOperator, type ThemeMode } from '@sheetbase-labs/sheetbase-shared'
 import { DataTable } from './components/DataTable'
+import { stageChartHeight } from './lib/chart-size'
 import { datasetFromFile } from './lib/adapters/file'
 import { binsToRows, bucketsToRows } from './lib/adapters/http'
 import { sampleAdapter } from './lib/adapters/sample'
@@ -173,6 +174,13 @@ export function App(props: AppProps = {}) {
   const sources = useMemo<DataAdapter[]>(() => props.sources ?? [sampleAdapter], [props.sources])
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const chartStageRef = useRef<HTMLDivElement>(null)
+  // The stage mounts late (after a dataset loads), so track the element
+  // itself: a measuring effect keyed on a ref object would never re-run.
+  const [stageElement, setStageElement] = useState<HTMLDivElement | null>(null)
+  const attachStage = useCallback((element: HTMLDivElement | null) => {
+    chartStageRef.current = element
+    setStageElement(element)
+  }, [])
   const rootRef = useRef<HTMLDivElement>(null)
   const persisted = useMemo<PersistedExplorerState>(() => ({ version: CURRENT_EXPLORATION_VERSION, theme: isDark ? 'dark' : 'light', spec, sql, saved, updatedAt: new Date().toISOString() }), [spec, sql, saved, isDark])
   useIdleExplorerSave(EXPLORER_STORAGE_KEY, persisted, defaultExplorerAdapter)
@@ -272,15 +280,21 @@ export function App(props: AppProps = {}) {
     if (rootRef.current) rootRef.current.dataset.theme = isDark ? 'dark' : 'light'
     setThemeEpoch((epoch) => epoch + 1)
   }, [isDark])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dataset/panelCollapsed/panelHeight are deliberate re-measure triggers, not captures
+  // The chart draws at exactly the box its SVG is stretched to fill — the
+  // stage's content height — so it never scales its text or letterboxes.
   useEffect(() => {
     if (props.frame === false && props.chartHeight === undefined) return
-    const stage = chartStageRef.current
+    const stage = stageElement
     if (!stage) return
-    const resize = () => setMeasuredHeight(Math.max(260, Math.floor(stage.clientHeight)))
-    resize(); const observer = new ResizeObserver(resize); observer.observe(stage); return () => observer.disconnect()
-    // Re-measure when the dataset or panel chrome changes the stage's size.
-  }, [dataset, panelCollapsed, panelHeight, props.frame, props.chartHeight])
+    const resize = () => {
+      const style = getComputedStyle(stage)
+      setMeasuredHeight(stageChartHeight(stage.clientHeight, Number.parseFloat(style.paddingTop), Number.parseFloat(style.paddingBottom)))
+    }
+    resize()
+    const observer = new ResizeObserver(resize)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [stageElement, props.frame, props.chartHeight])
 
   // The shared analysis view, when the host provides one, overrides the
   // spec's filters/group/summary and adds sort/limit to the row pipeline.
@@ -692,7 +706,7 @@ export function App(props: AppProps = {}) {
               ? <span>Raw rows stay on the server for this source — pick an aggregate (sum, mean, count, …) with a bar, pie, line or similar chart. Scatter, histogram, box, violin and heatmap need raw rows.</span>
               : <><span className="sb-spinner" aria-hidden="true" /><span>{remoteQuery ? 'Aggregating on the server…' : chartSpec.kind === 'histogram' && remote?.histogram ? 'Binning on the server…' : 'Sampling rows on the server…'}</span></>}
         </div></div>
-      : <ChartStage stageRef={chartStageRef} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
+      : <ChartStage stageRef={attachStage} seriesValues={seriesValues} palette={chartPalette} hiddenSeries={hiddenSeries} onToggleSeries={toggleSeries} definition={definition} chartHeight={chartHeight} chartLabel={describeChart(chartSpec, visibleRows.length)} onSelectRowId={onSelectChartMark} />}
     {!showPanel && (
       <details className="explorer-data-disclosure">
         <summary>Data table ({visibleRows.length.toLocaleString()} rows)</summary>

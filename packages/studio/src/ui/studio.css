@@ -1,10 +1,10 @@
 /* Sheetbase Studio — theme variables only (see packages/shared/src/theme.css). */
 
-.sbs-studio { width: 100%; height: 100%; min-height: 0; display: block; }
+.sbs-studio { width: 100%; height: 100%; min-height: 0; display: block; container: sbs-studio / inline-size; }
 .sbs-studio > .sb-frame { width: 100%; height: 100%; min-height: 0; }
-.sbs-studio .sb-topbar { gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.sbs-studio .sb-topbar .sb-btn { white-space: nowrap; flex: none; }
-.sbs-studio .sb-topbar-actions { gap: 8px; min-width: 0; }
+.sbs-studio > .sb-frame > .sb-topbar { gap: 6px; }
+.sbs-studio > .sb-frame > .sb-topbar .sb-btn { white-space: nowrap; flex: none; }
+.sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { gap: 8px; min-width: 0; }
 .sbs-body { min-height: 0; height: 100%; display: flex; }
 .sbs-body > * { flex: 1 1 0; min-width: 0; min-height: 0; }
 
@@ -47,7 +47,7 @@
 .sbs-note--error { color: var(--danger-text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* --- Field browser --- */
-.sbs-fields { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.sbs-fields { display: flex; flex-direction: column; min-height: 0; height: 100%; container: sbs-fields / inline-size; }
 .sbs-overview { flex: none; padding: 10px 10px 8px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
 .sbs-overview-title { font-weight: 650; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sbs-overview-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0 0; }
@@ -56,8 +56,9 @@
 .sbs-overview-stats dd { margin: 1px 0 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sbs-overview-hints { margin: 6px 0 0; font-size: var(--meta-size); color: var(--orange-text); }
 
-.sbs-fields-tools { flex: none; display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-.sbs-search { flex: 1 1 auto; height: 26px; }
+.sbs-fields-tools { flex: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.sbs-search { flex: 1 1 140px; min-width: 0; height: 26px; }
+.sbs-scope { flex: none; }
 .sbs-scope { flex: none; }
 .sbs-scope button { text-transform: none; }
 
@@ -152,18 +153,24 @@
 .sbs-schema-table:hover, .sbs-schema-field:hover { background: var(--accent-soft-2); }
 .sbs-history li { display: flex; align-items: center; gap: 6px; }
 
-@media (max-width: 720px) {
-  .sbs-status, .sbs-brand { display: none; }
-  .sbs-studio .sb-topbar-actions { margin-left: 0; }
+
+/* The fields pane is sized by the pane layout, not the viewport: adapt to its own width. */
+@container sbs-fields (max-width: 300px) {
+  .sbs-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sbs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sbs-scope { flex: 1 1 100%; grid-auto-columns: 1fr; }
+}
+@container sbs-fields (max-width: 240px) {
+  .sbs-field-row .sbs-spark, .sbs-field-row .sbs-spark--empty, .sbs-field-row .sbs-hint { display: none; }
+}
+
+/* Narrow hosts (phones, a notebook cell, a side panel): the top bar wraps
+   rather than hiding actions off the edge. Sized by the studio, not the viewport. */
+@container sbs-studio (max-width: 720px) {
+  .sbs-studio > .sb-frame > .sb-topbar { height: auto; min-height: 33px; flex-wrap: wrap; row-gap: 2px; padding-block: 3px; }
+  .sbs-studio > .sb-frame > .sb-topbar > .sb-topbar-actions { margin-left: auto; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; }
+  .sbs-brand { display: none; }
   .sbs-sql { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; overflow: auto; }
   .sbs-sql-editor, .sbs-sql-code, .sbs-sql-schema { grid-column: 1; grid-row: auto; min-height: 220px; }
   .sbs-picker select { max-width: 160px; }
-}
-
-/* The table's dark selected-header ink falls back to --accent-soft, its own
-   background, so the active row number and column label vanish. Studio sets
-   the host hooks the table exposes for exactly this. */
-.sbs-studio [data-theme="dark"] {
-  --grid-row-selected-ink: var(--accent-ink);
-  --grid-column-selected-ink: var(--accent-ink);
 }

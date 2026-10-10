@@ -5,7 +5,7 @@ import './ui/studio.css'
 export { SheetbaseStudio, type SheetbaseStudioProps, type TableRef } from './ui/Studio'
 export { FieldBrowser, type FieldBrowserProps, type ProfileScope } from './ui/FieldBrowser'
 export { SqlPane, type SqlPaneProps } from './ui/SqlPane'
-export { DEFAULT_LAYOUT, NARROW_LAYOUT } from './ui/Workspace'
+export { DEFAULT_LAYOUT, LAYOUTS, NARROW_LAYOUT, SHORT_LAYOUT, layoutModeFor, type LayoutMode } from './ui/Workspace'
 
 // Sources
 export { MemorySource, type MemorySourceOptions, type MemoryTableInput } from './sources/memory'

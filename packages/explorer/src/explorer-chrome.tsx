@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type ReactNode, type RefObject, type SetStateAction } from 'react'
+import { useState, type ComponentProps, type ReactNode, type Ref, type RefObject, type SetStateAction } from 'react'
 import { Chart } from '@tanstack/charts/react/tooltip'
 import { ThemeToggleButton } from '@sheetbase-labs/sheetbase-shared'
 import { DataMenus, SeriesLegend, ViewMenus, type Menu } from './explorer-popovers'
@@ -52,7 +52,7 @@ export function CommandBar({ menu, spec, dataset, sources, saved, libraryName, e
 }
 
 export function ChartStage({ stageRef, seriesValues, palette, hiddenSeries, onToggleSeries, definition, chartHeight, chartLabel, onSelectRowId }: {
-  stageRef: RefObject<HTMLDivElement | null>
+  stageRef: Ref<HTMLDivElement>
   seriesValues: string[]
   palette: string[]
   hiddenSeries: Set<string>

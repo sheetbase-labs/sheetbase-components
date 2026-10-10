@@ -142,6 +142,22 @@ server checks queries with sqlglot first (see its README). Results register as
 `query_N` tables in the catalog and can be filtered, profiled, charted and
 joined by later queries.
 
+## Screen sizes and embedding
+
+Studio sizes itself to its container, not the window, so the same rules hold
+in a full page, a side panel or a notebook cell:
+
+| Body size | Layout |
+| --- | --- |
+| ≥ 760 px wide and ≥ 600 px tall | Fields · chart over rows/SQL · filters |
+| ≥ 760 px wide, 300–600 px tall | Fields beside one tabbed stack (chart, filters, rows, SQL) |
+| < 760 px wide, or < 300 px tall | One tabbed stack |
+
+`layoutModeFor(width, height)` and `LAYOUTS` expose the choice; each mode keeps
+its own saved arrangement. The chart always draws at its stage's real size, so
+text never scales. The top bar and toolbars wrap rather than hide controls,
+and the fields pane condenses at its own width (container queries).
+
 ## Development
 
 ```bash
@@ -150,6 +166,7 @@ open "http://localhost:5204/?remote=1"   # same data, every table kept "at sourc
 open "http://localhost:5204/?server=http://127.0.0.1:8765"   # add a `sheetbase serve`
 bun run --filter @sheetbase-labs/sheetbase-studio test
 bun run --filter @sheetbase-labs/sheetbase-studio build:python   # UI for the Python package
+bun run --filter @sheetbase-labs/sheetbase-studio test:e2e       # Playwright: layout from 320×568 to 2560×1440
 ```
 
 Tests run the DuckDB compiler and sources against native DuckDB

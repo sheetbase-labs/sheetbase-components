@@ -148,3 +148,25 @@ jobs:
       - name: Run Playwright
         working-directory: packages/demo
         run: bunx playwright test --project=chromium
+
+  studio-e2e:
+    name: Studio Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Install Playwright browsers
+        working-directory: packages/studio
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run Playwright (layout at phone → wall sizes)
+        working-directory: packages/studio
+        run: bunx playwright test --project=chromium

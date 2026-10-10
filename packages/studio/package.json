@@ -39,7 +39,8 @@
     "test": "vitest run",
     "parity": "UPDATE_PARITY=1 vitest run src/lib/parity.test.ts",
     "build:widget": "vite build --config vite.widget.config.ts",
-    "build:python": "bun run build:standalone && bun run build:widget"
+    "build:python": "bun run build:standalone && bun run build:widget",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",
@@ -60,6 +61,7 @@
     "@duckdb/node-api": "1.5.6-r.1",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@playwright/test": "^1.63.0",
     "@tanstack/react-virtual": "^3.14.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
