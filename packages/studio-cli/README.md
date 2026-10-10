@@ -70,6 +70,6 @@ bun run --filter sheetbase-studio-cli build:binary -- --all   # linux_amd64 linu
 bun run --filter sheetbase-studio-cli smoke           # start the built binary and check it end to end
 ```
 
-CI builds all five platforms, smoke-tests Linux, macOS (Apple Silicon) and Windows on their own runners, and runs the binary against Postgres 16 and MySQL 8.4. Tagged releases attach the binaries (`.tar.gz`/`.zip`) and `SHA256SUMS.txt` to the GitHub release.
+CI builds and smoke-tests the Linux binary on every pull request and runs it against Postgres 16 and MySQL 8.4. macOS (Apple Silicon and Intel), Windows and Linux arm64 build on pushes to `main` and manual runs — macOS and Windows minutes cost 10× and 2× on private repos — with macOS (Apple Silicon) and Windows smoke-tested on their own runners. Tagged releases build all five, smoke-test three, and attach the binaries (`.tar.gz`/`.zip`) and `SHA256SUMS.txt` to the GitHub release.
 
 macOS binaries aren't notarised: a downloaded copy may need `xattr -d com.apple.quarantine sheetbase-studio` before the first run.

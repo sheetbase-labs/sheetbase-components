@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
@@ -174,8 +175,34 @@ jobs:
         working-directory: packages/studio
         run: bunx playwright test --project=chromium
 
+  # Pull requests build and smoke-test the Linux binary only. macOS and
+  # Windows minutes cost 10x and 2x on private repos, so the other platforms
+  # build on pushes to main, on manual runs and (always) in the release workflow.
   studio-binary:
+    name: Studio binary (linux_amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install
+
+      - name: Build
+        working-directory: packages/studio-cli
+        run: bun scripts/build-binary.ts linux_amd64
+
+      - name: Smoke test
+        working-directory: packages/studio-cli
+        run: bun scripts/smoke.ts
+
+  studio-binary-platforms:
     name: Studio binary (${{ matrix.target }})
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -183,7 +210,6 @@ jobs:
       matrix:
         include:
           # Smoke-tested on their own OS; the other two are cross-compiled.
-          - { os: ubuntu-latest, target: linux_amd64, smoke: true }
           - { os: ubuntu-latest, target: linux_arm64, smoke: false }
           - { os: macos-latest, target: osx_arm64, smoke: true }
           - { os: macos-latest, target: osx_amd64, smoke: false }
@@ -206,12 +232,6 @@ jobs:
         if: matrix.smoke
         working-directory: packages/studio-cli
         run: bun scripts/smoke.ts
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sheetbase-studio-${{ matrix.target }}
-          path: packages/studio-cli/dist/sheetbase-studio-*
-          if-no-files-found: error
 
   studio-databases:
     name: Studio binary against Postgres and MySQL
