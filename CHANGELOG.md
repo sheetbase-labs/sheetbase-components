@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-30
+
 ### Added
 
 - **Advanced search**: `FilterBuilder` groups — **Add group** rows that match All of, Any of or None of their conditions (AND / OR / NOT), with `addGroup`, `setCombinator`, `removeGroup` and `pruneEmptyGroups`. OR and NOT roots are no longer flattened to AND. `FilterChips` shows a group as one chip, removed as a unit, with `onEdit` and `FilterBuilder` `focusId` to open the builder at it; `describeNode` phrases any node.
