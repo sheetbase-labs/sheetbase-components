@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 authors = [{ name = "iamgp", email = "garethprice@me.com" }]
 dependencies = [
   "ibis-framework[duckdb]>=10,<13",
+  # DuckDB 2.0 dropped fetch_arrow_table, which Ibis 12 still calls.
+  "duckdb<2",
   # Ibis 12 builds DROP VIEW statements sqlglot 28+ no longer accepts.
   "sqlglot>=25,<28",
   "pandas>=2.1",
