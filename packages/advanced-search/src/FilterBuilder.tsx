@@ -1,6 +1,7 @@
-import { useEffect, useImperativeHandle, useState, type ChangeEvent, type ReactNode, type Ref } from "react";
+import { useEffect, useId, useImperativeHandle, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import {
   compileToDatasetQuery,
+  emptyGroup,
   emptyCondition,
   emptyRoot,
   ensureOperator,
@@ -8,19 +9,26 @@ import {
   operatorShortLabel,
   operatorsForField,
   toDatasetQuery,
+  type Combinator,
   type ConditionNode,
   type DatasetQuery,
+  type FieldOption,
   type FilterNode,
   type FilterOperator,
   type GroupNode,
   type SheetbaseField,
   type SortClause,
 } from "@sheetbase-labs/sheetbase-shared";
+import { rememberOptions, useOptionLabels } from "./option-labels";
 
 export type FilterBuilderFieldInput = string | SheetbaseField;
 
 export interface FilterBuilderProps {
-  /** The applied filter tree the builder opens with. Conditions are read from it (any nesting is flattened into an AND root). */
+  /**
+   * The applied filter tree the builder opens with. The root is always AND:
+   * conditions and groups stay as rows, and an OR or NOT root becomes one group
+   * under it.
+   */
   node?: FilterNode | null;
   /** Field metadata for the field/operator/value controls. Strings are treated as text columns. */
   fields?: readonly FilterBuilderFieldInput[];
@@ -30,6 +38,13 @@ export interface FilterBuilderProps {
   onApply?: (node: GroupNode, query: DatasetQuery) => void;
   /** Clear pressed, after the draft is emptied. */
   onClear?: () => void;
+  /**
+   * How many results the draft would return, from the host's server. Shown on
+   * Apply as "Show 42 results"; `null` or `undefined` leaves it as "Apply".
+   */
+  matchCount?: number | null;
+  /** Scroll to and focus this condition or group, e.g. the one a chip was clicked on. */
+  focusId?: string;
   className?: string;
 }
 
@@ -68,43 +83,99 @@ export function conditionsOf(node: FilterNode | null | undefined): ConditionNode
 }
 
 /**
- * The builder's working tree: one AND root over the node's conditions. A
- * non-AND root keeps its id but is rewritten as AND, so the builder's rows are
- * exactly the conditions it can edit.
+ * The builder's working tree: an AND root whose rows are conditions and
+ * groups. An AND root is used as is; anything else (a lone condition, an OR or
+ * NOT root) becomes a single row under a fresh AND root, so no meaning is lost.
  */
 export function builderTree(node: FilterNode | null | undefined): GroupNode {
-  const conditions = conditionsOf(node);
-  const root = node && node.type === "group" ? node : emptyRoot();
-  return { ...root, combinator: "AND", children: conditions };
+  if (!node) return emptyRoot();
+  if (node.type === "group" && node.combinator === "AND") return node;
+  return { ...emptyRoot(), children: [node] };
 }
 
-/** Append a new empty condition for `field`, its operator defaulted for the field's type. */
-export function addCondition(root: GroupNode, field: FilterBuilderFieldInput): GroupNode {
-  const typed = asSheetbaseField(field);
+/** Rewrite the node with `id`; `null` removes it. An unknown id returns `root` itself. */
+function mapNode(root: GroupNode, id: string, fn: (node: FilterNode) => FilterNode | null): GroupNode {
+  let changed = false;
+  function walk(node: FilterNode): FilterNode | null {
+    if (node.id === id) {
+      changed = true;
+      return fn(node);
+    }
+    if (node.type === "condition") return node;
+    const children: FilterNode[] = [];
+    let touched = false;
+    for (const child of node.children) {
+      const next = walk(child);
+      if (next !== child) touched = true;
+      if (next) children.push(next);
+    }
+    return touched ? { ...node, children } : node;
+  }
+  const next = walk(root);
+  return changed && next && next.type === "group" ? next : root;
+}
+
+function newCondition(field: FilterBuilderFieldInput): ConditionNode {
   const base = emptyCondition(fieldIdOf(field));
-  const condition: ConditionNode = { ...base, operator: operatorsForField(typed)[0] ?? base.operator };
-  return { ...root, children: [...root.children, condition] };
+  return { ...base, operator: operatorsForField(asSheetbaseField(field))[0] ?? base.operator };
 }
 
-/** Patch the condition with `id`; a missing id leaves the tree unchanged. */
+/** Append a new empty condition for `field`, its operator defaulted for the field's type. With `groupId`, it goes into that group. */
+export function addCondition(root: GroupNode, field: FilterBuilderFieldInput, groupId?: string): GroupNode {
+  const condition = newCondition(field);
+  if (groupId === undefined || groupId === root.id) return { ...root, children: [...root.children, condition] };
+  return mapNode(root, groupId, (node) =>
+    node.type === "group" ? { ...node, children: [...node.children, condition] } : node,
+  );
+}
+
+/** Append a group (default "Any of") holding one empty condition for `field`. */
+export function addGroup(root: GroupNode, field: FilterBuilderFieldInput, combinator: Combinator = "OR"): GroupNode {
+  return { ...root, children: [...root.children, { ...emptyGroup(combinator), children: [newCondition(field)] }] };
+}
+
+/** Change a group's combinator; the root stays AND. */
+export function setCombinator(root: GroupNode, id: string, combinator: Combinator): GroupNode {
+  if (id === root.id) return root;
+  return mapNode(root, id, (node) => (node.type === "group" ? { ...node, combinator } : node));
+}
+
+/** Patch the condition with `id`, wherever it sits; a missing id leaves the tree unchanged. */
 export function patchCondition(
   root: GroupNode,
   id: string,
   patch: Partial<ConditionNode>,
 ): GroupNode {
-  let found = false;
-  const children = root.children.map((child) => {
-    if (child.type !== "condition" || child.id !== id) return child;
-    found = true;
-    return { ...child, ...patch };
-  });
-  return found ? { ...root, children } : root;
+  return mapNode(root, id, (node) => (node.type === "condition" ? { ...node, ...patch } : node));
 }
 
 /** Remove the condition with `id`; a missing id leaves the tree unchanged. */
 export function removeCondition(root: GroupNode, id: string): GroupNode {
-  const children = root.children.filter((child) => child.type !== "condition" || child.id !== id);
-  return children.length === root.children.length ? root : { ...root, children };
+  if (id === root.id) return root;
+  return mapNode(root, id, (node) => (node.type === "condition" ? null : node));
+}
+
+/** Remove the group with `id` and everything in it; the root cannot be removed. */
+export function removeGroup(root: GroupNode, id: string): GroupNode {
+  if (id === root.id) return root;
+  return mapNode(root, id, (node) => (node.type === "group" ? null : node));
+}
+
+/** Drop groups with nothing in them (an empty OR matches nothing, so it must not reach the query). Unchanged trees come back as the same object. */
+export function pruneEmptyGroups(root: GroupNode): GroupNode {
+  function walk(node: FilterNode): FilterNode | null {
+    if (node.type === "condition") return node;
+    const children: FilterNode[] = [];
+    let touched = false;
+    for (const child of node.children) {
+      const next = walk(child);
+      if (next !== child) touched = true;
+      if (next) children.push(next);
+    }
+    if (children.length === 0 && node.id !== root.id) return null;
+    return touched ? { ...node, children } : node;
+  }
+  return (walk(root) as GroupNode | null) ?? root;
 }
 
 /** An empty AND root — what Clear leaves behind. */
@@ -118,7 +189,8 @@ export function clearFilter(): GroupNode {
  * undefined, so clearing can never silently drop a downstream filter.
  */
 export function applyFilter(root: GroupNode, sort?: SortClause[]): DatasetQuery {
-  return compileToDatasetQuery(root, sort) ?? toDatasetQuery(root, sort);
+  const pruned = pruneEmptyGroups(root);
+  return compileToDatasetQuery(pruned, sort) ?? toDatasetQuery(pruned, sort);
 }
 
 function parseValueInput(raw: string, operator: FilterOperator): ConditionNode["value"] {
@@ -126,10 +198,28 @@ function parseValueInput(raw: string, operator: FilterOperator): ConditionNode["
   return raw;
 }
 
+const COMBINATOR_LABELS: Readonly<Record<Combinator, string>> = {
+  AND: "All of",
+  OR: "Any of",
+  NOT: "None of",
+};
+
+/** "All of" / "Any of" / "None of" for a group's combinator. */
+export function combinatorLabel(combinator: Combinator): string {
+  return COMBINATOR_LABELS[combinator];
+}
+
+export function matchCountLabel(count: number | null | undefined): string {
+  if (count === null || count === undefined) return "Apply";
+  return `Show ${count.toLocaleString()} ${count === 1 ? "result" : "results"}`;
+}
+
 /**
  * COMP-04.1 — the v3 filter-builder popover: rows of field / operator / value
- * with Remove, then Add condition / Clear / Apply. Theme variables only; no
- * literals (COMP-01). The full-page `AdvancedSearch` stays for the demo.
+ * with Remove, then Add condition / Add group / Clear / Apply. A group is a row
+ * that holds its own conditions and matches All of, Any of or None of them.
+ * Theme variables only; no literals (COMP-01). The full-page `AdvancedSearch`
+ * stays for the demo.
  */
 export function FilterBuilder({
   node,
@@ -137,15 +227,26 @@ export function FilterBuilder({
   onChange,
   onApply,
   onClear,
+  matchCount,
+  focusId,
   className,
   ref,
 }: FilterBuilderProps & { ref?: Ref<FilterBuilderHandle> }) {
   const [draft, setDraft] = useState<GroupNode>(() => builderTree(node));
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Resync when the committed tree changes identity (e.g. an external Clear).
   useEffect(() => {
     setDraft(builderTree(node));
   }, [node]);
+
+  useEffect(() => {
+    if (!focusId) return;
+    const target = rootRef.current?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(focusId)}"]`);
+    if (!target) return;
+    target.scrollIntoView?.({ block: "nearest" });
+    target.querySelector<HTMLElement>("select, input, button")?.focus();
+  }, [focusId]);
 
   function commit(next: GroupNode) {
     setDraft(next);
@@ -156,30 +257,30 @@ export function FilterBuilder({
     onClear?.();
   }
   function handleApply() {
-    onApply?.(draft, applyFilter(draft));
+    onApply?.(pruneEmptyGroups(draft), applyFilter(draft));
   }
   useImperativeHandle(ref, () => ({ apply: handleApply, clear: handleClear }));
 
   const ids = fields.map(fieldIdOf);
+  const labelOf = useOptionLabels(fields, draft);
+  const actions: RowActions = {
+    fields,
+    labelOf,
+    ids,
+    onPatch: (id, patch) => commit(patchCondition(draft, id, patch)),
+    onRemove: (id) => commit(removeCondition(draft, id)),
+    onRemoveGroup: (id) => commit(removeGroup(draft, id)),
+    onCombinator: (id, combinator) => commit(setCombinator(draft, id, combinator)),
+    onAdd: (groupId) => commit(addCondition(draft, fields[0] ?? "", groupId)),
+  };
 
   return (
-    <div className={["sb-filter-builder", className].filter(Boolean).join(" ")}>
+    <div ref={rootRef} className={["sb-filter-builder", className].filter(Boolean).join(" ")}>
       <div className="sb-filter-builder-rows">
         {draft.children.length === 0 && (
           <p className="sb-muted sb-filter-builder-empty">No conditions — add one to filter.</p>
         )}
-        {draft.children.map((child) =>
-          child.type === "condition" ? (
-            <BuilderRow
-              key={child.id}
-              node={child}
-              fields={fields}
-              ids={ids}
-              onPatch={(patch) => commit(patchCondition(draft, child.id, patch))}
-              onRemove={() => commit(removeCondition(draft, child.id))}
-            />
-          ) : null,
-        )}
+        <Rows nodes={draft.children} actions={actions} />
       </div>
       <div className="sb-filter-builder-foot">
         <button
@@ -190,14 +291,94 @@ export function FilterBuilder({
           <Icon name="plus" />
           Add condition
         </button>
-        <span className="sb-filter-builder-spacer" />
-        <button type="button" className="sb-btn" onClick={handleClear}>
-          Clear
+        <button
+          type="button"
+          className="sb-btn subtle"
+          onClick={() => commit(addGroup(draft, fields[0] ?? ""))}
+        >
+          <Icon name="plus" />
+          Add group
         </button>
-        <button type="button" className="sb-btn primary" onClick={handleApply}>
-          Apply
+        <span className="sb-filter-builder-actions">
+          <button type="button" className="sb-btn" onClick={handleClear}>
+            Clear
+          </button>
+          <button type="button" className="sb-btn primary" onClick={handleApply} aria-live="polite">
+            {matchCountLabel(matchCount)}
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type RowActions = {
+  fields: readonly FilterBuilderFieldInput[];
+  labelOf: (fieldId: string, value: unknown) => string;
+  ids: string[];
+  onPatch: (id: string, patch: Partial<ConditionNode>) => void;
+  onRemove: (id: string) => void;
+  onRemoveGroup: (id: string) => void;
+  onCombinator: (id: string, combinator: Combinator) => void;
+  onAdd: (groupId: string) => void;
+};
+
+function Rows({ nodes, actions }: { nodes: readonly FilterNode[]; actions: RowActions }) {
+  return nodes.map((child) =>
+    child.type === "condition" ? (
+      <BuilderRow
+        key={child.id}
+        node={child}
+        fields={actions.fields}
+        labelOf={actions.labelOf}
+        ids={actions.ids}
+        onPatch={(patch) => actions.onPatch(child.id, patch)}
+        onRemove={() => actions.onRemove(child.id)}
+      />
+    ) : (
+      <GroupRows key={child.id} group={child} actions={actions} />
+    ),
+  );
+}
+
+function GroupRows({ group, actions }: { group: GroupNode; actions: RowActions }) {
+  const label = combinatorLabel(group.combinator);
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset would bring its own box model into the popover
+    <div className="sb-filter-group" role="group" aria-label={`${label} group`} data-node-id={group.id} data-combinator={group.combinator}>
+      <div className="sb-filter-group-head">
+        <BuilderSelect
+          ariaLabel="Match"
+          value={group.combinator}
+          label={label}
+          onChange={(e) => actions.onCombinator(group.id, e.target.value as Combinator)}
+        >
+          {(Object.keys(COMBINATOR_LABELS) as Combinator[]).map((combinator) => (
+            <option key={combinator} value={combinator}>
+              {COMBINATOR_LABELS[combinator]}
+            </option>
+          ))}
+        </BuilderSelect>
+        <span className="sb-muted sb-filter-group-hint">the following</span>
+        <span className="sb-filter-builder-spacer" />
+        <button
+          type="button"
+          className="sb-icon-btn sb-filter-builder-remove"
+          title="Remove group"
+          aria-label={`Remove ${label} group`}
+          onClick={() => actions.onRemoveGroup(group.id)}
+        >
+          <Icon name="x" />
         </button>
       </div>
+      <div className="sb-filter-group-rows">
+        {group.children.length === 0 && <p className="sb-muted sb-filter-builder-empty">Empty group — add a condition.</p>}
+        <Rows nodes={group.children} actions={actions} />
+      </div>
+      <button type="button" className="sb-btn subtle sb-filter-group-add" onClick={() => actions.onAdd(group.id)}>
+        <Icon name="plus" />
+        Add condition
+      </button>
     </div>
   );
 }
@@ -265,12 +446,14 @@ function Icon({ name, size = 12 }: { name: keyof typeof ICON_PATHS; size?: numbe
 function BuilderRow({
   node,
   fields,
+  labelOf,
   ids,
   onPatch,
   onRemove,
 }: {
   node: ConditionNode;
   fields: readonly FilterBuilderFieldInput[];
+  labelOf: (fieldId: string, value: unknown) => string;
   ids: string[];
   onPatch: (patch: Partial<ConditionNode>) => void;
   onRemove: () => void;
@@ -285,8 +468,9 @@ function BuilderRow({
   const rowClass = between
     ? "sb-filter-builder-row between"
     : "sb-filter-builder-row";
+  const remote = typed.loadOptions && (canon === "eq" || canon === "neq" || canon === "in");
   return (
-    <div className={rowClass}>
+    <div className={rowClass} data-node-id={node.id}>
       {fields.length > 0 ? (
         <BuilderSelect
           ariaLabel="Field"
@@ -336,7 +520,9 @@ function BuilderRow({
             onChange={(e) => onPatch({ value: [boundsOf(node.value)[0], Number(e.target.value) || 0] })}
           />
         </>
-      ) : nullary ? null : options.length > 0 ? (
+      ) : nullary ? null : remote ? (
+        <OptionPicker field={typed} labelOf={labelOf} multiple={canon === "in"} value={node.value} onChange={(value) => onPatch({ value })} />
+      ) : options.length > 0 ? (
         <BuilderSelect
           ariaLabel="Value"
           value={String(node.value ?? "")}
@@ -361,6 +547,150 @@ function BuilderRow({
       <button type="button" className="sb-icon-btn sb-filter-builder-remove" title="Remove condition" aria-label="Remove condition" onClick={onRemove}>
         <Icon name="x" />
       </button>
+    </div>
+  );
+}
+
+const PICKER_DELAY_MS = 200;
+
+/**
+ * Type-ahead value editor for fields with `loadOptions`: an ARIA combobox that
+ * asks the host for options as the person types (debounced, stale answers
+ * dropped) and keeps the chosen labels so chips can show them. Single choice
+ * for equals / does not equal, several for "any of".
+ */
+function OptionPicker({
+  field,
+  labelOf: resolveLabel,
+  multiple,
+  value,
+  onChange,
+}: {
+  field: SheetbaseField;
+  labelOf: (fieldId: string, value: unknown) => string;
+  multiple: boolean;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  const listId = useId();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<readonly FieldOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState(0);
+  const request = useRef(0);
+  const selected: string[] = (Array.isArray(value) ? value : value === undefined || value === null || value === "" ? [] : [value]).map(String);
+  const labelOf = (v: string) => resolveLabel(field.id, v);
+
+  useEffect(() => {
+    if (!open || !field.loadOptions) return;
+    const load = field.loadOptions;
+    const mine = ++request.current;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      load(query)
+        .then((found) => {
+          if (request.current !== mine) return;
+          rememberOptions(field, found);
+          setOptions(found);
+          setActive(0);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (request.current !== mine) return;
+          setOptions([]);
+          setLoading(false);
+        });
+    }, query === "" ? 0 : PICKER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [open, query, field]);
+
+  function choose(option: FieldOption) {
+    rememberOptions(field, [option]);
+    if (multiple) {
+      onChange(selected.includes(option.value) ? selected.filter((v) => v !== option.value) : [...selected, option.value]);
+      setQuery("");
+    } else {
+      onChange(option.value);
+      setQuery("");
+      setOpen(false);
+    }
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      setActive((i) => Math.min(i + 1, Math.max(options.length - 1, 0)));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (event.key === "Enter" && open && options[active]) {
+      event.preventDefault();
+      choose(options[active]);
+    } else if (event.key === "Escape" && open) {
+      event.stopPropagation();
+      setOpen(false);
+    } else if (event.key === "Backspace" && multiple && query === "" && selected.length > 0) {
+      onChange(selected.slice(0, -1));
+    }
+  }
+
+  const shown = open ? query : multiple ? "" : selected[0] ? labelOf(selected[0]) : "";
+  return (
+    <div className="sb-filter-picker">
+      {multiple && selected.length > 0 && (
+        <span className="sb-filter-picker-tokens">
+          {selected.map((v) => (
+            <span key={v} className="chip">
+              {labelOf(v)}
+              <button type="button" aria-label={`Remove ${labelOf(v)}`} onClick={() => onChange(selected.filter((x) => x !== v))}>
+                ×
+              </button>
+            </span>
+          ))}
+        </span>
+      )}
+      <input
+        role="combobox"
+        aria-label="Value"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && options[active] ? `${listId}-${active}` : undefined}
+        autoComplete="off"
+        placeholder={multiple && selected.length > 0 ? "add…" : "search…"}
+        value={shown}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      {open && (
+        <div id={listId} role="listbox" aria-label={`${field.label} options`} aria-multiselectable={multiple || undefined} className="sb-filter-picker-list">
+          {options.map((option, index) => (
+            <div
+              key={option.value}
+              id={`${listId}-${index}`}
+              role="option"
+              tabIndex={-1}
+              aria-selected={selected.includes(option.value)}
+              data-active={index === active || undefined}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(option);
+              }}
+            >
+              {option.label}
+            </div>
+          ))}
+          {options.length === 0 && (
+            <div className="sb-muted sb-filter-picker-note">{loading ? "Searching…" : "No matches"}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
