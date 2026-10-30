@@ -47,8 +47,12 @@ const dateOperators: readonly FilterOperator[] = ["eq", "gt", "lt", "between", "
 const booleanOperators: readonly FilterOperator[] = ["eq", "isNull", "notNull"];
 const optionOperators: readonly FilterOperator[] = ["eq", "neq", "in", "isNull", "notNull"];
 
-export function operatorsForField(field: { dataType?: FieldDataType; options?: readonly string[] }): readonly FilterOperator[] {
-  if (field.options?.length || field.dataType === "relationship") return optionOperators;
+export function operatorsForField(field: {
+  dataType?: FieldDataType;
+  options?: readonly string[];
+  loadOptions?: unknown;
+}): readonly FilterOperator[] {
+  if (field.options?.length || field.loadOptions || field.dataType === "relationship") return optionOperators;
   if (field.dataType === "number") return numberOperators;
   if (field.dataType === "date" || field.dataType === "datetime") return dateOperators;
   if (field.dataType === "boolean") return booleanOperators;
@@ -89,7 +93,7 @@ const shortLabels: Readonly<Record<FilterOperator, string>> = {
   contains: "contains",
   startsWith: "starts with",
   endsWith: "ends with",
-  in: "is one of",
+  in: "is any of",
   between: "is between",
   isNull: "is empty",
   notNull: "is not empty",
