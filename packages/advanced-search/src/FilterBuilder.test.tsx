@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest";
 import { compileToDatasetQuery, type ConditionNode, type GroupNode, type SheetbaseField } from "@sheetbase-labs/sheetbase-shared";
 import {
   addCondition,
+  addGroup,
   applyFilter,
   builderTree,
   clearFilter,
   FilterBuilder,
+  matchCountLabel,
   patchCondition,
+  pruneEmptyGroups,
   removeCondition,
+  removeGroup,
+  setCombinator,
 } from "./FilterBuilder";
 
 const STATUS: SheetbaseField = {
@@ -126,5 +131,117 @@ describe("FilterBuilder", () => {
   it("renders an empty-state hint with no conditions", () => {
     const html = renderToStaticMarkup(<FilterBuilder fields={[STATUS]} />);
     expect(html).toContain("No conditions");
+  });
+});
+
+describe("groups", () => {
+  it("adds a group with one condition and edits inside it", () => {
+    const root = addGroup(clearFilter(), STATUS);
+    const group = root.children[0];
+    expect(group).toMatchObject({ type: "group", combinator: "OR" });
+    if (group.type !== "group") return;
+    expect(group.children).toHaveLength(1);
+
+    const more = addCondition(root, OSMOLALITY, group.id);
+    expect(more.children).toHaveLength(1);
+    const inner = more.children[0];
+    expect(inner.type === "group" && inner.children).toHaveLength(2);
+
+    const first = group.children[0].id;
+    const patched = patchCondition(more, first, { value: "Approved" });
+    const patchedGroup = patched.children[0];
+    expect(patchedGroup.type === "group" && patchedGroup.children[0]).toMatchObject({ value: "Approved" });
+    expect(removeCondition(patched, first).children[0]).toMatchObject({ type: "group" });
+  });
+
+  it("changes a group's combinator and never the root's", () => {
+    const root = addGroup(clearFilter(), STATUS);
+    const group = root.children[0];
+    const none = setCombinator(root, group.id, "NOT");
+    expect(none.children[0]).toMatchObject({ combinator: "NOT" });
+    expect(setCombinator(root, root.id, "OR")).toBe(root);
+    expect(setCombinator(root, "missing", "OR")).toBe(root);
+  });
+
+  it("removes a group as a unit and refuses the root", () => {
+    const root = addGroup(addCondition(clearFilter(), STATUS), OSMOLALITY);
+    const group = root.children[1];
+    expect(removeGroup(root, group.id).children).toHaveLength(1);
+    expect(removeGroup(root, root.id)).toBe(root);
+  });
+
+  it("keeps groups and wraps a non-AND root instead of flattening it", () => {
+    const or: GroupNode = { type: "group", id: "o", combinator: "OR", children: [STATUS_CONDITION] };
+    const wrapped = builderTree(or);
+    expect(wrapped.combinator).toBe("AND");
+    expect(wrapped.children).toEqual([or]);
+
+    const and: GroupNode = { type: "group", id: "a", combinator: "AND", children: [STATUS_CONDITION, or] };
+    expect(builderTree(and)).toBe(and);
+    expect(builderTree(STATUS_CONDITION).children).toEqual([STATUS_CONDITION]);
+  });
+
+  it("prunes empty groups and keeps unchanged trees as they are", () => {
+    const root = addGroup(clearFilter(), STATUS);
+    const group = root.children[0];
+    if (group.type !== "group") throw new Error("expected group");
+    const emptied = removeCondition(root, group.children[0].id);
+    expect(pruneEmptyGroups(emptied).children).toHaveLength(0);
+    expect(pruneEmptyGroups(root)).toBe(root);
+    expect(applyFilter(emptied)).toEqual({ filters: [], filterLogic: "and", sort: undefined });
+  });
+
+  it("applies a group as a tree query", () => {
+    const root = addGroup(addCondition(clearFilter(), STATUS), OSMOLALITY, "NOT");
+    const query = applyFilter(root);
+    expect(query.filterTree).toBeDefined();
+    expect(query.filters).toBeUndefined();
+  });
+
+  it("renders a group with its combinator picker and own add control", () => {
+    const added = addGroup(clearFilter(), STATUS);
+    const none = setCombinator(added, added.children[0].id, "NOT");
+    const html = renderToStaticMarkup(<FilterBuilder node={none} fields={[STATUS, OSMOLALITY]} />);
+    expect(html).toContain('role="group"');
+    expect(html).toContain('aria-label="None of group"');
+    expect(html).toContain('aria-label="Match"');
+    expect(html).toContain(">All of<");
+    expect(html).toContain(">Any of<");
+    expect(html).toContain(">None of<");
+    expect(html).toContain("Remove None of group");
+    expect(html).toContain("Add group");
+  });
+});
+
+describe("matchCount", () => {
+  it("labels Apply with the server count", () => {
+    expect(matchCountLabel(undefined)).toBe("Apply");
+    expect(matchCountLabel(null)).toBe("Apply");
+    expect(matchCountLabel(1)).toBe("Show 1 result");
+    expect(matchCountLabel(0)).toBe("Show 0 results");
+    expect(matchCountLabel(1234)).toBe("Show 1,234 results");
+    const html = renderToStaticMarkup(<FilterBuilder fields={[STATUS]} matchCount={42} />);
+    expect(html).toContain("Show 42 results");
+    expect(html).not.toContain(">Apply<");
+  });
+});
+
+describe("async options", () => {
+  const PROJECT: SheetbaseField = {
+    id: "project",
+    label: "Project",
+    dataType: "relationship",
+    loadOptions: async () => [{ value: "p1", label: "AAV8 TFF" }],
+  };
+
+  it("offers equals, any of and emptiness for a remote field", () => {
+    const html = renderToStaticMarkup(
+      <FilterBuilder
+        fields={[PROJECT]}
+        node={{ type: "group", id: "g", combinator: "AND", children: [{ type: "condition", id: "c", field: "project", operator: "in", value: ["p1"] }] }}
+      />,
+    );
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-autocomplete="list"');
   });
 });
