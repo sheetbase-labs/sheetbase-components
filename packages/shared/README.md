@@ -119,6 +119,8 @@ Cache identity: `queryKey` folds the tree in through `canonicalFilterTree`, whic
 
 Tree editing: `andCondition(root, condition)` appends a condition under an AND root (wrapping OR/NOT roots so the tree stays intact), and `withoutCondition(root, { field, operator, value })` removes matching root-level conditions by serialised-value equality, returning `root` unchanged when nothing matched — the referential compare doubles as a containment check. The explorer uses both for chart-click cross-filtering.
 
+Search box syntax: `parseSearchQuery(input, fields)` returns `{ text, filter }` — `key:value`, `key:"two words"`, `-key:value` (NOT, as a one-child NOT group), `key:a,b` (in), `key:>5` / `key:<2026-10-01`, `key:1..5` (between), `key:=exact` — and `formatSearchQuery` is the inverse. Keys match a field's id or label ignoring case; unknown keys, quoted phrases, `-word` and `OR` stay in `text` verbatim for the server's `websearch_to_tsquery`. `SheetbaseField.loadOptions(query)` supplies options on demand for fields too large to list.
+
 **Executor obligations**: if you receive a `filterTree` you cannot evaluate, say so — echo it in `DatasetPage.request` and/or surface an error — never silently ignore it and return unfiltered rows. Do not evaluate the flat `filters` as a fallback: the tree is the filter, the flat clauses are not a partial equivalent. Host executors in other languages reimplement the `buildPredicate` walk; the node schema above is plain JSON.
 
 ## Workspace
