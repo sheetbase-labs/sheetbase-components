@@ -50,6 +50,9 @@
   background: transparent; color: var(--faint); cursor: pointer;
   font-size: 12px; line-height: 1;
 }
+.chip .sb-chip-label { width: auto; height: 22px; padding: 0; margin: 0 -2px 0 0; border-radius: 0; color: var(--text); font-size: 12px; cursor: pointer; }
+.chip .sb-chip-label:hover { background: transparent; text-decoration: underline; }
+.sb-chip-group { border-style: dashed; border-color: var(--border-strong); }
 .chip button:hover { background: var(--surface-hover); color: var(--text); }
 .chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .sb-chip-add {
@@ -112,10 +115,39 @@
   border: 0; background: transparent; color: transparent;
   padding: 0 8px; font: inherit; cursor: pointer; outline: none;
 }
+/* Groups: a quiet inset box holding its own rows; the combinator picker leads. */
+.sb-filter-group {
+  display: flex; flex-direction: column; gap: 8px; padding: 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-hover) 40%, var(--surface));
+}
+.sb-filter-group-head { display: flex; align-items: center; gap: 8px; }
+.sb-filter-group-head .sb-filter-select { width: 84px; flex: 0 0 auto; }
+.sb-filter-group-hint { font-size: 12px; }
+.sb-filter-group-rows { display: flex; flex-direction: column; gap: 8px; }
+.sb-filter-group .sb-btn.sb-filter-group-add { align-self: flex-start; }
+.sb-filter-group .sb-filter-builder-row { grid-template-columns: 80px 64px minmax(0, 1fr) 24px; }
+.sb-filter-group .sb-filter-builder-row.between { grid-template-columns: 80px 64px minmax(0, 1fr) minmax(0, 1fr) 24px; }
+
+/* Async option picker: input with a listbox under it (theme variables only). */
+.sb-filter-picker { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sb-filter-picker-tokens { display: flex; flex-wrap: wrap; gap: 4px; }
+.sb-filter-picker-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin: 2px 0 0; padding: 4px;
+  max-height: 180px; overflow: auto; 
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow); font-size: 13px;
+}
+.sb-filter-picker-list [role="option"] { padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.sb-filter-picker-list [role="option"][data-active], .sb-filter-picker-list [role="option"]:hover { background: var(--surface-hover); }
+.sb-filter-picker-list [aria-selected="true"] { font-weight: 600; }
+.sb-filter-picker-note { padding: 4px 8px; }
 .sb-filter-builder-remove { width: 28px; height: 28px; color: var(--text); border-radius: var(--radius-md); overflow: visible; }
 .sb-filter-builder-remove svg { width: 12px; height: 12px; display: block; }
 .sb-filter-builder-remove:hover { background: var(--surface-hover); color: var(--text); }
-.sb-filter-builder-foot { display: flex; align-items: center; gap: 8px; }
+.sb-filter-builder-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sb-filter-builder-foot .sb-btn { white-space: nowrap; }
+.sb-filter-builder-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .sb-filter-builder-spacer { flex: 1 1 auto; }
 /* States.dc.html's footer buttons are `.btn` `size="sm"` (24px, 12px, radius 6):
    "Add condition" is quiet, "Clear" is default, "Apply" is primary. */
