@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ### Added
 
+- **Advanced search**: `FilterBuilder` groups — **Add group** rows that match All of, Any of or None of their conditions (AND / OR / NOT), with `addGroup`, `setCombinator`, `removeGroup` and `pruneEmptyGroups`. OR and NOT roots are no longer flattened to AND. `FilterChips` shows a group as one chip, removed as a unit, with `onEdit` and `FilterBuilder` `focusId` to open the builder at it; `describeNode` phrases any node.
+- **Advanced search**: async options — `SheetbaseField.loadOptions(query)` drives a debounced combobox in the value editor for equals, does not equal and any of, and chips show option labels via `useOptionLabels`. `FilterBuilder` `matchCount` turns Apply into "Show 42 results".
+- **Shared**: search box syntax — `parseSearchQuery`, `formatSearchQuery` and `isQueryExpressible` for `key:value`, quoted values, `-key:value`, `key:a,b`, comparisons and `a..b` ranges, leaving other text verbatim.
+- **Shared**: `FieldOption` and `SheetbaseField.loadOptions`; `operatorsForField` treats a field with `loadOptions` like one with options.
+
+### Changed
+
+- **Shared**: the short label for the `in` operator reads "is any of" (was "is one of").
+
 - **Studio** (`@sheetbase-labs/sheetbase-studio`, new package): explore and chart any table. A field browser profiles every column (missing, distinct, quantiles, top values, bins) and filters on click; the explorer, advanced search, a read-only paged grid and a SQL pane follow one `AnalysisView`. Small tables explore locally; large ones stay at the source with exact aggregates and bins and labelled samples. Read-only SQL opens results as new tables, and the view is shown as SQL, Ibis and pandas. Chart exports embed provenance (source, table, query SQL, filter tree, chart spec, row count).
 - **Studio sources**: `MemorySource` (host rows), `DuckDbSource` (DuckDB-WASM; CSV, TSV, JSON, Excel and Parquet uploads, offline-safe) and `HttpSource` over a documented wire contract (`/api/studio/*` plus the existing pages and aggregate routes).
 - **Shared**: `StudioDataSource`, `TableInfo`, `FieldProfile` and the studio wire types; `workspaceSourceFor`.
