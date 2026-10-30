@@ -16,7 +16,7 @@
     },
     "packages/advanced-search": {
       "name": "@sheetbase-labs/sheetbase-advanced-search",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "@sheetbase-labs/sheetbase-table": "workspace:*",
@@ -40,7 +40,7 @@
     },
     "packages/demo": {
       "name": "sheetbase-demo",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
         "@sheetbase-labs/sheetbase-explorer": "workspace:*",
@@ -62,7 +62,7 @@
     },
     "packages/explorer": {
       "name": "@sheetbase-labs/sheetbase-explorer",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "@sheetbase-labs/sheetbase-table": "workspace:*",
@@ -91,7 +91,7 @@
     },
     "packages/rules-engine": {
       "name": "@sheetbase-labs/sheetbase-rulesengine",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
       },
@@ -112,7 +112,7 @@
     },
     "packages/schema-editor": {
       "name": "@sheetbase-labs/sheetbase-schemaeditor",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
       },
@@ -133,7 +133,7 @@
     },
     "packages/shared": {
       "name": "@sheetbase-labs/sheetbase-shared",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "devDependencies": {
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
@@ -150,7 +150,7 @@
     },
     "packages/studio": {
       "name": "@sheetbase-labs/sheetbase-studio",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@duckdb/duckdb-wasm": "1.32.0",
         "@sheetbase-labs/sheetbase-advanced-search": "workspace:*",
@@ -184,7 +184,7 @@
     },
     "packages/studio-cli": {
       "name": "sheetbase-studio-cli",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "bin": {
         "sheetbase-studio": "./src/cli.ts",
       },
@@ -201,7 +201,7 @@
     },
     "packages/table": {
       "name": "@sheetbase-labs/sheetbase-table",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@sheetbase-labs/sheetbase-shared": "workspace:*",
         "rbush": "^4.0.1",
