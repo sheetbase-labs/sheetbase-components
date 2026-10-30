@@ -6,6 +6,9 @@ export type ColumnKind = "number" | "string" | "boolean" | "date";
 
 export type FieldReference = Readonly<{ model: string; field?: string }>;
 
+/** One choice for a field whose options are too many to list up front. */
+export type FieldOption = Readonly<{ value: string; label: string }>;
+
 export type SheetbaseField = Readonly<{
   id: string;
   label: string;
@@ -20,6 +23,13 @@ export type SheetbaseField = Readonly<{
   unit?: string;
   precision?: number;
   references?: FieldReference;
+  /**
+   * Look up options on demand (type-ahead). Value editors for `eq`, `neq` and
+   * `in` call it with what the person has typed, and again with `""` to list
+   * the first few. Resolve the labels of values already in a filter by
+   * calling it with the value itself.
+   */
+  loadOptions?: (query: string) => Promise<readonly FieldOption[]>;
 }>;
 
 const DATA_TYPES = new Set<string>(["text", "number", "boolean", "date", "datetime", "relationship"]);

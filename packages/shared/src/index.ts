@@ -18,3 +18,4 @@ export {
   type PersistenceAdapter,
   type PersistenceFetchLike,
 } from "./persistence";
+export * from "./search-query";
