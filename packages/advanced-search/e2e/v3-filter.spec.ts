@@ -34,11 +34,11 @@ for (const theme of ["light", "dark"] as const) {
 test("Alt+ArrowDown on the grip moves a row down and keeps focus", async ({ page }) => {
   await page.goto("/v3.html?scene=rules", { waitUntil: "networkidle" });
   const fields = () => page.locator(".sb-fb-list").first().locator(":scope > .sb-fb-item > .sb-fb-row .sb-fb-field .sb-filter-select-value");
-  await expect(fields()).toHaveText(["Seniority", "Currency"]);
+  await expect(fields()).toHaveText(["Owner", "Status"]);
   const grip = page.locator(".sb-fb-row").first().getByRole("button", { name: "Move condition", exact: true });
   await grip.focus();
   await page.keyboard.press("Alt+ArrowDown");
-  await expect(fields()).toHaveText(["Currency", "Seniority"]);
+  await expect(fields()).toHaveText(["Status", "Owner"]);
   await expect(page.locator(".sb-fb-row").nth(1).getByRole("button", { name: "Move condition", exact: true })).toBeFocused();
 });
 
