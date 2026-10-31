@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-31
+
 ### Added
 
 - **Advanced search**: `FilterBuilder` is rebuilt as an inline rule builder. Conditions are rounded row cards (grip, field, "is", operator in words, value), lists of two or more rows hang off an And / Or rail whose pill switches a group between And and Or, and groups are larger cards headed "Group · 3 conditions" with their own Add condition, a "None of these" switch and remove. "Any of" shows removable chips inline in one value box, including over a fixed option list. Rows and groups reorder by the grip (native drag, or Alt+ArrowUp / Alt+ArrowDown) via the new `moveNode`; narrow containers wrap each row. New `variant?: "popover" | "inline"` (default `"popover"` keeps the 360px card). Also exported: `toggleCombinator`, `groupSummary`, `connectorLabel`, `ruleOperatorLabel`.

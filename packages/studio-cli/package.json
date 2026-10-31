@@ -1,6 +1,6 @@
 {
   "name": "sheetbase-studio-cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Sheetbase Studio as a single binary: the Studio UI and a DuckDB-backed server for files, SQLite, DuckDB, Postgres and MySQL.",
   "type": "module",

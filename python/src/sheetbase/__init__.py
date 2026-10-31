@@ -10,7 +10,7 @@ from .filters import UnsupportedFilter, apply_view, compile_filter
 from .server import serve
 
 __all__ = ["StudioBackend", "StudioError", "UnsupportedFilter", "apply_view", "compile_filter", "explore", "serve", "Studio"]
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 
 def __getattr__(name: str):
