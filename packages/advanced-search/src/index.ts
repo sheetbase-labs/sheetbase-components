@@ -17,13 +17,17 @@ export {
   clearFilter,
   combinatorLabel,
   conditionsOf,
+  connectorLabel,
+  groupSummary,
   matchCountLabel,
   moveNode,
   patchCondition,
   pruneEmptyGroups,
   removeCondition,
   removeGroup,
+  ruleOperatorLabel,
   setCombinator,
+  toggleCombinator,
 } from "./FilterBuilder";
 export type {
   FilterBuilderProps,
