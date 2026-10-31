@@ -90,26 +90,27 @@ function GroupsScene() {
  * `?width=420` renders it in a narrow host to show the wrapped rows.
  */
 const RULE_FIELDS: SheetbaseField[] = [
-  { id: "seniority", label: "Seniority", dataType: "text", options: ["Manager", "Director", "Analyst"] },
-  { id: "type", label: "Expense type", dataType: "text", options: ["Food & drink", "Travel", "Lodging", "Software"] },
-  { id: "merchant", label: "Merchant", dataType: "text", options: ["Uber", "Delta", "Hilton"] },
-  { id: "currency", label: "Currency", dataType: "text", options: ["USD", "EUR", "GBP"] },
+  { id: "owner", label: "Owner", dataType: "text", options: ["Sam Patel", "Priya S.", "Me"] },
+  { id: "status", label: "Status", dataType: "text", options: ["Draft", "In review", "Approved"] },
+  { id: "instrument", label: "Instrument", dataType: "text", options: ["ÄKTA Pure", "HPLC-02", "Plate reader", "Bioreactor 3"] },
+  { id: "project", label: "Project", dataType: "text", options: ["AAV8 TFF", "mAb polish step", "LNP screen"] },
+  { id: "kind", label: "Experiment type", dataType: "text", options: ["Purification", "Titration", "Stability"] },
 ];
 const rulesNode: GroupNode = {
   type: "group",
   id: "root",
   combinator: "AND",
   children: [
-    { type: "condition", id: "r1", field: "seniority", operator: "eq", value: "Manager" },
-    { type: "condition", id: "r2", field: "currency", operator: "neq", value: "GBP" },
+    { type: "condition", id: "r1", field: "owner", operator: "eq", value: "Sam Patel" },
+    { type: "condition", id: "r2", field: "status", operator: "neq", value: "Draft" },
     {
       type: "group",
       id: "g1",
       combinator: "OR",
       children: [
-        { type: "condition", id: "r3", field: "type", operator: "in", value: ["Food & drink", "Travel"] },
-        { type: "condition", id: "r4", field: "merchant", operator: "eq", value: "Uber" },
-        { type: "condition", id: "r5", field: "currency", operator: "eq", value: "USD" },
+        { type: "condition", id: "r3", field: "instrument", operator: "in", value: ["ÄKTA Pure", "HPLC-02"] },
+        { type: "condition", id: "r4", field: "project", operator: "eq", value: "AAV8 TFF" },
+        { type: "condition", id: "r5", field: "kind", operator: "eq", value: "Purification" },
       ],
     },
   ],
@@ -120,7 +121,7 @@ function RulesScene() {
   const [draft, setDraft] = React.useState<GroupNode>(rulesNode);
   return (
     <div style={{ padding: 24, width }}>
-      <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", marginBottom: 12 }}>WHEN</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Find records where</div>
       <FilterBuilder variant="inline" node={rulesNode} fields={RULE_FIELDS} onChange={setDraft} matchCount={draft.children.length * 7} />
     </div>
   );
