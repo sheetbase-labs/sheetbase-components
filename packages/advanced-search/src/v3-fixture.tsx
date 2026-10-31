@@ -1,7 +1,8 @@
 /**
- * COMP-04.3 visual fixture: the v3 `FilterBuilder` popover, rendered from the
- * States screen's own two conditions under `themes/v3.css`, for comparison with
- * a crop of the ELN design render (`canvas/States.dc.html`, "Filter builder").
+ * COMP-04.3 fixture: the v3 `FilterBuilder` under `themes/v3.css`. The default
+ * scene is the popover card with the States screen's two conditions;
+ * `?scene=rules` is the inline rule builder (reference layout) and
+ * `?scene=groups` the grouped one.
  */
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -83,7 +84,51 @@ function GroupsScene() {
   );
 }
 
+/**
+ * `?scene=rules`: the inline rule builder as the reference lays it out: two
+ * rows under And, then a three-condition Or group with a multi-value Any of.
+ * `?width=420` renders it in a narrow host to show the wrapped rows.
+ */
+const RULE_FIELDS: SheetbaseField[] = [
+  { id: "seniority", label: "Seniority", dataType: "text", options: ["Manager", "Director", "Analyst"] },
+  { id: "type", label: "Expense type", dataType: "text", options: ["Food & drink", "Travel", "Lodging", "Software"] },
+  { id: "merchant", label: "Merchant", dataType: "text", options: ["Uber", "Delta", "Hilton"] },
+  { id: "currency", label: "Currency", dataType: "text", options: ["USD", "EUR", "GBP"] },
+];
+const rulesNode: GroupNode = {
+  type: "group",
+  id: "root",
+  combinator: "AND",
+  children: [
+    { type: "condition", id: "r1", field: "seniority", operator: "eq", value: "Manager" },
+    { type: "condition", id: "r2", field: "currency", operator: "neq", value: "GBP" },
+    {
+      type: "group",
+      id: "g1",
+      combinator: "OR",
+      children: [
+        { type: "condition", id: "r3", field: "type", operator: "in", value: ["Food & drink", "Travel"] },
+        { type: "condition", id: "r4", field: "merchant", operator: "eq", value: "Uber" },
+        { type: "condition", id: "r5", field: "currency", operator: "eq", value: "USD" },
+      ],
+    },
+  ],
+};
+
+function RulesScene() {
+  const width = Number(new URLSearchParams(window.location.search).get("width")) || 900;
+  const [draft, setDraft] = React.useState<GroupNode>(rulesNode);
+  return (
+    <div style={{ padding: 24, width }}>
+      <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.04em", marginBottom: 12 }}>WHEN</div>
+      <FilterBuilder variant="inline" node={rulesNode} fields={RULE_FIELDS} onChange={setDraft} matchCount={draft.children.length * 7} />
+    </div>
+  );
+}
+
 const theme = new URLSearchParams(window.location.search).get("theme") === "dark" ? "dark" : "light";
+
+const scene = new URLSearchParams(window.location.search).get("scene");
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -105,7 +150,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         } as React.CSSProperties
       }
     >
-      {new URLSearchParams(window.location.search).get("scene") === "groups" ? (
+      {scene === "rules" ? (
+        <RulesScene />
+      ) : scene === "groups" ? (
         <GroupsScene />
       ) : (
         <FilterBuilder fields={fields} node={node} />
