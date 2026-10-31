@@ -12,9 +12,15 @@ import { AdvancedSearch, applySearch } from "@sheetbase-labs/sheetbase-advanced-
 import "@sheetbase-labs/sheetbase-advanced-search/styles.css"
 ```
 
-## Filter popover (v3)
+## Rule builder (v3)
 
-`FilterBuilder` is the filter-builder popover — rows of field / operator / value, then Add condition, Add group, Clear and Apply. A group is a row holding its own conditions that matches **All of**, **Any of** or **None of** them (AND / OR / NOT; NOT means none of the children match, as `buildPredicate` does). The root stays AND, so a flat AND tree looks and compiles exactly as before; an OR or NOT root passed as `node` shows as one group row instead of being flattened. `FilterChips` is the applied-filter row above the table: one chip per condition or group with a named remove label, then "+ Add filter". A group is one chip ("None of: Project is AAV8 TFF"), removed as a unit; pass `onEdit` and clicking a chip calls it with the node id, which you hand back to the builder as `focusId` to open it at that row. Both render theme variables only, so a `.sheetbase-scope` (or the v3 preset) themes them.
+`FilterBuilder` is the rule builder. Each condition is a rounded row card: grip, field, "is", operator (in words: "Equal to", "Any of", "Contains"), value, and a remove button that appears on hover or focus. A list of two or more rows hangs off a thin rail with an **And** / **Or** pill; on a group the pill is a button that switches that group between And and Or (the root stays And). A group is a larger card headed "Group · 3 conditions" with its own rail, an **Add condition** button, a quiet **None of these** switch (NOT: none of the children match, as `buildPredicate` does) and a remove button. "Any of" values are removable chips inside one value box with a type-ahead after them. Below the rows: **Add rule** and **Add group**, then Clear and Apply (or "Show 42 results" with `matchCount`). The root stays AND, so a flat AND tree looks and compiles exactly as before; an OR or NOT root passed as `node` shows as one group instead of being flattened.
+
+Reorder with the grip: drag a row or group within or between lists (native HTML5 drag, no dependency), or focus the grip and press Alt+ArrowUp / Alt+ArrowDown. `moveNode(root, id, targetGroupId, index)` is the pure helper behind it (the index counts the target's children after the node is taken out; a group cannot move into itself).
+
+`variant="inline"` fills its container, so the host decides whether it is a page panel or a popover; the default `"popover"` keeps the 360px card. Under about 520px of container width each row wraps: the field on one line, operator and value on the next. Colours come from theme variables only, light and dark.
+
+`FilterChips` is the applied-filter row above the table: one chip per condition or group with a named remove label, then "+ Add filter". A group is one chip ("None of: Project is AAV8 TFF"), removed as a unit; pass `onEdit` and clicking a chip calls it with the node id, which you hand back to the builder as `focusId` to open it at that row. Both render theme variables only, so a `.sheetbase-scope` (or the v3 preset) themes them.
 
 ```tsx
 import { FilterBuilder, FilterChips, applyFilter } from "@sheetbase-labs/sheetbase-advanced-search"
