@@ -9,6 +9,7 @@ import {
   clearFilter,
   FilterBuilder,
   matchCountLabel,
+  moveNode,
   patchCondition,
   pruneEmptyGroups,
   removeCondition,
@@ -243,5 +244,50 @@ describe("async options", () => {
     );
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-autocomplete="list"');
+  });
+});
+
+describe("moveNode", () => {
+  const tree = (): GroupNode => {
+    const a = addCondition(addCondition(addCondition(clearFilter(), STATUS), OSMOLALITY), STATUS);
+    return addCondition(addGroup(a, STATUS), OSMOLALITY, undefined);
+  };
+  const ids = (group: GroupNode) => group.children.map((child) => child.id);
+
+  it("reorders inside one list, counting the index after removal", () => {
+    const root = tree();
+    const [a, b, c] = ids(root);
+    expect(ids(moveNode(root, a, root.id, 2)).slice(0, 3)).toEqual([b, c, a]);
+    expect(ids(moveNode(root, c, root.id, 0)).slice(0, 3)).toEqual([c, a, b]);
+    expect(moveNode(root, a, root.id, 99).children.at(-1)?.id).toBe(a);
+    expect(ids(moveNode(root, a, root.id, -5))[0]).toBe(a);
+  });
+
+  it("moves a row into a group and back out", () => {
+    const root = tree();
+    const group = root.children.find((child) => child.type === "group");
+    if (!group) throw new Error("expected group");
+    const [a] = ids(root);
+    const into = moveNode(root, a, group.id, 0);
+    const inner = into.children.find((child) => child.id === group.id);
+    expect(inner?.type === "group" && inner.children[0].id).toBe(a);
+    expect(into.children.some((child) => child.id === a)).toBe(false);
+    const out = moveNode(into, a, root.id, 0);
+    expect(out.children[0].id).toBe(a);
+  });
+
+  it("refuses to move a group into itself, move the root or use unknown ids", () => {
+    const root = tree();
+    const group = root.children.find((child) => child.type === "group");
+    if (!group || group.type !== "group") throw new Error("expected group");
+    expect(moveNode(root, group.id, group.id, 0)).toBe(root);
+    const nested = addGroup(root, STATUS);
+    const inner = nested.children.at(-1) as GroupNode;
+    const into = moveNode(nested, inner.id, group.id, 0);
+    expect(moveNode(into, group.id, inner.id, 0)).toBe(into);
+    expect(moveNode(root, root.id, group.id, 0)).toBe(root);
+    expect(moveNode(root, "missing", root.id, 0)).toBe(root);
+    expect(moveNode(root, ids(root)[0], "missing", 0)).toBe(root);
+    expect(moveNode(root, ids(root)[0], ids(root)[1], 0)).toBe(root);
   });
 });

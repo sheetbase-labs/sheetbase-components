@@ -18,6 +18,7 @@ export {
   combinatorLabel,
   conditionsOf,
   matchCountLabel,
+  moveNode,
   patchCondition,
   pruneEmptyGroups,
   removeCondition,
