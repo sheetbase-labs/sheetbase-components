@@ -68,11 +68,11 @@
    card; `inline` fills its container. The root is a size container so narrow
    hosts wrap each row (field above, operator and value below). */
 .sb-filter-builder {
-  --sb-fb-rail: 52px;
-  --sb-fb-gap: 8px;
-  --sb-fb-control: 32px;
+  --sb-fb-rail: 44px;
+  --sb-fb-gap: 6px;
+  --sb-fb-control: 28px;
   container: sbfb / inline-size;
-  display: flex; flex-direction: column; gap: 14px;
+  display: flex; flex-direction: column; gap: 10px;
   color: var(--text); font-size: 13px; min-width: 0;
 }
 .sb-filter-builder[data-variant="popover"] {
@@ -81,7 +81,7 @@
   border-radius: 8px; box-shadow: var(--shadow);
 }
 .sb-filter-builder[data-variant="inline"] { width: 100%; }
-.sb-fb-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sb-fb-body { display: flex; flex-direction: column; gap: var(--sb-fb-gap); min-width: 0; }
 .sb-filter-builder-empty { margin: 0; padding: 2px 0; }
 
 /* A list of rows. With two or more, a bracket line and an And / Or pill hang off its left. */
@@ -111,7 +111,7 @@
   position: absolute; z-index: 1; top: 50%; left: calc(var(--sb-fb-rail) / 2);
   transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; justify-content: center;
-  height: 26px; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: 13px;
+  height: 22px; padding: 0 7px; border: 1px solid var(--border-strong); border-radius: 11px;
   background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; line-height: 1;
 }
 button.sb-fb-pill { cursor: pointer; }
@@ -121,11 +121,11 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 /* A condition: a soft rounded card. */
 .sb-fb-row {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 8px 8px 6px; min-width: 0;
-  border: 1px solid var(--border); border-radius: 12px;
+  padding: 3px 4px 3px 2px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 10px;
   background: var(--surface-muted);
 }
-.sb-fb-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sb-fb-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .sb-fb-is { color: var(--faint); font-size: 13px; }
 .sb-fb-field { display: flex; min-width: 0; }
 .sb-fb-value { flex: 1 1 180px; min-width: 0; display: flex; }
@@ -194,8 +194,8 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 
 /* A group: a larger card with its own header, rail and Add condition. */
 .sb-fb-group {
-  display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 12px 8px; min-width: 0;
-  border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  display: flex; flex-direction: column; gap: 6px; padding: 4px 6px 6px 4px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
 }
 .sb-fb-group .sb-fb-list[data-rail] { padding-left: var(--sb-fb-rail); }
 .sb-fb-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 28px; }
@@ -214,7 +214,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 /* Async / multi-value picker: one bordered box, chips inline with the type-ahead. */
 .sb-filter-picker {
   position: relative; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px;
-  min-height: var(--sb-fb-control); padding: 3px 6px;
+  min-height: var(--sb-fb-control); padding: 1px 6px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
 }
 .sb-filter-picker:hover { border-color: var(--border-strong); }
@@ -223,11 +223,11 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .sb-filter-picker input {
-  flex: 1 1 80px; min-width: 60px; height: 24px; padding: 0 4px; border: 0; outline: none;
+  flex: 1 1 80px; min-width: 60px; height: 22px; padding: 0 4px; border: 0; outline: none;
   background: transparent; color: var(--text); font-family: var(--font-sans); font-size: 13px;
 }
 .sb-filter-picker input::placeholder { color: var(--faint); }
-.sb-filter-picker .chip { background: var(--surface-muted); border-radius: 6px; height: 24px; }
+.sb-filter-picker .chip { background: var(--surface-muted); border-radius: 6px; height: 22px; }
 .sb-filter-picker-list {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin: 4px 0 0; padding: 4px;
   max-height: 180px; overflow: auto;
@@ -245,7 +245,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 .sb-filter-builder-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .sb-filter-builder-spacer { flex: 1 1 auto; }
 .sb-filter-builder .sb-btn {
-  height: 32px; min-height: 32px; max-height: 32px; padding: 0 12px;
+  height: 28px; min-height: 28px; max-height: 28px; padding: 0 10px;
   border-radius: 8px; font-size: 13px; font-weight: 500; gap: 8px;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
 }
