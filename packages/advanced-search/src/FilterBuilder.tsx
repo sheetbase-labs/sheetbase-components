@@ -1,4 +1,4 @@
-import { useEffect, useId, useImperativeHandle, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import {
   compileToDatasetQuery,
   emptyGroup,
@@ -6,7 +6,7 @@ import {
   emptyRoot,
   ensureOperator,
   normaliseOperator,
-  operatorShortLabel,
+  operatorLabel,
   operatorsForField,
   toDatasetQuery,
   type Combinator,
@@ -46,6 +46,12 @@ export interface FilterBuilderProps {
   /** Scroll to and focus this condition or group, e.g. the one a chip was clicked on. */
   focusId?: string;
   className?: string;
+  /**
+   * `"popover"` (default) keeps the 360px card for hosts that float the builder.
+   * `"inline"` drops the card border, shadow and fixed width so it fills its
+   * container, and the host decides whether that is a panel or a popover.
+   */
+  variant?: "popover" | "inline";
 }
 
 export interface FilterBuilderHandle {
@@ -249,17 +255,85 @@ export function combinatorLabel(combinator: Combinator): string {
   return COMBINATOR_LABELS[combinator];
 }
 
+/** What the group's match reads as in the rail pill. */
+const CONNECTOR_LABELS: Readonly<Record<Combinator, string>> = {
+  AND: "And",
+  OR: "Or",
+  // A None of group matches when none of its rows do, which reads as "Or" on the rail.
+  NOT: "Or",
+};
+
+const OPERATOR_WORDS: Readonly<Record<FilterOperator, string>> = {
+  eq: "Equal to",
+  neq: "Not equal to",
+  gt: "Greater than",
+  gte: "At least",
+  lt: "Less than",
+  lte: "At most",
+  contains: "Contains",
+  startsWith: "Starts with",
+  endsWith: "Ends with",
+  in: "Any of",
+  between: "Between",
+  isNull: "Empty",
+  notNull: "Not empty",
+  withinLastDays: "Within the last days",
+};
+
+/** The operator as the rule row says it: words, never symbols ("Equal to", "Any of"). Dates read "After" / "Before". */
+export function ruleOperatorLabel(operator: FilterOperator, field?: { dataType?: SheetbaseField["dataType"] }): string {
+  if ((field?.dataType === "date" || field?.dataType === "datetime") && ["gt", "gte", "lt", "lte"].includes(operator)) {
+    return operatorLabel(operator, field);
+  }
+  return OPERATOR_WORDS[operator];
+}
+
+/** "And" / "Or" for a list's connector pill. */
+export function connectorLabel(combinator: Combinator): string {
+  return CONNECTOR_LABELS[combinator];
+}
+
+/** What the pill's click does: And becomes Or and back. A None of group stays as it is, and so does the root. */
+export function toggleCombinator(root: GroupNode, id: string): GroupNode {
+  if (id === root.id) return root;
+  const group = findNode(root, id);
+  if (group?.type !== "group" || group.combinator === "NOT") return root;
+  return setCombinator(root, id, group.combinator === "AND" ? "OR" : "AND");
+}
+
+/** "Group · 3 conditions", or "None of these · 3 conditions" for a NOT group. Counts every condition inside, nested groups included. */
+export function groupSummary(group: GroupNode): { title: string; count: string } {
+  const total = conditionsOf(group).length;
+  return {
+    title: group.combinator === "NOT" ? "None of these" : "Group",
+    count: `${total} ${total === 1 ? "condition" : "conditions"}`,
+  };
+}
+
 export function matchCountLabel(count: number | null | undefined): string {
   if (count === null || count === undefined) return "Apply";
   return `Show ${count.toLocaleString()} ${count === 1 ? "result" : "results"}`;
 }
 
+function locate(root: GroupNode, id: string): { parentId: string; index: number } | null {
+  for (const [index, child] of root.children.entries()) {
+    if (child.id === id) return { parentId: root.id, index };
+    if (child.type === "group") {
+      const found = locate(child, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 /**
- * COMP-04.1 — the v3 filter-builder popover: rows of field / operator / value
- * with Remove, then Add condition / Add group / Clear / Apply. A group is a row
- * that holds its own conditions and matches All of, Any of or None of them.
- * Theme variables only; no literals (COMP-01). The full-page `AdvancedSearch`
- * stays for the demo.
+ * The inline rule builder. Each condition is a row card (grip · field · "is" ·
+ * operator · value); lists of two or more rows hang off a rail whose pill reads
+ * And or Or; groups are larger cards with their own header, rail and Add
+ * condition. Rows and groups drag by the grip (native HTML5 drag) or move with
+ * Alt+ArrowUp / Alt+ArrowDown on it. `variant="inline"` fills its container;
+ * the default `"popover"` keeps the old 360px card for hosts that float it.
+ * Theme variables only (COMP-01).
  */
 export function FilterBuilder({
   node,
@@ -270,9 +344,12 @@ export function FilterBuilder({
   matchCount,
   focusId,
   className,
+  variant = "popover",
   ref,
 }: FilterBuilderProps & { ref?: Ref<FilterBuilderHandle> }) {
   const [draft, setDraft] = useState<GroupNode>(() => builderTree(node));
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<DropTarget | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Resync when the committed tree changes identity (e.g. an external Clear).
@@ -285,7 +362,7 @@ export function FilterBuilder({
     const target = rootRef.current?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(focusId)}"]`);
     if (!target) return;
     target.scrollIntoView?.({ block: "nearest" });
-    target.querySelector<HTMLElement>("select, input, button")?.focus();
+    target.querySelector<HTMLElement>("select, input, button:not([data-grip])")?.focus();
   }, [focusId]);
 
   function commit(next: GroupNode) {
@@ -301,42 +378,72 @@ export function FilterBuilder({
   }
   useImperativeHandle(ref, () => ({ apply: handleApply, clear: handleClear }));
 
+  function endDrag() {
+    setDragId(null);
+    setDrop(null);
+  }
+  function finishDrop() {
+    const from = dragId ? locate(draft, dragId) : null;
+    if (dragId && drop && from) {
+      const index = from.parentId === drop.parentId && from.index < drop.index ? drop.index - 1 : drop.index;
+      commit(moveNode(draft, dragId, drop.parentId, index));
+    }
+    endDrag();
+  }
+  function canDropInto(parentId: string): boolean {
+    if (!dragId) return false;
+    const moving = findNode(draft, dragId);
+    return !!moving && !containsId(moving, parentId);
+  }
+
   const ids = fields.map(fieldIdOf);
   const labelOf = useOptionLabels(fields, draft);
   const actions: RowActions = {
     fields,
     labelOf,
     ids,
+    dragId,
+    drop,
+    canDropInto,
+    onDropTarget: setDrop,
+    onDragStart: setDragId,
+    onDragEnd: endDrag,
+    onDrop: finishDrop,
+    onMoveBy: (id, delta) => {
+      const at = locate(draft, id);
+      if (!at) return;
+      const size = findNode(draft, at.parentId);
+      const length = size && size.type === "group" ? size.children.length : 0;
+      const index = Math.max(0, Math.min(at.index + delta, length - 1));
+      if (index !== at.index) commit(moveNode(draft, id, at.parentId, index));
+    },
     onPatch: (id, patch) => commit(patchCondition(draft, id, patch)),
     onRemove: (id) => commit(removeCondition(draft, id)),
     onRemoveGroup: (id) => commit(removeGroup(draft, id)),
     onCombinator: (id, combinator) => commit(setCombinator(draft, id, combinator)),
+    onToggleCombinator: (id) => commit(toggleCombinator(draft, id)),
     onAdd: (groupId) => commit(addCondition(draft, fields[0] ?? "", groupId)),
   };
 
   return (
-    <div ref={rootRef} className={["sb-filter-builder", className].filter(Boolean).join(" ")}>
-      <div className="sb-filter-builder-rows">
+    <div
+      ref={rootRef}
+      className={["sb-filter-builder", className].filter(Boolean).join(" ")}
+      data-variant={variant}
+    >
+      <div className="sb-fb-body">
         {draft.children.length === 0 && (
           <p className="sb-muted sb-filter-builder-empty">No conditions — add one to filter.</p>
         )}
-        <Rows nodes={draft.children} actions={actions} />
+        <List group={draft} root actions={actions} />
       </div>
       <div className="sb-filter-builder-foot">
-        <button
-          type="button"
-          className="sb-btn subtle"
-          onClick={() => commit(addCondition(draft, fields[0] ?? ""))}
-        >
-          <Icon name="plus" />
-          Add condition
+        <button type="button" className="sb-btn sb-fb-add" onClick={() => commit(addCondition(draft, fields[0] ?? ""))}>
+          <Icon name="rule" />
+          Add rule
         </button>
-        <button
-          type="button"
-          className="sb-btn subtle"
-          onClick={() => commit(addGroup(draft, fields[0] ?? ""))}
-        >
-          <Icon name="plus" />
+        <button type="button" className="sb-btn sb-fb-add" onClick={() => commit(addGroup(draft, fields[0] ?? ""))}>
+          <Icon name="folder" />
           Add group
         </button>
         <span className="sb-filter-builder-actions">
@@ -352,71 +459,217 @@ export function FilterBuilder({
   );
 }
 
+type DropTarget = { parentId: string; index: number };
+
 type RowActions = {
   fields: readonly FilterBuilderFieldInput[];
   labelOf: (fieldId: string, value: unknown) => string;
   ids: string[];
+  dragId: string | null;
+  drop: DropTarget | null;
+  canDropInto: (parentId: string) => boolean;
+  onDropTarget: (target: DropTarget | null) => void;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
+  onMoveBy: (id: string, delta: number) => void;
   onPatch: (id: string, patch: Partial<ConditionNode>) => void;
   onRemove: (id: string) => void;
   onRemoveGroup: (id: string) => void;
   onCombinator: (id: string, combinator: Combinator) => void;
+  onToggleCombinator: (id: string) => void;
   onAdd: (groupId: string) => void;
 };
 
-function Rows({ nodes, actions }: { nodes: readonly FilterNode[]; actions: RowActions }) {
-  return nodes.map((child) =>
-    child.type === "condition" ? (
-      <BuilderRow
-        key={child.id}
-        node={child}
-        fields={actions.fields}
-        labelOf={actions.labelOf}
-        ids={actions.ids}
-        onPatch={(patch) => actions.onPatch(child.id, patch)}
-        onRemove={() => actions.onRemove(child.id)}
-      />
-    ) : (
-      <GroupRows key={child.id} group={child} actions={actions} />
-    ),
+/** The rows of one group, with the And / Or rail down their left when there are two or more. */
+function List({ group, root = false, actions }: { group: GroupNode; root?: boolean; actions: RowActions }) {
+  const rail = group.children.length >= 2;
+  const label = connectorLabel(group.combinator);
+  const toggles = !root && group.combinator !== "NOT";
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a native drag-and-drop target; the grip button has the keyboard route
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: a native drag-and-drop target; the grip button has the keyboard route
+    <div
+      className="sb-fb-list"
+      data-rail={rail || undefined}
+      onDragOver={(event) => {
+        // An empty list (or the gap under the last row) takes the drop at the end.
+        if (!actions.dragId || !actions.canDropInto(group.id) || event.target !== event.currentTarget) return;
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onDropTarget({ parentId: group.id, index: group.children.length });
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onDrop();
+      }}
+    >
+      {rail &&
+        (toggles ? (
+          <button
+            type="button"
+            className="sb-fb-pill"
+            aria-label={`Match ${label === "And" ? "all" : "any"} of these. Switch to ${label === "And" ? "Or" : "And"}`}
+            title={`Switch to ${label === "And" ? "Or" : "And"}`}
+            onClick={() => actions.onToggleCombinator(group.id)}
+          >
+            {label}
+          </button>
+        ) : (
+          <span
+            className="sb-fb-pill"
+            data-static
+            title={root ? "Every rule must match" : "None of these may match. Change it in the group header."}
+          >
+            {root ? "And" : label}
+          </span>
+        ))}
+      {group.children.length === 0 && !root && (
+        <p className="sb-muted sb-filter-builder-empty" data-empty>
+          Empty group — add a condition.
+        </p>
+      )}
+      {group.children.map((child, index) => (
+        <Item key={child.id} node={child} parentId={group.id} index={index} actions={actions}>
+          {child.type === "condition" ? (
+            <BuilderRow
+              node={child}
+              parentId={group.id}
+              fields={actions.fields}
+              labelOf={actions.labelOf}
+              ids={actions.ids}
+              actions={actions}
+            />
+          ) : (
+            <GroupCard group={child} parentId={group.id} actions={actions} />
+          )}
+        </Item>
+      ))}
+    </div>
   );
 }
 
-function GroupRows({ group, actions }: { group: GroupNode; actions: RowActions }) {
-  const label = combinatorLabel(group.combinator);
+/** One row or group in a list: the drop target that shows where a dragged item would land. */
+function Item({
+  node,
+  parentId,
+  index,
+  actions,
+  children,
+}: {
+  node: FilterNode;
+  parentId: string;
+  index: number;
+  actions: RowActions;
+  children: ReactNode;
+}) {
+  const edge = actions.drop && actions.drop.parentId === parentId ? (actions.drop.index === index ? "before" : actions.drop.index === index + 1 ? "after" : null) : null;
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a fieldset would bring its own box model into the popover
-    <div className="sb-filter-group" role="group" aria-label={`${label} group`} data-node-id={group.id} data-combinator={group.combinator}>
-      <div className="sb-filter-group-head">
-        <BuilderSelect
-          ariaLabel="Match"
-          value={group.combinator}
-          label={label}
-          onChange={(e) => actions.onCombinator(group.id, e.target.value as Combinator)}
-        >
-          {(Object.keys(COMBINATOR_LABELS) as Combinator[]).map((combinator) => (
-            <option key={combinator} value={combinator}>
-              {COMBINATOR_LABELS[combinator]}
-            </option>
-          ))}
-        </BuilderSelect>
-        <span className="sb-muted sb-filter-group-hint">the following</span>
+    // biome-ignore lint/a11y/noStaticElementInteractions: a native drag-and-drop target; the grip button has the keyboard route
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: a native drag-and-drop target; the grip button has the keyboard route
+    <div
+      className="sb-fb-item"
+      data-dragging={actions.dragId === node.id || undefined}
+      data-drop={edge ?? undefined}
+      onDragOver={(event) => {
+        if (!actions.dragId || actions.dragId === node.id || !actions.canDropInto(parentId)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const box = event.currentTarget.getBoundingClientRect();
+        const after = event.clientY > box.top + box.height / 2;
+        actions.onDropTarget({ parentId, index: after ? index + 1 : index });
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.onDrop();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** The six-dot handle. Drag it, or focus it and press Alt+ArrowUp / Alt+ArrowDown. */
+function Grip({ id, label, actions }: { id: string; label: string; actions: RowActions }) {
+  return (
+    <button
+      type="button"
+      data-grip
+      className="sb-fb-grip"
+      draggable
+      aria-label={label}
+      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+      title="Drag to reorder, or Alt + arrow keys"
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", id);
+        const item = event.currentTarget.closest(".sb-fb-item");
+        if (item) event.dataTransfer.setDragImage(item, 12, 12);
+        actions.onDragStart(id);
+      }}
+      onDragEnd={actions.onDragEnd}
+      onKeyDown={(event) => {
+        if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+        event.preventDefault();
+        actions.onMoveBy(id, event.key === "ArrowUp" ? -1 : 1);
+      }}
+    >
+      <Icon name="grip" size={14} />
+    </button>
+  );
+}
+
+function GroupCard({ group, parentId, actions }: { group: GroupNode; parentId: string; actions: RowActions }) {
+  const { title, count } = groupSummary(group);
+  const none = group.combinator === "NOT";
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset would bring its own box model into the builder
+    <div className="sb-fb-group" role="group" aria-label={none ? "None of these group" : "Group"} data-node-id={group.id} data-combinator={group.combinator} data-parent-id={parentId}>
+      <div className="sb-fb-group-head">
+        <Grip id={group.id} label="Move group" actions={actions} />
+        <span className="sb-fb-group-title">
+          <strong>{title}</strong> · {count}
+        </span>
         <span className="sb-filter-builder-spacer" />
+        <button
+          type="button"
+          className="sb-fb-quiet"
+          aria-pressed={none}
+          title={none ? "Match any of these again" : "Match none of these"}
+          onClick={() => actions.onCombinator(group.id, none ? "OR" : "NOT")}
+        >
+          None of these
+        </button>
         <button
           type="button"
           className="sb-icon-btn sb-filter-builder-remove"
           title="Remove group"
-          aria-label={`Remove ${label} group`}
+          aria-label="Remove group"
           onClick={() => actions.onRemoveGroup(group.id)}
         >
           <Icon name="x" />
         </button>
       </div>
-      <div className="sb-filter-group-rows">
-        {group.children.length === 0 && <p className="sb-muted sb-filter-builder-empty">Empty group — add a condition.</p>}
-        <Rows nodes={group.children} actions={actions} />
-      </div>
-      <button type="button" className="sb-btn subtle sb-filter-group-add" onClick={() => actions.onAdd(group.id)}>
-        <Icon name="plus" />
+      <List group={group} actions={actions} />
+      <button
+        type="button"
+        className="sb-btn sb-fb-add sb-fb-group-add"
+        onClick={() => actions.onAdd(group.id)}
+        onDragOver={(event) => {
+          if (!actions.dragId || !actions.canDropInto(group.id)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          actions.onDropTarget({ parentId: group.id, index: group.children.length });
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          actions.onDrop();
+        }}
+      >
+        <Icon name="condition" />
         Add condition
       </button>
     </div>
@@ -424,10 +677,9 @@ function GroupRows({ group, actions }: { group: GroupNode; actions: RowActions }
 }
 
 /**
- * A select rendered as the v3 design's trigger: a bordered box whose label and
- * `▾` sit together, with the native `<select>` kept as a transparent overlay so
- * the control stays a real, keyboard-accessible select. The design canvas uses
- * a static `<div class="select">Status ▾</div>`; a native select would instead
+ * A select rendered as a bordered trigger: its label and a chevron sit
+ * together, with the native `<select>` kept as a transparent overlay so the
+ * control stays a real, keyboard-accessible select. A native select would
  * inset its label and draw its own platform chevron at the box's right edge.
  */
 function BuilderSelect({
@@ -446,8 +698,9 @@ function BuilderSelect({
   return (
     <span className="sb-filter-select">
       <span className="sb-filter-select-value" aria-hidden="true">
-        {label} ▾
+        {label}
       </span>
+      <Icon name="chevron" size={14} />
       <select aria-label={ariaLabel} value={value} onChange={onChange}>
         {children}
       </select>
@@ -456,16 +709,39 @@ function BuilderSelect({
 }
 
 /**
- * The design system's `Icon` (design-system/components/bundle.js): a 16×16
- * viewBox stroked in `currentColor` at 1.4. `Button size="sm"` renders it at
- * 12px, which is what the States canvas uses for the `plus` and `x` icons.
+ * The design system's `Icon`: a 16×16 viewBox stroked in `currentColor` at 1.4.
+ * `grip` is filled dots rather than strokes.
  */
 const ICON_PATHS = {
   plus: "M8 3v10M3 8h10",
   x: "M4 4l8 8M12 4l-8 8",
+  chevron: "M4 6.5l4 4 4-4",
+  // A branch: a trunk with a side line that ends in a node.
+  rule: "M4.5 2.5v7.2M4.5 9.7c0-3.2 6.5-1.4 6.5-5.2M4.5 11.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM11 2.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
+  folder: "M2.5 5a1.5 1.5 0 0 1 1.5-1.5h2.3l1.4 1.5h4.3A1.5 1.5 0 0 1 13.5 6.5v5A1.5 1.5 0 0 1 12 13H4a1.5 1.5 0 0 1-1.5-1.5z",
+  // A bracket with two child nodes.
+  condition: "M3 2.5v9.5M3 5h4.5M3 12h4.5M9 3.6a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0zM9 10.9a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0z",
 } as const;
 
-function Icon({ name, size = 12 }: { name: keyof typeof ICON_PATHS; size?: number }) {
+const GRIP_DOTS = [
+  [5.5, 3.5],
+  [10.5, 3.5],
+  [5.5, 8],
+  [10.5, 8],
+  [5.5, 12.5],
+  [10.5, 12.5],
+] as const;
+
+function Icon({ name, size = 12 }: { name: keyof typeof ICON_PATHS | "grip"; size?: number }) {
+  if (name === "grip") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        {GRIP_DOTS.map(([cx, cy]) => (
+          <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={1.25} />
+        ))}
+      </svg>
+    );
+  }
   return (
     <svg
       width={size}
@@ -485,19 +761,20 @@ function Icon({ name, size = 12 }: { name: keyof typeof ICON_PATHS; size?: numbe
 
 function BuilderRow({
   node,
+  parentId,
   fields,
   labelOf,
   ids,
-  onPatch,
-  onRemove,
+  actions,
 }: {
   node: ConditionNode;
+  parentId: string;
   fields: readonly FilterBuilderFieldInput[];
   labelOf: (fieldId: string, value: unknown) => string;
   ids: string[];
-  onPatch: (patch: Partial<ConditionNode>) => void;
-  onRemove: () => void;
+  actions: RowActions;
 }) {
+  const onPatch = (patch: Partial<ConditionNode>) => actions.onPatch(node.id, patch);
   const selected = fields.find((field) => fieldIdOf(field) === node.field) ?? node.field;
   const typed = asSheetbaseField(selected);
   const ops = operatorsForField(typed);
@@ -505,86 +782,106 @@ function BuilderRow({
   const nullary = canon === "isNull" || canon === "notNull";
   const between = canon === "between";
   const options = typed.options ?? [];
-  const rowClass = between
-    ? "sb-filter-builder-row between"
-    : "sb-filter-builder-row";
   const remote = typed.loadOptions && (canon === "eq" || canon === "neq" || canon === "in");
+  // "Any of" over a fixed list picks several from the same type-ahead as a remote field.
+  const staticMulti = !typed.loadOptions && canon === "in" && options.length > 0;
+  const pickerField = useMemo<SheetbaseField>(() => {
+    if (!staticMulti) return typed;
+    return {
+      ...typed,
+      loadOptions: async (query: string) =>
+        options
+          .filter((option) => option.toLowerCase().includes(query.toLowerCase()))
+          .map((option) => ({ value: option, label: option })),
+    };
+  }, [staticMulti, typed, options]);
   return (
-    <div className={rowClass} data-node-id={node.id}>
-      {fields.length > 0 ? (
+    <div className="sb-fb-row" data-node-id={node.id} data-parent-id={parentId}>
+      <Grip id={node.id} label="Move condition" actions={actions} />
+      <div className="sb-fb-row-main" data-between={between || undefined}>
+        <span className="sb-fb-field">
+          {fields.length > 0 ? (
+            <BuilderSelect
+              ariaLabel="Field"
+              value={node.field}
+              label={fieldLabelOf(selected) || "field…"}
+              onChange={(e) => {
+                const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
+                onPatch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
+              }}
+            >
+              {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
+              {fields.map((field) => (
+                <option key={fieldIdOf(field)} value={fieldIdOf(field)}>
+                  {fieldLabelOf(field)}
+                </option>
+              ))}
+            </BuilderSelect>
+          ) : (
+            <input className="sb-fb-input" aria-label="Field" placeholder="field" value={node.field} onChange={(e) => onPatch({ field: e.target.value })} />
+          )}
+        </span>
+        <span className="sb-fb-is">is</span>
         <BuilderSelect
-          ariaLabel="Field"
-          value={node.field}
-          label={fieldLabelOf(selected) || "field…"}
-          onChange={(e) => {
-            const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
-            onPatch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
-          }}
+          ariaLabel="Operator"
+          value={canon}
+          label={ruleOperatorLabel(canon, typed)}
+          onChange={(e) => onPatch({ operator: e.target.value as FilterOperator })}
         >
-          {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
-          {fields.map((field) => (
-            <option key={fieldIdOf(field)} value={fieldIdOf(field)}>
-              {fieldLabelOf(field)}
+          {ops.map((op) => (
+            <option key={op} value={op}>
+              {ruleOperatorLabel(op, typed)}
             </option>
           ))}
         </BuilderSelect>
-      ) : (
-        <input aria-label="Field" placeholder="field" value={node.field} onChange={(e) => onPatch({ field: e.target.value })} />
-      )}
-      <BuilderSelect
-        ariaLabel="Operator"
-        value={canon}
-        label={operatorShortLabel(canon)}
-        onChange={(e) => onPatch({ operator: e.target.value as FilterOperator })}
-      >
-        {ops.map((op) => (
-          <option key={op} value={op}>
-            {operatorShortLabel(op)}
-          </option>
-        ))}
-      </BuilderSelect>
-      {between ? (
-        <>
+        {between ? (
+          <>
+            <input
+              className="sb-fb-input sb-fb-value"
+              aria-label="Low value"
+              type="number"
+              placeholder="low"
+              value={boundsOf(node.value)[0] || ""}
+              onChange={(e) => onPatch({ value: [Number(e.target.value) || 0, boundsOf(node.value)[1]] })}
+            />
+            <input
+              className="sb-fb-input sb-fb-value"
+              aria-label="High value"
+              type="number"
+              placeholder="high"
+              value={boundsOf(node.value)[1] || ""}
+              onChange={(e) => onPatch({ value: [boundsOf(node.value)[0], Number(e.target.value) || 0] })}
+            />
+          </>
+        ) : nullary ? null : remote || staticMulti ? (
+          <OptionPicker field={pickerField} labelOf={labelOf} multiple={canon === "in"} value={node.value} onChange={(value) => onPatch({ value })} />
+        ) : options.length > 0 ? (
+          <span className="sb-fb-value">
+            <BuilderSelect
+              ariaLabel="Value"
+              value={String(node.value ?? "")}
+              label={String(node.value ?? "") || "value…"}
+              onChange={(e) => onPatch({ value: e.target.value })}
+            >
+              <option value="">value…</option>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </BuilderSelect>
+          </span>
+        ) : (
           <input
-            aria-label="Low value"
-            type="number"
-            placeholder="low"
-            value={boundsOf(node.value)[0] || ""}
-            onChange={(e) => onPatch({ value: [Number(e.target.value) || 0, boundsOf(node.value)[1]] })}
+            className="sb-fb-input sb-fb-value"
+            aria-label="Value"
+            placeholder={canon === "in" ? "a, b, c" : "value"}
+            value={Array.isArray(node.value) ? node.value.join(", ") : String(node.value ?? "")}
+            onChange={(e) => onPatch({ value: parseValueInput(e.target.value, canon) })}
           />
-          <input
-            aria-label="High value"
-            type="number"
-            placeholder="high"
-            value={boundsOf(node.value)[1] || ""}
-            onChange={(e) => onPatch({ value: [boundsOf(node.value)[0], Number(e.target.value) || 0] })}
-          />
-        </>
-      ) : nullary ? null : remote ? (
-        <OptionPicker field={typed} labelOf={labelOf} multiple={canon === "in"} value={node.value} onChange={(value) => onPatch({ value })} />
-      ) : options.length > 0 ? (
-        <BuilderSelect
-          ariaLabel="Value"
-          value={String(node.value ?? "")}
-          label={String(node.value ?? "") || "value…"}
-          onChange={(e) => onPatch({ value: e.target.value })}
-        >
-          <option value="">value…</option>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </BuilderSelect>
-      ) : (
-        <input
-          aria-label="Value"
-          placeholder={canon === "in" ? "a, b, c" : "value"}
-          value={Array.isArray(node.value) ? node.value.join(", ") : String(node.value ?? "")}
-          onChange={(e) => onPatch({ value: parseValueInput(e.target.value, canon) })}
-        />
-      )}
-      <button type="button" className="sb-icon-btn sb-filter-builder-remove" title="Remove condition" aria-label="Remove condition" onClick={onRemove}>
+        )}
+      </div>
+      <button type="button" className="sb-icon-btn sb-filter-builder-remove" title="Remove condition" aria-label="Remove condition" onClick={() => actions.onRemove(node.id)}>
         <Icon name="x" />
       </button>
     </div>
@@ -677,19 +974,16 @@ function OptionPicker({
 
   const shown = open ? query : multiple ? "" : selected[0] ? labelOf(selected[0]) : "";
   return (
-    <div className="sb-filter-picker">
-      {multiple && selected.length > 0 && (
-        <span className="sb-filter-picker-tokens">
-          {selected.map((v) => (
-            <span key={v} className="chip">
-              {labelOf(v)}
-              <button type="button" aria-label={`Remove ${labelOf(v)}`} onClick={() => onChange(selected.filter((x) => x !== v))}>
-                ×
-              </button>
-            </span>
-          ))}
-        </span>
-      )}
+    <div className="sb-filter-picker sb-fb-value">
+      {multiple &&
+        selected.map((v) => (
+          <span key={v} className="chip">
+            {labelOf(v)}
+            <button type="button" aria-label={`Remove ${labelOf(v)}`} onClick={() => onChange(selected.filter((x) => x !== v))}>
+              <Icon name="x" size={10} />
+            </button>
+          </span>
+        ))}
       <input
         role="combobox"
         aria-label="Value"

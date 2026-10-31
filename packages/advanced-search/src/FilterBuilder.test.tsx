@@ -7,14 +7,18 @@ import {
   applyFilter,
   builderTree,
   clearFilter,
+  connectorLabel,
   FilterBuilder,
+  groupSummary,
   matchCountLabel,
   moveNode,
   patchCondition,
   pruneEmptyGroups,
   removeCondition,
   removeGroup,
+  ruleOperatorLabel,
   setCombinator,
+  toggleCombinator,
 } from "./FilterBuilder";
 
 const STATUS: SheetbaseField = {
@@ -118,13 +122,17 @@ describe("FilterBuilder", () => {
       children: [STATUS_CONDITION],
     };
     const html = renderToStaticMarkup(<FilterBuilder node={node} fields={[STATUS, OSMOLALITY]} />);
-    expect(html).toContain('class="sb-filter-builder-row"');
+    expect(html).toContain('class="sb-fb-row"');
+    expect(html).toContain('aria-label="Move condition"');
+    expect(html).toContain(">is<");
+    expect(html).toContain("Equal to");
     expect(html).toContain('aria-label="Field"');
     expect(html).toContain('aria-label="Operator"');
     expect(html).toContain('aria-label="Value"');
     expect(html).toContain('aria-label="Remove condition"');
     expect(html).toContain("In progress");
-    expect(html).toContain("Add condition");
+    expect(html).toContain("Add rule");
+    expect(html).toContain("Add group");
     expect(html).toContain(">Clear<");
     expect(html).toContain(">Apply<");
   });
@@ -199,18 +207,80 @@ describe("groups", () => {
     expect(query.filters).toBeUndefined();
   });
 
-  it("renders a group with its combinator picker and own add control", () => {
-    const added = addGroup(clearFilter(), STATUS);
-    const none = setCombinator(added, added.children[0].id, "NOT");
-    const html = renderToStaticMarkup(<FilterBuilder node={none} fields={[STATUS, OSMOLALITY]} />);
+  it("renders a group card with its count, none-of switch and own add control", () => {
+    const added = addGroup(addCondition(clearFilter(), STATUS), STATUS);
+    const group = added.children[1] as GroupNode;
+    const more = addCondition(added, OSMOLALITY, group.id);
+    const html = renderToStaticMarkup(<FilterBuilder node={more} fields={[STATUS, OSMOLALITY]} />);
     expect(html).toContain('role="group"');
-    expect(html).toContain('aria-label="None of group"');
-    expect(html).toContain('aria-label="Match"');
-    expect(html).toContain(">All of<");
-    expect(html).toContain(">Any of<");
-    expect(html).toContain(">None of<");
-    expect(html).toContain("Remove None of group");
-    expect(html).toContain("Add group");
+    expect(html).toContain('aria-label="Group"');
+    expect(html).toContain("<strong>Group</strong> · 2 conditions");
+    expect(html).toContain(">None of these<");
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain("Remove group");
+    expect(html).toContain("Add condition");
+
+    const none = setCombinator(more, group.id, "NOT");
+    const noneHtml = renderToStaticMarkup(<FilterBuilder node={none} fields={[STATUS, OSMOLALITY]} />);
+    expect(noneHtml).toContain("<strong>None of these</strong> · 2 conditions");
+    expect(noneHtml).toContain('aria-pressed="true"');
+    expect(noneHtml).toContain('aria-label="None of these group"');
+  });
+
+  it("counts conditions in nested groups and says 1 condition", () => {
+    const root = addGroup(clearFilter(), STATUS);
+    const group = root.children[0] as GroupNode;
+    expect(groupSummary(group)).toEqual({ title: "Group", count: "1 condition" });
+    const nested = addGroup(addCondition(root, OSMOLALITY, group.id), STATUS);
+    expect(groupSummary(nested.children[0] as GroupNode).count).toBe("2 conditions");
+  });
+});
+
+describe("rail pill", () => {
+  it("shows a static And pill on the root and a button pill on groups of two or more", () => {
+    const root = addGroup(addCondition(clearFilter(), STATUS), STATUS);
+    const group = root.children[1] as GroupNode;
+    const two = addCondition(root, OSMOLALITY, group.id);
+    const html = renderToStaticMarkup(<FilterBuilder node={two} fields={[STATUS, OSMOLALITY]} />);
+    expect(html).toContain('<span class="sb-fb-pill" data-static="true" title="Every rule must match">And</span>');
+    expect(html).toMatch(/<button[^>]*class="sb-fb-pill"[^>]*>Or<\/button>/);
+    // One row has no rail and so no pill.
+    expect(renderToStaticMarkup(<FilterBuilder node={addCondition(clearFilter(), STATUS)} fields={[STATUS]} />)).not.toContain("sb-fb-pill");
+  });
+
+  it("toggles a group between And and Or, and leaves the root and None of alone", () => {
+    const root = addGroup(clearFilter(), STATUS);
+    const group = root.children[0];
+    const and = toggleCombinator(root, group.id);
+    expect(and.children[0]).toMatchObject({ combinator: "AND" });
+    expect(toggleCombinator(and, group.id).children[0]).toMatchObject({ combinator: "OR" });
+    expect(toggleCombinator(root, root.id)).toBe(root);
+    expect(toggleCombinator(root, "missing")).toBe(root);
+    const none = setCombinator(root, group.id, "NOT");
+    expect(toggleCombinator(none, group.id)).toBe(none);
+  });
+
+  it("reads a None of group as Or on the rail", () => {
+    expect(connectorLabel("AND")).toBe("And");
+    expect(connectorLabel("OR")).toBe("Or");
+    expect(connectorLabel("NOT")).toBe("Or");
+  });
+});
+
+describe("operator words", () => {
+  it("reads operators as words, dates as After / Before", () => {
+    expect(ruleOperatorLabel("eq")).toBe("Equal to");
+    expect(ruleOperatorLabel("in")).toBe("Any of");
+    expect(ruleOperatorLabel("contains")).toBe("Contains");
+    expect(ruleOperatorLabel("gt")).toBe("Greater than");
+    expect(ruleOperatorLabel("gt", { dataType: "date" })).toBe("After");
+  });
+});
+
+describe("variant", () => {
+  it("defaults to the popover card and offers an inline layout", () => {
+    expect(renderToStaticMarkup(<FilterBuilder fields={[STATUS]} />)).toContain('data-variant="popover"');
+    expect(renderToStaticMarkup(<FilterBuilder fields={[STATUS]} variant="inline" />)).toContain('data-variant="inline"');
   });
 });
 
@@ -279,7 +349,7 @@ describe("moveNode", () => {
   it("refuses to move a group into itself, move the root or use unknown ids", () => {
     const root = tree();
     const group = root.children.find((child) => child.type === "group");
-    if (!group || group.type !== "group") throw new Error("expected group");
+    if (group?.type !== "group") throw new Error("expected group");
     expect(moveNode(root, group.id, group.id, 0)).toBe(root);
     const nested = addGroup(root, STATUS);
     const inner = nested.children.at(-1) as GroupNode;
