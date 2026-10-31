@@ -178,6 +178,46 @@ export function pruneEmptyGroups(root: GroupNode): GroupNode {
   return (walk(root) as GroupNode | null) ?? root;
 }
 
+function containsId(node: FilterNode, id: string): boolean {
+  if (node.id === id) return true;
+  return node.type === "group" && node.children.some((child) => containsId(child, id));
+}
+
+function findNode(node: FilterNode, id: string): FilterNode | null {
+  if (node.id === id) return node;
+  if (node.type === "condition") return null;
+  for (const child of node.children) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Move the condition or group `id` into the group `targetGroupId` at `index`.
+ * `index` counts the target's children after the node has been taken out, so
+ * reordering inside one list is "remove, then insert here". It is clamped to the
+ * list. A move that would put a group inside itself, move the root or use an
+ * unknown id returns `root` unchanged.
+ */
+export function moveNode(root: GroupNode, id: string, targetGroupId: string, index: number): GroupNode {
+  if (id === root.id) return root;
+  const moving = findNode(root, id);
+  const target = findNode(root, targetGroupId);
+  if (!moving || !target || target.type !== "group") return root;
+  if (containsId(moving, targetGroupId)) return root;
+  const without = mapNode(root, id, () => null);
+  const insert = (node: FilterNode): FilterNode => {
+    if (node.type === "condition") return node;
+    if (node.id === targetGroupId) {
+      const at = Math.max(0, Math.min(index, node.children.length));
+      return { ...node, children: [...node.children.slice(0, at), moving, ...node.children.slice(at)] };
+    }
+    return { ...node, children: node.children.map(insert) };
+  };
+  return insert(without) as GroupNode;
+}
+
 /** An empty AND root — what Clear leaves behind. */
 export function clearFilter(): GroupNode {
   return emptyRoot();
