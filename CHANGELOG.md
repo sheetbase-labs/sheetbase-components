@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-02
+
+### Added
+
+- **Advanced search**: the rule builder's field chooser is a type-to-search panel grouped by model (General first) instead of a flat select. `SheetbaseField` gains an optional `group`; without it, "Model · Field" labels are split on the dot. The root And pill is now a button: Or wraps the rows in an Any of group. Also exported: `matchAnyOfRoot`.
+
 ## [0.8.0] — 2026-10-31
 
 ### Added
