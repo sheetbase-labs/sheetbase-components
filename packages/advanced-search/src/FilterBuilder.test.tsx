@@ -19,6 +19,7 @@ import {
   ruleOperatorLabel,
   setCombinator,
   toggleCombinator,
+  matchAnyOfRoot,
 } from "./FilterBuilder";
 
 const STATUS: SheetbaseField = {
@@ -237,15 +238,25 @@ describe("groups", () => {
 });
 
 describe("rail pill", () => {
-  it("shows a static And pill on the root and a button pill on groups of two or more", () => {
+  it("shows an And pill on the root and a button pill on groups of two or more", () => {
     const root = addGroup(addCondition(clearFilter(), STATUS), STATUS);
     const group = root.children[1] as GroupNode;
     const two = addCondition(root, OSMOLALITY, group.id);
     const html = renderToStaticMarkup(<FilterBuilder node={two} fields={[STATUS, OSMOLALITY]} />);
-    expect(html).toContain('<span class="sb-fb-pill" data-static="true" title="Every rule must match">And</span>');
-    expect(html).toMatch(/<button[^>]*class="sb-fb-pill"[^>]*>Or<\/button>/);
+    expect(html).toMatch(/<button[^>]*class="sb-fb-pill"[^>]*>And</);
+    expect(html).toMatch(/<button[^>]*class="sb-fb-pill"[^>]*>Or</);
     // One row has no rail and so no pill.
     expect(renderToStaticMarkup(<FilterBuilder node={addCondition(clearFilter(), STATUS)} fields={[STATUS]} />)).not.toContain("sb-fb-pill");
+  });
+
+  it("wraps the root's rows in an Any of group when the root pill switches to Or", () => {
+    const root = addCondition(addCondition(clearFilter(), STATUS), OSMOLALITY);
+    const wrapped = matchAnyOfRoot(root);
+    expect(wrapped.children).toHaveLength(1);
+    expect(wrapped.children[0]).toMatchObject({ type: "group", combinator: "OR" });
+    expect((wrapped.children[0] as GroupNode).children).toHaveLength(2);
+    const one = addCondition(clearFilter(), STATUS);
+    expect(matchAnyOfRoot(one)).toBe(one);
   });
 
   it("toggles a group between And and Or, and leaves the root and None of alone", () => {
@@ -359,5 +370,15 @@ describe("moveNode", () => {
     expect(moveNode(root, "missing", root.id, 0)).toBe(root);
     expect(moveNode(root, ids(root)[0], "missing", 0)).toBe(root);
     expect(moveNode(root, ids(root)[0], ids(root)[1], 0)).toBe(root);
+  });
+});
+
+describe("field chooser", () => {
+  it("renders the chosen field on a searchable trigger instead of a native select", () => {
+    const fields = [STATUS, { id: "model:cell_bank:passage", label: "Cell bank · Passage", dataType: "number" as const }];
+    const html = renderToStaticMarkup(<FilterBuilder node={addCondition(clearFilter(), fields[1])} fields={fields} />);
+    expect(html).toMatch(/<button[^>]*aria-label="Field"[^>]*aria-haspopup="listbox"/);
+    expect(html).not.toContain('<select aria-label="Field"');
+    expect(html).toContain("Cell bank · Passage");
   });
 });
