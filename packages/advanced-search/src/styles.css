@@ -108,6 +108,7 @@
   bottom: 50%; border-bottom: 1px solid var(--border-strong); border-bottom-left-radius: 10px;
 }
 .sb-fb-pill {
+  gap: 3px;
   position: absolute; z-index: 1; top: 50%; left: calc(var(--sb-fb-rail) / 2);
   transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; justify-content: center;
@@ -270,3 +271,34 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
   .sb-fb-group { padding: 10px 8px 12px 6px; }
   .sb-fb-row { padding-right: 4px; }
 }
+
+/* Field chooser: a searchable list grouped by model. */
+.sb-fb-fieldpick { padding: 0; }
+.sb-fb-fieldpick-trigger {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 100%;
+  padding: 0 8px 0 12px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; outline: none;
+}
+.sb-fb-fieldpick-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 8px; }
+.sb-fb-fieldpick-trigger > svg { flex: 0 0 auto; color: var(--faint); }
+.sb-fb-fieldpick-trigger .sb-filter-select-value { pointer-events: auto; }
+.sb-fb-fieldpick-scrim { position: fixed; inset: 0; z-index: 40; }
+.sb-fb-fieldpick-panel {
+  position: fixed; z-index: 41; width: 300px; max-width: calc(100vw - 16px); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+  font-family: var(--font-sans); font-size: 13px; overflow: hidden;
+}
+.sb-fb-fieldpick-search {
+  flex: 0 0 auto; height: 36px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--border); outline: none;
+  background: transparent; color: var(--text); font: inherit;
+}
+.sb-fb-fieldpick-search::placeholder { color: var(--faint); }
+.sb-fb-fieldpick-list { flex: 1 1 auto; overflow: auto; padding: 4px; }
+.sb-fb-fieldpick-group {
+  padding: 8px 8px 3px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+.sb-fb-fieldpick-list [role="option"] {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--text);
+}
+.sb-fb-fieldpick-list [role="option"][data-active] { background: var(--surface-hover); }
+.sb-fb-fieldpick-list [aria-selected="true"] { font-weight: 600; }
