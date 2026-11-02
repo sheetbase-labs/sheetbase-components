@@ -405,12 +405,10 @@ export function FilterBuilder({
     return !!moving && !containsId(moving, parentId);
   }
 
-  const ids = fields.map(fieldIdOf);
   const labelOf = useOptionLabels(fields, draft);
   const actions: RowActions = {
     fields,
     labelOf,
-    ids,
     dragId,
     drop,
     canDropInto,
@@ -474,7 +472,6 @@ type DropTarget = { parentId: string; index: number };
 type RowActions = {
   fields: readonly FilterBuilderFieldInput[];
   labelOf: (fieldId: string, value: unknown) => string;
-  ids: string[];
   dragId: string | null;
   drop: DropTarget | null;
   canDropInto: (parentId: string) => boolean;
@@ -557,7 +554,6 @@ function List({ group, root = false, actions }: { group: GroupNode; root?: boole
               parentId={group.id}
               fields={actions.fields}
               labelOf={actions.labelOf}
-              ids={actions.ids}
               actions={actions}
             />
           ) : (
@@ -784,14 +780,12 @@ function BuilderRow({
   parentId,
   fields,
   labelOf,
-  ids,
   actions,
 }: {
   node: ConditionNode;
   parentId: string;
   fields: readonly FilterBuilderFieldInput[];
   labelOf: (fieldId: string, value: unknown) => string;
-  ids: string[];
   actions: RowActions;
 }) {
   const onPatch = (patch: Partial<ConditionNode>) => actions.onPatch(node.id, patch);
@@ -942,7 +936,10 @@ function FieldPicker({
   const groups: { name: string; items: typeof matches }[] = [];
   for (const entry of matches) {
     let group = groups.find((g) => g.name === entry.group);
-    if (!group) groups.push((group = { name: entry.group, items: [] }));
+    if (!group) {
+      group = { name: entry.group, items: [] };
+      groups.push(group);
+    }
     group.items.push(entry);
   }
   groups.sort((a, b) => (a.name === FIELD_GENERAL ? -1 : b.name === FIELD_GENERAL ? 1 : 0));
@@ -1006,6 +1003,8 @@ function FieldPicker({
       </button>
       {open && box && (
         <>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: a click-away backdrop; Escape closes it from the keyboard */}
+          {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: a click-away backdrop; Escape closes it from the keyboard */}
           <div className="sb-fb-fieldpick-scrim" onMouseDown={() => setOpen(false)} />
           <div className="sb-fb-fieldpick-panel" style={{ top: box.top, left: box.left, maxHeight: box.maxHeight }}>
             <input
@@ -1028,6 +1027,7 @@ function FieldPicker({
             />
             <div id={listId} role="listbox" aria-label="Fields" className="sb-fb-fieldpick-list">
               {groups.map((group) => (
+                // biome-ignore lint/a11y/useSemanticElements: a fieldset cannot sit inside a listbox
                 <div key={group.name} role="group" aria-label={group.name}>
                   <div className="sb-fb-fieldpick-group">{group.name}</div>
                   {group.items.map((entry) => {
