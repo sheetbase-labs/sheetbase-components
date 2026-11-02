@@ -30,6 +30,8 @@ export type SheetbaseField = Readonly<{
    * calling it with the value itself.
    */
   loadOptions?: (query: string) => Promise<readonly FieldOption[]>;
+  /** Heading the field sits under in the rule builder's field chooser, e.g. its model. Without it, "Model · Field" labels are split on the dot. */
+  group?: string;
 }>;
 
 const DATA_TYPES = new Set<string>(["text", "number", "boolean", "date", "datetime", "relationship"]);

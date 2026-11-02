@@ -293,6 +293,15 @@ export function connectorLabel(combinator: Combinator): string {
   return CONNECTOR_LABELS[combinator];
 }
 
+/**
+ * The root list is always And, so "Or" at the top level wraps every row in one
+ * "Any of" group: the same meaning, and the group's own pill then switches back.
+ */
+export function matchAnyOfRoot(root: GroupNode): GroupNode {
+  if (root.children.length < 2) return root;
+  return { ...root, children: [{ ...emptyGroup("OR"), children: root.children }] };
+}
+
 /** What the pill's click does: And becomes Or and back. A None of group stays as it is, and so does the root. */
 export function toggleCombinator(root: GroupNode, id: string): GroupNode {
   if (id === root.id) return root;
@@ -422,6 +431,7 @@ export function FilterBuilder({
     onRemoveGroup: (id) => commit(removeGroup(draft, id)),
     onCombinator: (id, combinator) => commit(setCombinator(draft, id, combinator)),
     onToggleCombinator: (id) => commit(toggleCombinator(draft, id)),
+    onMatchAny: () => commit(matchAnyOfRoot(draft)),
     onAdd: (groupId) => commit(addCondition(draft, fields[0] ?? "", groupId)),
   };
 
@@ -478,6 +488,7 @@ type RowActions = {
   onRemoveGroup: (id: string) => void;
   onCombinator: (id: string, combinator: Combinator) => void;
   onToggleCombinator: (id: string) => void;
+  onMatchAny: () => void;
   onAdd: (groupId: string) => void;
 };
 
@@ -515,14 +526,22 @@ function List({ group, root = false, actions }: { group: GroupNode; root?: boole
             onClick={() => actions.onToggleCombinator(group.id)}
           >
             {label}
+            <Icon name="chevron" size={10} />
+          </button>
+        ) : root ? (
+          <button
+            type="button"
+            className="sb-fb-pill"
+            aria-label="Match all of these. Switch to Or"
+            title="Every rule must match. Click to match any of them instead (Or)."
+            onClick={() => actions.onMatchAny()}
+          >
+            And
+            <Icon name="chevron" size={10} />
           </button>
         ) : (
-          <span
-            className="sb-fb-pill"
-            data-static
-            title={root ? "Every rule must match" : "None of these may match. Change it in the group header."}
-          >
-            {root ? "And" : label}
+          <span className="sb-fb-pill" data-static title="None of these may match. Change it in the group header.">
+            {label}
           </span>
         ))}
       {group.children.length === 0 && !root && (
@@ -716,6 +735,7 @@ const ICON_PATHS = {
   plus: "M8 3v10M3 8h10",
   x: "M4 4l8 8M12 4l-8 8",
   chevron: "M4 6.5l4 4 4-4",
+  check: "M3.5 8.5l3 3 6-7",
   // A branch: a trunk with a side line that ends in a node.
   rule: "M4.5 2.5v7.2M4.5 9.7c0-3.2 6.5-1.4 6.5-5.2M4.5 11.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM11 2.2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
   folder: "M2.5 5a1.5 1.5 0 0 1 1.5-1.5h2.3l1.4 1.5h4.3A1.5 1.5 0 0 1 13.5 6.5v5A1.5 1.5 0 0 1 12 13H4a1.5 1.5 0 0 1-1.5-1.5z",
@@ -801,22 +821,15 @@ function BuilderRow({
       <div className="sb-fb-row-main" data-between={between || undefined}>
         <span className="sb-fb-field">
           {fields.length > 0 ? (
-            <BuilderSelect
-              ariaLabel="Field"
+            <FieldPicker
+              fields={fields}
               value={node.field}
               label={fieldLabelOf(selected) || "field…"}
-              onChange={(e) => {
-                const next = fields.find((field) => fieldIdOf(field) === e.target.value) ?? e.target.value;
-                onPatch({ field: e.target.value, operator: ensureOperator(asSheetbaseField(next), canon) });
+              onChange={(id) => {
+                const next = fields.find((field) => fieldIdOf(field) === id) ?? id;
+                onPatch({ field: id, operator: ensureOperator(asSheetbaseField(next), canon) });
               }}
-            >
-              {!ids.includes(node.field) && <option value={node.field}>{node.field || "field…"}</option>}
-              {fields.map((field) => (
-                <option key={fieldIdOf(field)} value={fieldIdOf(field)}>
-                  {fieldLabelOf(field)}
-                </option>
-              ))}
-            </BuilderSelect>
+            />
           ) : (
             <input className="sb-fb-input" aria-label="Field" placeholder="field" value={node.field} onChange={(e) => onPatch({ field: e.target.value })} />
           )}
@@ -885,6 +898,168 @@ function BuilderRow({
         <Icon name="x" />
       </button>
     </div>
+  );
+}
+
+const FIELD_GENERAL = "General";
+
+/** The group a field sits under: its `group`, else the part of "Model · Field" before the dot, else General. */
+function fieldGroupOf(field: FilterBuilderFieldInput): { group: string; name: string } {
+  const label = fieldLabelOf(field);
+  if (typeof field !== "string" && field.group) return { group: field.group, name: label };
+  const at = label.indexOf(" · ");
+  return at > 0 ? { group: label.slice(0, at), name: label.slice(at + 3) } : { group: FIELD_GENERAL, name: label };
+}
+
+/**
+ * The field chooser: a searchable list grouped by model (General fields first),
+ * in place of a long flat select. Type to narrow, arrows and Enter to choose.
+ */
+function FieldPicker({
+  fields,
+  value,
+  label,
+  onChange,
+}: {
+  fields: readonly FilterBuilderFieldInput[];
+  value: string;
+  label: string;
+  onChange: (id: string) => void;
+}) {
+  const listId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const [box, setBox] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+
+  const entries = useMemo(() => fields.map((field) => ({ id: fieldIdOf(field), ...fieldGroupOf(field) })), [fields]);
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = entries.filter((entry) => {
+    const hay = `${entry.group} ${entry.name}`.toLowerCase();
+    return words.every((word) => hay.includes(word));
+  });
+  const groups: { name: string; items: typeof matches }[] = [];
+  for (const entry of matches) {
+    let group = groups.find((g) => g.name === entry.group);
+    if (!group) groups.push((group = { name: entry.group, items: [] }));
+    group.items.push(entry);
+  }
+  groups.sort((a, b) => (a.name === FIELD_GENERAL ? -1 : b.name === FIELD_GENERAL ? 1 : 0));
+  const flat = groups.flatMap((g) => g.items);
+
+  function show() {
+    const rect = trigger.current?.getBoundingClientRect();
+    if (rect) {
+      const below = window.innerHeight - rect.bottom - 16;
+      const above = rect.top - 16;
+      const up = below < 240 && above > below;
+      const maxHeight = Math.max(200, Math.min(up ? above : below, 420));
+      setBox({ top: up ? Math.max(8, rect.top - maxHeight - 4) : rect.bottom + 4, left: Math.min(rect.left, Math.max(8, window.innerWidth - 300)), maxHeight });
+    }
+    setQuery("");
+    setActive(Math.max(0, entries.findIndex((entry) => entry.id === value)));
+    setOpen(true);
+  }
+  function close() {
+    setOpen(false);
+    trigger.current?.focus();
+  }
+  function choose(id: string) {
+    onChange(id);
+    close();
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActive((i) => Math.min(i + 1, flat.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (flat[active]) choose(flat[active].id);
+    } else if (event.key === "Escape") {
+      event.stopPropagation();
+      close();
+    }
+  }
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [open, active, listId]);
+
+  let index = -1;
+  return (
+    <span className="sb-filter-select sb-fb-fieldpick">
+      <button
+        ref={trigger}
+        type="button"
+        className="sb-fb-fieldpick-trigger"
+        aria-label="Field"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => (open ? close() : show())}
+      >
+        <span className="sb-filter-select-value">{label}</span>
+        <Icon name="chevron" size={14} />
+      </button>
+      {open && box && (
+        <>
+          <div className="sb-fb-fieldpick-scrim" onMouseDown={() => setOpen(false)} />
+          <div className="sb-fb-fieldpick-panel" style={{ top: box.top, left: box.left, maxHeight: box.maxHeight }}>
+            <input
+              // biome-ignore lint/a11y/noAutofocus: the panel opens on a click and exists to be typed into
+              autoFocus
+              className="sb-fb-fieldpick-search"
+              role="combobox"
+              aria-label="Search fields"
+              aria-expanded
+              aria-controls={listId}
+              aria-activedescendant={flat[active] ? `${listId}-${active}` : undefined}
+              autoComplete="off"
+              placeholder="Search fields…"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActive(0);
+              }}
+              onKeyDown={onKeyDown}
+            />
+            <div id={listId} role="listbox" aria-label="Fields" className="sb-fb-fieldpick-list">
+              {groups.map((group) => (
+                <div key={group.name} role="group" aria-label={group.name}>
+                  <div className="sb-fb-fieldpick-group">{group.name}</div>
+                  {group.items.map((entry) => {
+                    index += 1;
+                    const at = index;
+                    return (
+                      <div
+                        key={entry.id}
+                        id={`${listId}-${at}`}
+                        role="option"
+                        tabIndex={-1}
+                        aria-selected={entry.id === value}
+                        data-active={at === active || undefined}
+                        onMouseMove={() => setActive(at)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          choose(entry.id);
+                        }}
+                      >
+                        <span>{entry.name}</span>
+                        {entry.id === value && <Icon name="check" size={14} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              {flat.length === 0 && <div className="sb-muted sb-filter-picker-note">No matching fields</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 
