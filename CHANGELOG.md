@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-06
+
+### Changed
+
+- **Shared**: `.sb-spinner` is now the Sheetbase mark with a bright arc chasing round the ring a spoke at a time, coloured from `--muted`, fading in place under reduced motion. It moves from explorer's styles into `shell.css`, so studio's loading lines are styled too.
+
 ## [0.9.0] — 2026-11-02
 
 ### Added
