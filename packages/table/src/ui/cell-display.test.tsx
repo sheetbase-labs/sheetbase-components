@@ -22,17 +22,17 @@ describe("cell displays", () => {
   });
 
   it("draws a badge, a bar and a sparkline", () => {
-    const badge = renderToStaticMarkup(<>{renderCellDisplay({ kind: "badge", tones: { pass: "success" } }, "pass")}</>);
+    const badge = renderToStaticMarkup(renderCellDisplay({ kind: "badge", tones: { pass: "success" } }, "pass"));
     expect(badge).toContain("pass");
-    const bar = renderToStaticMarkup(<>{renderCellDisplay({ kind: "bar", max: 100 }, 40)}</>);
+    const bar = renderToStaticMarkup(renderCellDisplay({ kind: "bar", max: 100 }, 40));
     expect(bar).toContain('aria-valuenow="40"');
-    const spark = renderToStaticMarkup(<>{renderCellDisplay({ kind: "sparkline" }, "1,3,2")}</>);
+    const spark = renderToStaticMarkup(renderCellDisplay({ kind: "sparkline" }, "1,3,2"));
     expect(spark).toContain("<polyline");
   });
 
   it("draws nothing for an empty value, and no svg without a cleaner", () => {
-    expect(renderToStaticMarkup(<>{renderCellDisplay({ kind: "text" }, "")}</>)).toBe("");
-    expect(renderToStaticMarkup(<>{renderCellDisplay({ kind: "svg" }, "<svg onload='x()'/>")}</>)).toBe("");
-    expect(renderToStaticMarkup(<>{renderCellDisplay({ kind: "svg" }, "<svg/>", (s) => s)}</>)).toContain("<svg/>");
+    expect(renderToStaticMarkup(renderCellDisplay({ kind: "text" }, ""))).toBe("");
+    expect(renderToStaticMarkup(renderCellDisplay({ kind: "svg" }, "<svg onload='x()'/>"))).toBe("");
+    expect(renderToStaticMarkup(renderCellDisplay({ kind: "svg" }, "<svg/>", (s) => s))).toContain("<svg/>");
   });
 });
