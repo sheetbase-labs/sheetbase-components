@@ -21,3 +21,5 @@ export * from "./column-layout";
 export * from "./formula-engine";
 export * from "../grid/conditional-formatting";
 export * from "../grid/view";
+export * from "./cell-display";
+export * from "./cell-display-view";

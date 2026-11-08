@@ -10,6 +10,8 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FormulaTokens } from "./FormulaTokens";
+import type { CellDisplaySpec } from "./cell-display";
+import { renderCellDisplay } from "./cell-display-view";
 import { columnLabel, parseAddress } from "../engine/coordinates";
 import { Worksheet, type BindingResolver } from "../engine/workbook";
 import { RangeStore } from "../engine/range-store";
@@ -397,6 +399,14 @@ export type SpreadsheetProps = {
   calculationAuthority?: CalculationAuthority;
   /** Replaces the default cell content. Return undefined to keep the built-in rendering. */
   renderCell?(context: SpreadsheetCellRenderContext): ReactNode | undefined;
+  /**
+   * Declarative displays by dataset field id: a badge, bar, sparkline, number or
+   * text style drawn instead of the plain value. Data, never code, so a grid of
+   * thousands of cells stays cheap. `renderCell` still wins where it returns a node.
+   */
+  cellDisplays?: Readonly<Record<string, CellDisplaySpec>>;
+  /** The host's SVG cleaner for `svg` displays. Without it an `svg` display draws nothing. */
+  sanitizeSvg?(svg: string): string | null;
   /** Custom in-cell editors; the first matching editor replaces the built-in input for that field. */
   customEditors?: readonly SpreadsheetCustomEditor[];
   /** Extra actions appended to the column and row context menus. */
@@ -463,7 +473,13 @@ export type SpreadsheetMenuAction = Readonly<{
   label: string;
   /** Hidden from the menu when true. */
   disabled?(): boolean;
-  onSelect(context: { axis: "row" | "column"; index: number; fieldId?: string }): void;
+  onSelect(context: {
+    axis: "row" | "column";
+    index: number;
+    fieldId?: string;
+    /** Row menus only: the rows the action is for. The selected rows when the menu opened inside the selection, otherwise just `index`. */
+    rows?: readonly number[];
+  }): void;
 }>;
 
 export type SpreadsheetCustomEditorContext = Readonly<{
@@ -625,7 +641,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   onFrozenColumnsChange,
   onColumnWidthsChange,
   onRowHeightsChange,
-  renderCell,
+  renderCell: renderCellProp,
+  cellDisplays,
+  sanitizeSvg,
   customEditors,
   contextMenuActions,
   columnMenuItems,
@@ -656,6 +674,15 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const formulaEngineRef = useRef(formulaEngine);
   formulaEngineRef.current = formulaEngine;
   const sortBaselineRef = useRef<ReadonlyMap<string, string> | undefined>(undefined);
+  const renderCell = useMemo<typeof renderCellProp>(() => {
+    if (!cellDisplays || Object.keys(cellDisplays).length === 0) return renderCellProp;
+    return (context) => {
+      const custom = renderCellProp?.(context);
+      if (custom !== undefined) return custom;
+      const spec = context.field ? cellDisplays[context.field.id] : undefined;
+      return spec && !context.loading ? renderCellDisplay(spec, context.display, sanitizeSvg) : undefined;
+    };
+  }, [cellDisplays, renderCellProp, sanitizeSvg]);
   const [data, setData] = useState<ReadonlyMap<string, string>>(() => CellStore.from(initialState?.data ?? initialData));
   const worksheetRef = useRef<Worksheet | null>(null);
   if (!worksheetRef.current) {
@@ -2694,7 +2721,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         {contextMenu.axis === "row" && contextMenu.index > 0 && rowHeightAt(contextMenu.index - 1) === 0 && <button type="button" onClick={() => { const source = sourceRowOf(contextMenu.index - 1); if (source < 0) { closeContextMenu(); return; } const next = [...rowHeights]; next[source] = defaultRowHeight; setRowHeights(next); onRowHeightsChange?.(next); closeContextMenu(); }}>Unhide previous row</button>}
         {contextMenu.axis === "row" && <button type="button" onClick={() => { setFrozenRowCount(contextMenu.index + 1); closeContextMenu(); }}>Freeze through row</button>}
         {(frozenRowCount > 0 || frozenColumnCount > 0) && <button type="button" onClick={() => { setFrozenRowCount(0); setFrozenColumnCount(0); closeContextMenu(); }}>Unfreeze panes</button>}
-        {enabledMenuActions(contextMenuActions).map((action) => <button type="button" key={action.id ?? action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index }); closeContextMenu(); }}>{action.label}</button>)}
+        {enabledMenuActions(contextMenuActions).map((action) => <button type="button" key={action.id ?? action.label} onClick={() => { action.onSelect({ axis: "row", index: contextMenu.index, rows: contextMenu.index >= range.top && contextMenu.index <= range.bottom ? Array.from({ length: range.bottom - range.top + 1 }, (_, i) => range.top + i) : [contextMenu.index] }); closeContextMenu(); }}>{action.label}</button>)}
       </div>}
 
 

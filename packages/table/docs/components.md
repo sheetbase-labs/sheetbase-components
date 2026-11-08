@@ -132,6 +132,12 @@ Hosts can customise cells, editing and menus without forking the grid:
 - `contextMenuActions` appends host actions to the column and row context menus. `onSelect({ axis, index, fieldId })` receives the menu target; Escape and the arrow-key navigation treat host actions like built-in items.
 - `columnMenuItems` appends host entries to the column header menu only. Both action types accept an optional `id` (used as the React key) and `disabled?(): boolean`; disabled entries are hidden.
 
+### Declarative cell displays
+
+`cellDisplays` is a map from dataset field id to a display spec: `text` (prefix, suffix, mono), `number` (decimals, unit, grouping), `badge` (value to tone and label), `bar` (min, max, thresholds), `sparkline` and `svg`. The grid draws the spec itself, so a column of thousands of cells costs no more than plain text and a host can offer displays from untrusted sources as data. `renderCell` still wins where it returns a node. An `svg` display draws nothing unless the host passes `sanitizeSvg`, its own cleaner. `cellDisplayModel(spec, value)` is the pure model behind it; the Sheetbase app runs the same fixtures (`CELL_DISPLAY_FIXTURES`) against its copy.
+
+Row context-menu actions now receive `rows`: the selected rows when the menu opens inside the selection, otherwise just the clicked row.
+
 The plain demo (`/`) uses `renderCell` for status badges and a `Copy column name` context-menu action as a working reference.
 
 ## Host hooks
