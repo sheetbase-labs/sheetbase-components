@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-08
+
+### Added
+
+- **Table**: `Spreadsheet` takes `cellDisplays`, a declarative look for a column's cells (text, number, badge, bar, sparkline or svg), drawn without running any code. Plugin-supplied SVG goes through `sanitizeSvg`, a fixed allowlist of elements and attributes. The row menu's `onSelect` now also receives the chosen `rows`, so an action can work on one row or many. Also exported: `CellDisplay`, `sanitizeSvg`.
+
 ## [0.10.0] — 2026-11-06
 
 ### Changed
