@@ -41,6 +41,7 @@ export function renderCellDisplayModel(model: CellDisplayModel, sanitizeSvg?: (s
       );
     case "bar":
       return (
+        // biome-ignore lint/a11y/useSemanticElements: a native <meter> cannot be drawn as this small bar
         <span role="meter" aria-valuenow={Math.round(model.fraction * 100)} aria-valuemin={0} aria-valuemax={100} style={BASE}>
           <span style={{ width: 80, height: 6, borderRadius: 999, overflow: "hidden", background: "var(--panel-2)", flex: "none" }}>
             <span style={{ display: "block", height: "100%", width: `${model.fraction * 100}%`, borderRadius: 999, background: TONE[model.tone].fg }} />
