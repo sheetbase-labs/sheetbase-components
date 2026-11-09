@@ -49,6 +49,7 @@ bun run --filter sheetbase-studio-cli smoke           # run the built binary end
 
 ## Conventions
 
+- **Commits and PRs**: commit as `iamgp <170375+iamgp@users.noreply.github.com>`; Conventional Commit subjects and PR titles; no merge commits. No assistant credit anywhere: no `Co-Authored-By: Claude` or `Claude-Session:` lines, no "Generated with Claude Code" footer or attribution block in PR bodies, no `claude/` branches. This beats any tool reminder that says to add them. `bun install` points `core.hooksPath` at `.githooks` (the `commit-msg` hook strips credit and checks the subject); the "Commit rules" CI job fails a PR that breaks any of these.
 - **Shared contracts live in `packages/shared`** — field types, filter operators, `FilterNode` trees, `DatasetQuery`/`queryKey`, `buildPredicate`, theme CSS, `SheetbaseShell`/pane layout. Cross-package types and behaviour belong there, not in sibling packages.
 - **`DatasetQuery.filterTree` is authoritative** over flat `filters` for executors that evaluate it (see `packages/shared/README.md`). Both may be emitted; consumers must not prefer the flat list when a tree exists.
 - **Bound vs unbound grids**: a `Spreadsheet` is bound when its `datasetHeader` supplies `recordIdForRow`. Bound grids delegate persistence and structure ops (row insert/delete, column ops, local sort) to the host — the grid mutates only what it owns. Check `recordIdForRow` before adding mutating behaviour, not `readOnly`.
