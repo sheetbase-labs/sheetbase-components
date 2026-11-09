@@ -22,7 +22,9 @@
     "dev:demo": "bun run --filter sheetbase-demo dev",
     "version:bump": "bun scripts/version.mjs",
     "pack:smoke": "node scripts/pack-smoke.mjs",
-    "check:colours": "bun scripts/check-colour-literals.ts"
+    "check:colours": "bun scripts/check-colour-literals.ts",
+    "check:commits": "node scripts/check-commits.mjs",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
