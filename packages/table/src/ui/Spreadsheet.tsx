@@ -298,7 +298,7 @@ export type SpreadsheetProps = {
    * Optional header groups: a label row above the column headers spanning
    * the given columns (v3 source group headers). 20px tall when present.
    */
-  columnGroups?: readonly { label: string; columns: readonly number[] }[];
+  columnGroups?: readonly { label: string; /** A muted second line under the label; any group with one makes every band two lines. */ description?: string; columns: readonly number[] }[];
   /** Row header width in px (v3: 50). */
   rowHeaderWidth?: number;
   /** Render the row-number header column. Default true; `false` frees the width. */
@@ -1063,7 +1063,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const appendInRows = appendDisplayIndex !== undefined && appendDisplayIndex < viewRowCount;
   const appendBeyond = appendDisplayIndex !== undefined && (view !== undefined || appendIndex === rowCount);
   const draftRow = appendEnabled && editing?.row === appendDisplayIndex;
-  const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? 20 : 0;
+  const datasetHeaderHeight = columnGroups && columnGroups.length > 0 ? (columnGroups.some((group) => group.description) ? 40 : 20) : 0;
   const contentWidth = rowHeaderWidthResolved + columnVirtualizer.getTotalSize();
   const contentHeight = headerHeight + datasetHeaderHeight + rowVirtualizer.getTotalSize() + (appendBeyond ? (rowHeights[rowCount] ?? defaultRowHeight) : 0);
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -2621,12 +2621,13 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         for (let column = start; column <= end; column += 1) width += renderColumnWidths[column] ?? 0;
         return (
           <div
-            key={`group-${group.label}`}
+            key={`group-${group.label}-${columnLeft(start)}`}
             role="presentation"
-            className="column-group-header"
+            className={`column-group-header${datasetHeaderHeight > 20 ? " two-line" : ""}`}
             style={{ left: columnLeft(start), top: "var(--sheet-scroll-top, 0px)", width, height: datasetHeaderHeight }}
           >
-            {group.label}
+            {datasetHeaderHeight > 20 ? <b>{group.label}</b> : group.label}
+            {group.description && <span>{group.description}</span>}
           </div>
         );
       })}

@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-12
+
+### Added
+
+- **Table**: a `Spreadsheet` column group takes an optional `description`. When any group has one, every owner band is two lines tall: the name in bold and the description muted beneath it. Without one, bands stay a single 20px line.
+
 ## [0.11.0] — 2026-11-08
 
 ### Added
