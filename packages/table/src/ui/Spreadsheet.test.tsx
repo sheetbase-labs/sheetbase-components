@@ -62,3 +62,28 @@ describe("Spreadsheet layout props", () => {
     expect(html).toContain("grid-canvas");
   });
 });
+
+describe("Spreadsheet column group bands", () => {
+  const render = (props: Partial<Parameters<typeof Spreadsheet>[0]>) =>
+    renderToStaticMarkup(<Spreadsheet initialData={new Map()} rowCount={8} columnCount={3} {...props} />);
+
+  it("keeps a one-line 20px band when no group has a description", () => {
+    const html = render({ columnGroups: [{ label: "DS-0311", columns: [0, 1] }] });
+    expect(html).toContain("column-group-header");
+    expect(html).toContain("height:20px");
+    expect(html).not.toContain("two-line");
+  });
+
+  it("draws every band two lines (bold name, muted description) once one group has a description", () => {
+    const html = render({
+      columnGroups: [
+        { label: "This experiment", description: "edits make a sheet revision", columns: [0] },
+        { label: "Derived", columns: [1] },
+      ],
+    });
+    expect(html).toContain("column-group-header two-line");
+    expect(html).toContain("height:40px");
+    expect(html).toContain("<b>This experiment</b><span>edits make a sheet revision</span>");
+    expect(html).toContain("<b>Derived</b>");
+  });
+});
