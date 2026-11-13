@@ -75,26 +75,36 @@ export function isEmptyMutation(mutation: GridMutation): boolean {
 }
 
 /** A grid mutation stamped for audit/provenance sinks. */
-export type AuditedMutation = GridMutation & Readonly<{ at: string; revision?: string }>;
+export type AuditedMutation = GridMutation & Readonly<{
+  at: string;
+  revision?: string;
+  /**
+   * `"backward"` when this is an undo: `cells` are still the original
+   * mutation, so a sink that applies them must swap `before` and `after`.
+   * Absent for a commit, a redo or a conflict resolution.
+   */
+  direction?: "backward";
+}>;
 
 /** Receives every committed, undone, redone, or conflict-resolved mutation. Never blocks the commit. */
 export type MutationAuditSink = (mutation: AuditedMutation) => void;
 
-export function auditedMutation(mutation: GridMutation, revision?: string): AuditedMutation {
+export function auditedMutation(mutation: GridMutation, revision?: string, direction?: "backward"): AuditedMutation {
   return {
     ...mutation,
     cells: [...mutation.cells],
     columnWidths: [...mutation.columnWidths],
     at: new Date().toISOString(),
     ...(revision === undefined ? null : { revision }),
+    ...(direction === undefined ? null : { direction }),
   };
 }
 
 /** Invokes the audit sink synchronously; sink errors are swallowed so commits never fail. */
-export function emitMutationAudit(sink: MutationAuditSink | undefined, mutation: GridMutation, revision?: string): void {
+export function emitMutationAudit(sink: MutationAuditSink | undefined, mutation: GridMutation, revision?: string, direction?: "backward"): void {
   if (!sink) return;
   try {
-    sink(auditedMutation(mutation, revision));
+    sink(auditedMutation(mutation, revision, direction));
   } catch {
     // Audit sinks are best-effort provenance hooks; a throwing sink must not break the grid.
   }

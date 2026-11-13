@@ -49,6 +49,15 @@ describe("mutation audit sink", () => {
     expect(new Date(seen[0]?.at).getTime()).not.toBeNaN();
   });
 
+  it("marks an undo as backward so a sink knows to swap before and after", () => {
+    const seen: AuditedMutation[] = [];
+    const forward = cellChangesMutation("Edit cell", [{ address: "A1", before: "one", after: "two" }]);
+    emitMutationAudit((mutation) => { seen.push(mutation); }, forward);
+    emitMutationAudit((mutation) => { seen.push(mutation); }, forward, undefined, "backward");
+    expect(seen[0]?.direction).toBeUndefined();
+    expect(seen[1]?.direction).toBe("backward");
+  });
+
   it("never blocks the commit when the sink throws or is absent", () => {
     const mutation = cellChangesMutation("Edit cell", [{ address: "A1", before: "one", after: "two" }]);
     expect(() => emitMutationAudit(() => { throw new Error("sink down"); }, mutation)).not.toThrow();
