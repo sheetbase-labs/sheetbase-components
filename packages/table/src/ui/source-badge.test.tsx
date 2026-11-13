@@ -26,7 +26,7 @@ describe("showsComputedMark", () => {
 
   it("does not duplicate the ƒx already shown by a calc source", () => {
     expect(showsComputedMark(true, "calc")).toBe(false);
-    expect(showsComputedMark(true, "calc", "custom label")).toBe(true);
+    expect(showsComputedMark(true, "calc", "custom label")).toBe(false);
   });
 });
 
