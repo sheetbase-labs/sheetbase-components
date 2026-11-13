@@ -10,7 +10,7 @@
     "registry": "https://npm.pkg.github.com",
     "access": "restricted"
   },
-  "version": "0.12.0",
+  "version": "0.12.1",
   "type": "module",
   "main": "./dist-lib/sheetbase-explorer.js",
   "module": "./dist-lib/sheetbase-explorer.js",
