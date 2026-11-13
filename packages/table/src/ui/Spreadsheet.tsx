@@ -328,7 +328,7 @@ export type SpreadsheetProps = {
   onSelectionChange?(selection: SpreadsheetSelection): void;
   onEditChange?(value: string): void;
   /** Audit/provenance hook: fired synchronously for every committed, undone, redone, or conflict-resolved mutation. Never blocks the grid when the sink throws. */
-  onMutation?(mutation: GridMutation & { at: string; revision?: string }): void;
+  onMutation?(mutation: GridMutation & { at: string; revision?: string; direction?: "backward" }): void;
   /**
    * Pre-commit gate for every cell mutation (edit, paste, fill, clear, move,
    * replace, structural edit, local sort). Runs *before* the change is applied.
