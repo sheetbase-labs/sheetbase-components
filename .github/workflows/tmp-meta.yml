@@ -1,0 +1,22 @@
+name: Package metadata (one-off)
+on:
+  push:
+    branches: [tmp/meta]
+permissions:
+  contents: read
+  packages: read
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '//npm.pkg.github.com/:_authToken=%s\n@sheetbase-labs:registry=https://npm.pkg.github.com\n' "$NODE_AUTH_TOKEN" > ~/.npmrc
+          for p in advanced-search explorer shared table; do
+            echo "=== $p"
+            npm view "@sheetbase-labs/sheetbase-$p@0.12.0" --json dist dependencies peerDependencies peerDependenciesMeta engines
+          done
