@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-11-13
+
+### Fixed
+
+- **Table**: a column header's name and source badge sit on one line, as on the tables board. In a narrow column the badge's label shrinks to an ellipsis first (the icon stays) instead of being cut off, then the name. A calculated column shows one ƒx mark, whatever label its badge carries.
+
 ## [0.12.0] — 2026-11-12
 
 ### Added

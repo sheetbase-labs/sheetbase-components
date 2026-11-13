@@ -34,12 +34,12 @@ export function sourceBadgeLabel(source: ColumnSource | undefined, label?: strin
 }
 
 /**
- * The `fx` mark is redundant when the `Source` badge already reads "ƒx" — the
- * design shows one calculation mark per header.
+ * The `fx` mark is redundant when a `calc` badge is shown — the design shows
+ * one calculation mark per header, whatever the badge's label.
  */
-export function showsComputedMark(computed: boolean, source?: ColumnSource, label?: string): boolean {
+export function showsComputedMark(computed: boolean, source?: ColumnSource, _label?: string): boolean {
   if (!computed) return false;
-  return sourceBadgeLabel(source, label) !== CALC_SOURCE_LABEL;
+  return source !== "calc";
 }
 
 /** The design's `Sheetbase.Source`: kind class, icon, and label. */
@@ -50,7 +50,7 @@ export function SourceBadge({ source, label }: Readonly<{ source: ColumnSource; 
       <svg width={10} height={10} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {SOURCE_ICONS[source]}
       </svg>
-      {text}
+      {text && <span className="src-label">{text}</span>}
     </span>
   );
 }

@@ -94,9 +94,13 @@ button { border: 0; background: transparent; cursor: pointer; }
 .column-header { justify-content: flex-start; gap: 7px; padding: 0 var(--grid-header-padding-x, 10px); color: var(--grid-column-header-ink, var(--accent-ink)); background: var(--grid-header-surface, var(--accent-soft)); font-size: var(--grid-header-size, var(--text-size)); font-weight: 500; font-variant-numeric: var(--grid-font-variant-numeric, normal); }
 .column-coordinate { display: var(--grid-column-coordinate-display, inline); flex: 0 0 auto; color: var(--accent); font: 500 var(--meta-size) var(--font-mono); }
 .column-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.column-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.spreadsheet .src { display: inline-flex; align-items: center; gap: 3px; padding: 0; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 400; line-height: 14px; white-space: nowrap; }
+.column-heading { display: flex; flex-direction: row; align-items: center; gap: 6px; min-width: 0; }
+.column-heading .column-name { flex: 0 1 auto; }
+.column-heading .src { flex: 0 100 auto; }
+.spreadsheet .src { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 3px; padding: 0; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 400; line-height: 14px; white-space: nowrap; }
 .spreadsheet .src.local { color: var(--accent); }
+.spreadsheet .src svg { flex: 0 0 auto; }
+.spreadsheet .src-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-header .fx { flex: 0 0 auto; height: auto; margin: 0; padding: 0 3px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-style: normal; line-height: 14px; }
 .column-sort { position: absolute; right: 8px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 4px; color: var(--purple); font-size: 9px; opacity: 0; }
 .column-header:hover .column-sort, .column-sort:focus-visible, .column-sort.active { opacity: 1; }
