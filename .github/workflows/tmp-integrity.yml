@@ -1,0 +1,17 @@
+name: Integrity (one-off)
+on:
+  push:
+    branches: [chore/tmp-integrity]
+permissions:
+  contents: read
+  packages: read
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+      - run: |
+          for p in advanced-search explorer shared table; do
+            echo "== $p"
+            npm view @sheetbase-labs/sheetbase-$p@0.12.1 dist.integrity dist.tarball dependencies peerDependencies --registry=https://npm.pkg.github.com --json
+          done
