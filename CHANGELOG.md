@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-11-13
+
+### Fixed
+
+- **Table**: an undo now tells the host. The audited mutation passed to `onMutation` carries `direction: "backward"` when it comes from undo (absent for commit, redo and conflict resolution). A host that saves from `onMutation` swaps `before` and `after` for a backward mutation, so undoing an edit no longer writes the removed value back.
+
 ## [0.12.1] — 2026-11-13
 
 ### Fixed
