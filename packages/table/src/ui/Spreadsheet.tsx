@@ -1308,7 +1308,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
     setData((current) => applyCellMutation(current, previous, "backward"));
     setFormats((current) => mutationFormat(current, previous, "backward"));
     setColumnWidths((current) => applyColumnWidthMutation(current, previous, "backward"));
-    emitMutationAudit(onMutation, previous);
+    emitMutationAudit(onMutation, previous, undefined, "backward");
   }, [onMutation, worksheet]);
 
   const redo = useCallback(() => {
