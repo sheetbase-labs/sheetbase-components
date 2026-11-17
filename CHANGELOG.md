@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.3] — 2026-11-17
+
+### Fixed
+
+- **Table**: the `onMutation` callback's type now declares `direction?: "backward"`, which 0.12.2 already sends for an undo. A host can read `mutation.direction` without a type error.
+
 ## [0.12.2] — 2026-11-13
 
 ### Fixed
