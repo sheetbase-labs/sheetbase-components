@@ -67,6 +67,25 @@
 .typed-options.multi button:hover { background: var(--accent-soft); }
 @media (prefers-reduced-motion: no-preference) {
   .table-surface, .stage { transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease; }
+
+  /* Interaction polish. Menus and pop-ups grow in from the corner they open
+     at (they are removed on close, so only the enter is animated, and it is
+     short). Pressable controls answer a press at once and ease their hover
+     colour. `scale` rather than `transform`, so positioning that already uses
+     transform is untouched. */
+  @keyframes sb-pop-in { from { opacity: 0; scale: 0.97; } }
+  .grid-context-menu, .column-menu, .sheet-menu, .typed-options, .find-panel, .formula-error-popover {
+    transform-origin: top left;
+    animation: sb-pop-in 150ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .toolbar button, .menubar button, .table-formatting-toolbar button, .format-palette > button,
+  .sheet-menu button, .grid-context-menu button, .column-menu button, .typed-options button,
+  .find-panel button, .tabs > button {
+    transition: background-color 100ms ease, color 100ms ease, border-color 100ms ease, scale 150ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .toolbar button:active:not(:disabled), .table-formatting-toolbar button:active:not(:disabled),
+  .format-palette > button:active:not(:disabled), .column-menu-actions button:active:not(:disabled),
+  .find-panel button:active:not(:disabled), .typed-options.multi button:active:not(:disabled) { scale: 0.97; }
 }
 
 /* Phase 2 — per-cell annotations (provenance notes, review comments). */
