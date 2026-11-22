@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.4] — 2026-11-22
+
+### Changed
+
+- **Table**: context, column, sheet and cell-option menus ease in from the corner they open at, and toolbar and menu buttons ease their hover colour and give press feedback. All of it is inside `prefers-reduced-motion: no-preference`.
+
 ## [0.12.3] — 2026-11-17
 
 ### Fixed
