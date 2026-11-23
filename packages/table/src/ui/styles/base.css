@@ -42,7 +42,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 .sheet-tabs { min-width: 0; display: flex; overflow-x: auto; }
 .sheet-tab { min-width: 112px; padding: 0 12px; border-right: 1px solid var(--border); color: var(--muted); text-align: left; white-space: nowrap; font-size: var(--text-size); }
 .sheet-tab:hover { background: var(--panel-2); color: var(--text); }
-.sheet-tab.active { color: var(--text); background: var(--panel); font-weight: 500; box-shadow: inset 0 2px var(--accent); }
+.sheet-tab.active { color: var(--text); background: var(--panel); font-weight: 500; box-shadow: inset 0 2px var(--state-edge, var(--accent)); }
 .body { min-height: 0; display: grid; grid-template-columns: 320px 1fr; }
 .body.no-sidebar { grid-template-columns: 1fr; }
 .sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; background: var(--panel); }
@@ -64,7 +64,7 @@ button { border: 0; background: transparent; cursor: pointer; }
 .query-status { height: 52px; display: flex; align-items: center; gap: 10px; padding-left: 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
 .query-status span { background: var(--text); color: var(--panel); border-radius: 16px; padding: 6px 11px; }
 .spreadsheet { position: relative; min-width: 0; min-height: 0; overflow: auto; outline: none; background: var(--grid-frame-surface, var(--canvas)); cursor: cell; user-select: none; overscroll-behavior: contain; border-top: var(--grid-frame-width, 0px) solid var(--border); border-left: var(--grid-frame-width, 0px) solid var(--border); border-radius: var(--grid-frame-radius, 0); }
-.spreadsheet:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent); }
+.spreadsheet:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-edge, var(--accent)) 12%, transparent); }
 .grid-canvas { position: relative; background-color: var(--canvas); background-image: linear-gradient(var(--grid-line-color, var(--border)) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line-color, var(--border)) 1px, transparent 1px); }
 .grid-cell, .row-header, .column-header, .grid-corner, .selection-outline, .cell-editor { position: absolute; }
 .grid-cell { z-index: 1; display: flex; align-items: center; gap: 7px; padding: 0 var(--grid-cell-padding-x, 9px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border-right: 1px solid var(--grid-line-color, var(--border)); border-bottom: 1px solid var(--grid-line-color, var(--border)); background: var(--grid-cell-surface, var(--canvas)); font-size: var(--text-size); font-variant-numeric: var(--grid-font-variant-numeric, normal); }
@@ -104,23 +104,23 @@ button { border: 0; background: transparent; cursor: pointer; }
 .column-header .fx { flex: 0 0 auto; height: auto; margin: 0; padding: 0 3px; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-style: normal; line-height: 14px; }
 .column-sort { position: absolute; right: 8px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 4px; color: var(--purple); font-size: 9px; opacity: 0; }
 .column-header:hover .column-sort, .column-sort:focus-visible, .column-sort.active { opacity: 1; }
-.column-sort:hover { background: var(--accent-soft); color: var(--accent-dark); }
-.row-header.selected-header { color: var(--grid-row-selected-ink, var(--accent-ink)); background: var(--grid-row-selected-surface, var(--accent-soft)); font-weight: 600; }
-.column-header.selected-header { color: var(--grid-column-selected-ink, var(--accent-ink)); background: var(--grid-column-selected-surface, var(--accent-soft)); font-weight: 600; }
+.column-sort:hover { background: var(--accent-soft); color: var(--state-ink, var(--accent-dark)); }
+.row-header.selected-header { color: var(--grid-row-selected-ink, var(--state-ink, var(--accent-ink))); background: var(--grid-row-selected-surface, var(--accent-soft)); font-weight: 600; }
+.column-header.selected-header { color: var(--grid-column-selected-ink, var(--state-ink, var(--accent-ink))); background: var(--grid-column-selected-surface, var(--accent-soft)); font-weight: 600; }
 .grid-corner { z-index: 8; background: var(--grid-header-surface, var(--accent-soft)); cursor: pointer; }
 .grid-corner:hover { background: var(--grid-header-surface, var(--accent-soft)); }
 .column-resizer { position: absolute; right: -3px; top: 0; width: 7px; height: 100%; margin: 0; padding: 0; border: 0; cursor: col-resize; z-index: 10; }
-.column-resizer:hover { background: color-mix(in oklab, var(--accent) 25%, transparent); }
-.selection-outline { z-index: 3; border: 2px solid var(--accent); pointer-events: none; box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 8%, transparent); }
-.selection-outline.filling { border-style: dashed; background: color-mix(in oklab, var(--accent) 4%, transparent); }
+.column-resizer:hover { background: color-mix(in oklab, var(--state-edge, var(--accent)) 25%, transparent); }
+.selection-outline { z-index: 3; border: 2px solid var(--state-edge, var(--accent)); pointer-events: none; box-shadow: 0 0 0 1px color-mix(in oklab, var(--state-edge, var(--accent)) 8%, transparent); }
+.selection-outline.filling { border-style: dashed; background: color-mix(in oklab, var(--state-edge, var(--accent)) 4%, transparent); }
 .selection-outline.copied { border-color: transparent; box-shadow: none; }
 .copy-outline { position: absolute; z-index: 4; overflow: visible; pointer-events: none; }
-.copy-outline rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: var(--accent); stroke-width: 2px; stroke-dasharray: 4px 4px; animation: copy-ants 0.4s linear infinite; }
+.copy-outline rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: var(--state-edge, var(--accent)); stroke-width: 2px; stroke-dasharray: 4px 4px; animation: copy-ants 0.4s linear infinite; }
 @keyframes copy-ants { to { stroke-dashoffset: -8px; } }
 @media (prefers-reduced-motion: reduce) { .copy-outline rect { animation: none; } }
-.move-outline { position: absolute; z-index: 4; border: 2px dashed var(--accent); background: color-mix(in oklab, var(--accent) 6%, transparent); pointer-events: none; }
-.spill-range { position: absolute; z-index: 2; border: 1.5px dashed var(--accent); border-radius: 2px; pointer-events: none; }
-.fill-handle { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; padding: 0; border: 1px solid var(--panel); border-radius: 1px; background: var(--accent); cursor: crosshair; pointer-events: auto; }
+.move-outline { position: absolute; z-index: 4; border: 2px dashed var(--state-edge, var(--accent)); background: color-mix(in oklab, var(--state-edge, var(--accent)) 6%, transparent); pointer-events: none; }
+.spill-range { position: absolute; z-index: 2; border: 1.5px dashed var(--state-edge, var(--accent)); border-radius: 2px; pointer-events: none; }
+.fill-handle { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; padding: 0; border: 1px solid var(--panel); border-radius: 1px; background: var(--state-edge, var(--accent)); cursor: crosshair; pointer-events: auto; }
 .fill-handle:hover { transform: scale(1.25); }
 .formula-reference { position: absolute; z-index: 4; border: 2px solid; pointer-events: none; background: transparent; }
 .formula-reference.suggested { background: color-mix(in srgb, currentColor 6%, transparent); }
@@ -145,20 +145,20 @@ button { border: 0; background: transparent; cursor: pointer; }
 .column-menu-label { display: flex; align-items: center; justify-content: space-between; }
 .column-menu-label select { width: auto !important; height: 24px !important; }
 .column-menu input, .column-menu select { width: 100%; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; outline: none; background: var(--app); color: inherit; font: inherit; }
-.column-menu input:focus, .column-menu select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 11%, transparent); }
+.column-menu input:focus, .column-menu select:focus { border-color: var(--state-edge, var(--accent)); box-shadow: 0 0 0 2px color-mix(in oklab, var(--state-edge, var(--accent)) 11%, transparent); }
 .column-menu button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .column-menu-segment { display: grid; grid-template-columns: repeat(3, 1fr); padding: 2px; border-radius: 7px; background: var(--panel-2); }
 .column-menu-segment button { height: 27px; border-radius: 5px; color: var(--faint); }
-.column-menu-segment button:hover, .column-menu-segment button.active { color: var(--accent-ink); background: var(--panel); box-shadow: 0 1px 3px rgb(0 0 0 / 9%); }
+.column-menu-segment button:hover, .column-menu-segment button.active { color: var(--state-ink, var(--accent-ink)); background: var(--panel); box-shadow: 0 1px 3px rgb(0 0 0 / 9%); }
 .column-menu-actions { display: flex; gap: 5px; justify-content: flex-end; }
 .column-menu-actions button { min-width: 54px; height: 27px; padding: 0 8px; border-radius: 5px; background: var(--panel-2); }
 .column-menu-actions button.primary { color: var(--panel); background: var(--accent); }
 .column-menu-list { gap: 1px !important; padding: 4px !important; }
 .column-menu-list button { min-height: 29px; padding: 0 8px; border-radius: 5px; text-align: left; }
-.column-menu-list button:hover, .column-menu header button:hover { color: var(--accent-dark); background: var(--accent-soft); }
+.column-menu-list button:hover, .column-menu header button:hover { color: var(--state-ink, var(--accent-dark)); background: var(--accent-soft); }
 .row-resizer { position: absolute; right: 0; bottom: -2px; left: 0; height: 5px; margin: 0; padding: 0; border: 0; cursor: row-resize; }
 .find-panel { position: fixed; top: 18px; right: 28px; z-index: 45; display: flex; gap: 5px; align-items: center; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
 .find-panel input { width: 150px; height: 27px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; font-size: 12px; }
-.find-panel input:focus { border-color: var(--accent); }
+.find-panel input:focus { border-color: var(--state-edge, var(--accent)); }
 .find-panel button { height: 27px; padding: 0 8px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-dark); font-size: 12px; }
 .cell-editor { z-index: 9; margin: 0; padding: 0 8px; border: 0; border-radius: 0; outline: 2px solid var(--accent); background: var(--panel); color: var(--text); font: var(--text-size) var(--font-mono); box-shadow: 0 2px 8px rgb(0 0 0 / 10%); user-select: text; }

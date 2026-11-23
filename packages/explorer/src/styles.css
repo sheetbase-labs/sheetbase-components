@@ -75,12 +75,12 @@
 .segmented { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-2); }
 .segmented button { border: 0; background: transparent; border-radius: 5px; height: 24px; min-height: 24px; display: flex; gap: 4px; align-items: center; justify-content: center; font-size: 10px; text-transform: capitalize; cursor: pointer; color: var(--muted); }
 .segmented button:hover { color: var(--text); }
-.segmented button.active { background: var(--canvas); color: var(--accent-dark); box-shadow: 0 1px 2px rgb(0 0 0 / 8%); }
+.segmented button.active { background: var(--canvas); color: var(--state-ink, var(--accent-dark)); box-shadow: 0 1px 2px rgb(0 0 0 / 8%); }
 .field-control { display: grid; grid-template-columns: 56px 1fr; gap: 6px; align-items: center; margin: 3px 0; font-size: 11px; color: var(--muted); }
 .field-label { white-space: nowrap; }
 .field-select-shell { height: 24px; display: grid; grid-template-columns: 22px 1fr; align-items: center; border: 1px solid transparent; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
 .field-select-shell:hover { border-color: var(--border-strong); }
-.field-select-shell:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
+.field-select-shell:focus-within { border-color: var(--state-edge, var(--accent)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 12%, transparent); }
 .field-select-shell.has-value { background: var(--accent-soft-2); border-color: color-mix(in srgb, var(--accent) 23%, var(--border)); }
 .field-type { height: 100%; display: grid; place-items: center; border-right: 1px solid var(--border); color: var(--faint); font-size: 9px; font-weight: 650; }
 .field-type.type-number { color: var(--accent); }
@@ -101,7 +101,7 @@
 .sql-header div { margin-left: auto; display: flex; gap: 4px; }
 .sql-header code { color: var(--accent-dark); background: var(--accent-soft); padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); }
 .sql-workspace textarea { border: 0; resize: none; outline: none; background: var(--canvas); color: var(--text); padding: 12px; font: 12px/1.6 var(--font-mono); }
-.sql-workspace textarea:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent); }
+.sql-workspace textarea:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--state-edge, var(--accent)) 15%, transparent); }
 .sql-error { border-top: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border)); color: var(--danger); padding: 7px 10px; font-size: 12px; background: color-mix(in srgb, var(--danger) 6%, var(--canvas)); }
 .remote-note { display: grid; place-items: center; height: 100%; padding: 16px; color: var(--muted); font-size: 12px; text-align: center; }
 .remote-note--strip { height: auto; padding: 5px 10px; place-items: center start; text-align: left; border-bottom: 1px solid var(--border); flex: none; }

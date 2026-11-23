@@ -81,9 +81,9 @@
   background: transparent;
   transition: background 120ms ease;
 }
-.sb-resizer:hover::after { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.sb-resizer:hover::after { background: color-mix(in srgb, var(--state-edge, var(--accent)) 45%, var(--border)); }
 .sb-resizer:focus-visible { outline: none; }
-.sb-resizer:focus-visible::after { background: var(--accent); }
+.sb-resizer:focus-visible::after { background: var(--state-edge, var(--accent)); }
 
 /* When the panes on both sides of a gutter open with a `.sb-panel-heading`,
    carry the lavender band across the resizer so the row reads as one bar. */
@@ -160,12 +160,12 @@
 .sb-pane-tab:hover { color: var(--text); }
 .sb-pane-tab.active {
   background: var(--canvas);
-  color: var(--accent-dark);
+  color: var(--state-ink, var(--accent-dark));
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
 .sb-pane-tab.dragging { opacity: 0.4; }
-.sb-pane-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
+.sb-pane-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--state-edge, var(--accent)) 55%, transparent); outline-offset: 1px; }
 .sb-pane-tab svg { width: 13px; height: 13px; display: block; }
 .sb-pane-actions { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; position: relative; }
 .sb-pane-menu-wrap { position: relative; display: inline-flex; }
@@ -222,7 +222,7 @@
 }
 .sb-pane-stack:hover > .sb-pane-fab,
 .sb-pane-fab:focus-within { opacity: 1; pointer-events: auto; }
-.sb-pane-stack:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; border-radius: 13px; }
+.sb-pane-stack:focus-visible { outline: 2px solid color-mix(in srgb, var(--state-edge, var(--accent)) 55%, transparent); outline-offset: -2px; border-radius: 13px; }
 /* Announcer for keyboard moves; invisible but read by assistive tech. */
 .sb-pane-live {
   position: absolute;
