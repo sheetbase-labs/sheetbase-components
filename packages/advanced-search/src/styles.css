@@ -14,7 +14,7 @@
 }
 .sb-filter-rule input { font-family: var(--font-mono); font-size: 11px; }
 .sb-filter-rule select:hover, .sb-filter-rule input:hover { border-color: var(--border-strong); }
-.sb-filter-rule select:focus, .sb-filter-rule input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
+.sb-filter-rule select:focus, .sb-filter-rule input:focus { border-color: var(--state-edge, var(--accent)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 12%, transparent); }
 .sb-search-controls {
   display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
   gap: 6px 14px; border-top: 1px solid var(--border); padding-top: 8px;
@@ -54,14 +54,14 @@
 .chip .sb-chip-label:hover { background: transparent; text-decoration: underline; }
 .sb-chip-group { border-style: dashed; border-color: var(--border-strong); }
 .chip button:hover { background: var(--surface-hover); color: var(--text); }
-.chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.chip button:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 1px; }
 .sb-chip-add {
   height: 24px; padding: 0 8px;
   border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
   background: transparent; color: var(--faint); font-size: 12px; cursor: pointer;
 }
 .sb-chip-add:hover { background: var(--surface-hover); color: var(--text); }
-.sb-chip-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sb-chip-add:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 1px; }
 
 /* COMP-04.1 — the rule builder. Rows are rounded cards on a rail of And / Or
    pills; groups are larger cards. `data-variant="popover"` keeps the old 360px
@@ -117,7 +117,7 @@
 }
 button.sb-fb-pill { cursor: pointer; }
 button.sb-fb-pill:hover { background: var(--surface-hover); color: var(--text); }
-button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button.sb-fb-pill:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 2px; }
 
 /* A condition: a soft rounded card. */
 .sb-fb-row {
@@ -139,8 +139,8 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 }
 .sb-fb-input:hover { border-color: var(--border-strong); }
 .sb-fb-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--state-edge, var(--accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 16%, transparent);
 }
 .sb-fb-input::placeholder { color: var(--faint); }
 
@@ -151,7 +151,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 }
 .sb-fb-grip:hover { color: var(--text); background: var(--surface-hover); }
 .sb-fb-grip:active { cursor: grabbing; }
-.sb-fb-grip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sb-fb-grip:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 1px; }
 
 /* A select is a bordered box whose label and chevron sit together; the native
    <select> is a transparent overlay so it stays a real, keyboard-accessible control. */
@@ -165,8 +165,8 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 .sb-filter-select > svg { flex: 0 0 auto; color: var(--faint); }
 .sb-filter-select:hover { border-color: var(--border-strong); }
 .sb-filter-select:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--state-edge, var(--accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 16%, transparent);
 }
 .sb-filter-select-value { pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-filter-select select {
@@ -208,7 +208,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 }
 .sb-fb-quiet:hover { background: var(--surface-hover); color: var(--text); }
 .sb-fb-quiet[aria-pressed="true"] { border-color: var(--border-strong); background: var(--surface-muted); color: var(--text); }
-.sb-fb-quiet:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sb-fb-quiet:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 1px; }
 .sb-fb-group > .sb-fb-list { padding-left: 8px; }
 .sb-fb-group > .sb-fb-list[data-rail] { padding-left: var(--sb-fb-rail); }
 
@@ -220,8 +220,8 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
 }
 .sb-filter-picker:hover { border-color: var(--border-strong); }
 .sb-filter-picker:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--state-edge, var(--accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 16%, transparent);
 }
 .sb-filter-picker input {
   flex: 1 1 80px; min-width: 60px; height: 22px; padding: 0 4px; border: 0; outline: none;
@@ -251,7 +251,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
 }
 .sb-filter-builder .sb-btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
-.sb-filter-builder .sb-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sb-filter-builder .sb-btn:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 2px; }
 .sb-filter-builder .sb-btn svg { width: 14px; height: 14px; color: var(--faint); }
 .sb-filter-builder .sb-btn.primary {
   background: var(--accent-ink); border-color: var(--accent-ink); color: var(--on-accent);
@@ -278,7 +278,7 @@ button.sb-fb-pill:focus-visible { outline: 2px solid var(--focus); outline-offse
   display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 100%;
   padding: 0 8px 0 12px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; outline: none;
 }
-.sb-fb-fieldpick-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 8px; }
+.sb-fb-fieldpick-trigger:focus-visible { outline: 2px solid var(--state-edge, var(--focus)); outline-offset: 1px; border-radius: 8px; }
 .sb-fb-fieldpick-trigger > svg { flex: 0 0 auto; color: var(--faint); }
 .sb-fb-fieldpick-trigger .sb-filter-select-value { pointer-events: auto; }
 .sb-fb-fieldpick-scrim { position: fixed; inset: 0; z-index: 40; }

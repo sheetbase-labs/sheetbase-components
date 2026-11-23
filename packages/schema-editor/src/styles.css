@@ -18,7 +18,7 @@
   background-position: 0 -1px;
 }
 .sb-schema-canvas:active { cursor: grabbing; }
-.sb-schema-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sb-schema-canvas:focus-visible { outline: 2px solid var(--state-edge, var(--accent)); outline-offset: -2px; }
 .sb-schema-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .sb-schema-pane { position: absolute; inset: -1px 0 0; }
 .sb-schema-edges { position: absolute; inset: 0; width: 4000px; height: 4000px; overflow: visible; pointer-events: none; }
@@ -36,9 +36,9 @@
 .sb-legend-lineage { border-top-color: var(--muted); border-top-style: dotted; }
 .sb-node { position: absolute; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow); overflow: hidden; user-select: none; transition: border-color 0.12s ease, color 0.12s ease; }
 .sb-node:focus { outline: none; }
-.sb-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sb-node:focus-visible { outline: 2px solid var(--state-edge, var(--accent)); outline-offset: 2px; }
 .sb-node.moving { border-style: dashed; border-color: var(--accent); }
-.sb-node.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.sb-node.active { border-color: var(--state-edge, var(--accent)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 22%, transparent); }
 .sb-node header { padding: 5px 8px; background: var(--accent-soft); color: var(--accent-ink); display: flex; flex-direction: column; transition: background-color 0.12s ease, color 0.12s ease; }
 .sb-node header strong { font-size: 12px; font-weight: 500; }
 .sb-node header small { font-size: 10px; opacity: 0.75; font-family: var(--font-mono); }
@@ -102,5 +102,5 @@
 .sb-import-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 0 10px; }
 .sb-schema .sb-frame { position: relative; }
 /* Focus toggle pressed state — quieter than the primary "+ Model" action. */
-.sb-schema .sb-btn.toggled { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
-.sb-schema .sb-btn.toggled:hover { background: color-mix(in srgb, var(--accent) 18%, var(--accent-soft)); }
+.sb-schema .sb-btn.toggled { background: var(--accent-soft); border-color: var(--state-edge, var(--accent)); color: var(--state-ink, var(--accent-ink)); }
+.sb-schema .sb-btn.toggled:hover { background: color-mix(in srgb, var(--state-edge, var(--accent)) 18%, var(--accent-soft)); }

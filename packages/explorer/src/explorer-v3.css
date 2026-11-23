@@ -7,14 +7,14 @@
 .tool-anchor { position: relative; flex: 0 0 auto; }
 .explorer-tool { height: 24px; display: inline-flex; align-items: center; gap: 5px; max-width: 180px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
 .explorer-tool:hover,.explorer-tool.active { background: var(--panel-2); }
-.explorer-tool.active { color: var(--accent-dark); }
+.explorer-tool.active { color: var(--state-ink, var(--accent-dark)); }
 .explorer-tool small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 9px; }
 .explorer-tool b { color: var(--faint); font-size: 9px; font-weight: 500; }
 .tool-popover { position: absolute; top: 34px; left: 0; z-index: 100; min-width: 180px; padding: 5px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--canvas); box-shadow: 0 10px 28px rgb(0 0 0 / 14%); }
 .plot-popover { display: grid; grid-template-columns: repeat(2, 1fr); width: 230px; }
 .plot-popover button { height: 24px; min-height: 24px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-size: 12px; }
 .plot-popover button:hover { background: var(--panel-2); }
-.plot-popover button.selected { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
+.plot-popover button.selected { background: var(--accent-soft); color: var(--state-ink, var(--accent-dark)); font-weight: 600; }
 .inspector-popover { width: 310px; padding: 6px 8px 8px; }
 .inspector-popover h4 { margin: 0 0 4px; color: var(--muted); font-size: 9.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .inspector-popover .field-control,.inspector-popover .compact-control,.inspector-popover .range-control,.inspector-popover .toggle-row { margin: 3px 0; }
@@ -24,10 +24,10 @@
 .explorer-frame-v4 { grid-template-rows: minmax(0, 1fr) 250px; }
 /* Neutral strip like table/sb bars; hover keeps the indigo accent language. */
 .explorer-commandbar-v4 { height: auto; min-height: 33px; flex-wrap: wrap; padding: 0 8px; border-bottom-color: var(--border); background: var(--panel-2); color: var(--text); }
-.explorer-commandbar-v4 .explorer-tool:hover, .explorer-commandbar-v4 .explorer-tool.active { background: var(--accent-soft); color: var(--accent-dark); }
+.explorer-commandbar-v4 .explorer-tool:hover, .explorer-commandbar-v4 .explorer-tool.active { background: var(--accent-soft); color: var(--state-ink, var(--accent-dark)); }
 .explorer-subbar .explorer-tool { color: var(--accent-ink); }
 .explorer-subbar .explorer-tool small, .explorer-subbar .explorer-tool b { color: inherit; opacity: 0.75; }
-.explorer-subbar .explorer-tool:hover, .explorer-subbar .explorer-tool.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-dark); }
+.explorer-subbar .explorer-tool:hover, .explorer-subbar .explorer-tool.active { background: color-mix(in srgb, var(--state-edge, var(--accent)) 14%, transparent); color: var(--state-ink, var(--accent-dark)); }
 .command-spacer { flex: 1 1 auto; }
 .explorer-reset { height: 24px; margin-left: auto; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 11px; font-weight: 600; cursor: pointer; }
 .explorer-reset:hover { border-color: var(--border-strong); background: var(--panel-2); }
@@ -76,13 +76,13 @@
 }
 .panel-resizer { position:absolute; top:-4px; left:0; right:0; z-index:20; height:8px; margin:0; padding:0; border:0; cursor:ns-resize; }
 .panel-resizer::after { content:""; position:absolute; top:3px; left:0; right:0; height:1px; background:transparent; }
-.panel-resizer:hover::after { background:var(--accent); }
+.panel-resizer:hover::after { background:var(--state-edge, var(--accent)); }
 .bottom-panel-v3.collapsed .panel-resizer { display:none; }
 .panel-collapse { margin-left:0; width:34px; border:0 !important; border-left:1px solid var(--border) !important; color:var(--muted) !important; }
 .sortable-header { cursor:pointer; user-select:none; }
 :where(.sheetbase-explorer) tbody tr { cursor: pointer; }
 :where(.sheetbase-explorer) tbody tr.selected-data-row td { background: var(--accent-soft) !important; }
-:where(.sheetbase-explorer) tbody tr.selected-data-row td:first-child { box-shadow: inset 2px 0 var(--accent); }
+:where(.sheetbase-explorer) tbody tr.selected-data-row td:first-child { box-shadow: inset 2px 0 var(--state-edge, var(--accent)); }
 @media (max-width: 1100px) { .explorer-tool small { display: none; }.filter-popover { width: 430px; }.series-legend { max-width:45%; } }
 
 /* Narrow hosts (phones, a notebook cell): the toolbars size by the canvas's own

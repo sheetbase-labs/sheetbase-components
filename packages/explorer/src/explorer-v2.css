@@ -81,11 +81,11 @@
   cursor: pointer;
 }
 
-.channel-slot button:hover { background: var(--accent-soft); color: var(--accent-dark); }
+.channel-slot button:hover { background: var(--accent-soft); color: var(--state-ink, var(--accent-dark)); }
 
 .column-item { cursor: grab; }
 .column-item:active { cursor: grabbing; }
-.column-item[draggable="true"]:hover .grip { color: var(--accent); opacity: 1; }
+.column-item[draggable="true"]:hover .grip { color: var(--state-edge, var(--accent)); opacity: 1; }
 
 .column-item.mapped { background: transparent; }
 .column-item.mapped:hover { background: var(--accent-soft-2); }
@@ -168,7 +168,7 @@
 .plot-grid button:hover { background: var(--canvas); color: var(--text); }
 .plot-grid button.active {
   background: var(--canvas);
-  color: var(--accent-dark);
+  color: var(--state-ink, var(--accent-dark));
   font-weight: 600;
   box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
 }
@@ -203,8 +203,8 @@
 
 .compact-control select:focus,
 .compact-control input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--state-edge, var(--accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-edge, var(--accent)) 12%, transparent);
 }
 
 .range-control {
