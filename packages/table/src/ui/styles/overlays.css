@@ -74,7 +74,7 @@
      colour. `scale` rather than `transform`, so positioning that already uses
      transform is untouched. */
   @keyframes sb-pop-in { from { opacity: 0; scale: 0.97; } }
-  .grid-context-menu, .column-menu, .sheet-menu, .typed-options, .find-panel, .formula-error-popover {
+  .grid-context-menu, .column-menu, .sheet-menu, .find-panel, .formula-error-popover {
     transform-origin: top left;
     animation: sb-pop-in 150ms cubic-bezier(0.23, 1, 0.32, 1);
   }
