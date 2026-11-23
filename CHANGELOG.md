@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 
 ## [Unreleased]
 
+## [0.12.5] — 2026-11-23
+
+### Fixed
+
+- **All packages**: hover, focus, selected and active styles no longer use the accent blue directly. They read `--state-ink` and `--state-edge` (falling back to the accent), so a host can keep those states neutral. A test in `shared` fails if a state rule reads the bare accent.
+
 ## [0.12.4] — 2026-11-22
 
 ### Changed
