@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); ver
 ### Fixed
 
 - **All packages**: hover, focus, selected and active styles no longer use the accent blue directly. They read `--state-ink` and `--state-edge` (falling back to the accent), so a host can keep those states neutral. A test in `shared` fails if a state rule reads the bare accent.
+- **Table**: the option list of a controlled or relationship cell editor no longer pops in. Its entry animation made the first option click miss in Firefox, which failed the e2e run intermittently.
 
 ## [0.12.4] — 2026-11-22
 
