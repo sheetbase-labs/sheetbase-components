@@ -718,8 +718,8 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   // Set when an edit is cancelled. Removing the focused editor fires a blur in
   // current Chromium, whose handler would otherwise commit the draft that
   // Escape just discarded.
-  const editDiscarded = useRef(false);
-  useEffect(() => { if (editing) editDiscarded.current = false; }, [editing]);
+  const editEnded = useRef(false);
+  useEffect(() => { if (editing) editEnded.current = false; }, [editing]);
   const [draft, setDraft] = useState("");
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
@@ -1647,7 +1647,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
   const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
     if (!editing) return;
-    if (!save) editDiscarded.current = true;
+    // Finishing an edit, by saving or discarding it, ends it: removing the
+    // focused editor fires a blur whose handler must not commit it again.
+    editEnded.current = true;
     if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
     if (save) {
       const key = cellKeyAt(editing.row, editing.column);
@@ -1660,7 +1662,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       const completedDraft = completeFormula(explicitDraft ?? draft);
       const field = datasetHeader?.fields.find((item) => item.column === editing.column);
       const invalid = field ? validateTypedCell(completedDraft, field.dataType, field.required, field.options) : undefined;
-      if (invalid) { setValidationError(invalid); return; }
+      if (invalid) { editEnded.current = false; setValidationError(invalid); return; }
       const rowWasBlank = datasetHeader ? datasetHeader.fields.every((item) => !(data.get(cellKey({ row: editingSourceRow, column: item.column })) ?? "").trim()) : false;
       const before = data.get(key);
       // The single-edit write goes through runFieldWrite below, which carries
@@ -1673,7 +1675,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       }]), { emitFieldWrites: false, source: "edit" });
       // A rejected edit applies nothing and leaves the editor open so the host
       // can show its own feedback; replaced values are the ones that persisted.
-      if (outcome.status === "rejected") return;
+      if (outcome.status === "rejected") { editEnded.current = false; return; }
       const appliedCell = outcome.status === "applied" ? outcome.mutation.cells.find((cell) => cell.address === key) : undefined;
       const appliedValue = appliedCell ? appliedCell.after ?? "" : completedDraft;
       const recordId = datasetHeader?.recordIdForRow?.(editingSourceRow);
@@ -2859,7 +2861,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         }}
         onBlur={(event) => {
           if ((event.relatedTarget as HTMLElement | null)?.closest("[data-formula-bar]")) return;
-          if (editDiscarded.current) return;
+          if (editEnded.current) return;
           finishEdit(true);
         }}
         onKeyDown={(event) => {
