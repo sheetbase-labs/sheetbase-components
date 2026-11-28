@@ -2742,9 +2742,9 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
       />}
       <div className={`selection-outline${fillTarget ? " filling" : ""}${selectionIsCopySource ? " copied" : ""}`} style={{
         left: columnLeft(previewRange.left),
-        top: headerHeight + datasetHeaderHeight + rowOffsets[previewRange.top],
-        width: columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left],
-        height: rowOffsets[previewRange.bottom + 1] - rowOffsets[previewRange.top],
+        top: headerHeight + datasetHeaderHeight + (rowOffsets[previewRange.top] ?? 0),
+        width: (columnOffsets[previewRange.right + 1] - columnOffsets[previewRange.left]) || 0,
+        height: (rowOffsets[previewRange.bottom + 1] - rowOffsets[previewRange.top]) || 0,
       }}>
         {!readOnly && <button type="button"
           className="fill-handle"
