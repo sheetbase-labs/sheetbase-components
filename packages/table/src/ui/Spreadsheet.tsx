@@ -715,6 +715,11 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
   const selectionRef = useRef(selection);
   useEffect(() => { selectionRef.current = selection; }, [selection]);
   const [editing, setEditing] = useState<GridPoint | null>(null);
+  // Set when an edit is cancelled. Removing the focused editor fires a blur in
+  // current Chromium, whose handler would otherwise commit the draft that
+  // Escape just discarded.
+  const editDiscarded = useRef(false);
+  useEffect(() => { if (editing) editDiscarded.current = false; }, [editing]);
   const [draft, setDraft] = useState("");
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [formulaReference, setFormulaReference] = useState<FormulaReferenceSelection | null>(null);
@@ -1642,6 +1647,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
 
   const finishEdit = useCallback((save: boolean, movement?: GridPoint, explicitDraft?: string) => {
     if (!editing) return;
+    if (!save) editDiscarded.current = true;
     if (save && readOnly) { setEditing(null); setFormulaReference(null); queueMicrotask(() => viewportRef.current?.focus()); return; }
     if (save) {
       const key = cellKeyAt(editing.row, editing.column);
@@ -2853,6 +2859,7 @@ export const Spreadsheet = forwardRef<SpreadsheetHandle, SpreadsheetProps>(funct
         }}
         onBlur={(event) => {
           if ((event.relatedTarget as HTMLElement | null)?.closest("[data-formula-bar]")) return;
+          if (editDiscarded.current) return;
           finishEdit(true);
         }}
         onKeyDown={(event) => {
